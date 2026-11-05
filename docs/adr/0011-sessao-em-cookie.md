@@ -26,3 +26,5 @@
 **CSRF:** `SameSite=Strict` mais o cabeçalho `X-Requested-With: gestor-web`, obrigatório em todo método que não seja GET/HEAD; sem ele, 403.
 
 **Risco aceito:** quem já conhece um CPF consegue distinguir se ele existe pelas respostas 403 (primeiro acesso já configurado) e 423 (conta bloqueada), que não aparecem para CPF inexistente. Aceito porque é um sistema de casal, o CPF não é segredo para quem o conhece e o ganho de esconder isso não compensa a perda de clareza para o usuário.
+
+**Risco aceito (falhas no registro):** falhas de atestação e de confirmação no registro de credencial contam para o bloqueio. Quem tiver um cookie de autorização de registro roubado (vale 10 min) pode, errando de propósito, bloquear o cônjuge por um tempo; o bloqueio é temporário e o outro cônjuge pode destravar.
