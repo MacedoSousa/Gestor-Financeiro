@@ -1,0 +1,21 @@
+# Sobe o Gestor Financeiro sempre que o PC liga.
+# Instalação (ajuste o caminho do repositório em WorkingDirectory):
+#   sudo cp infra/systemd/gestor-financeiro.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now docker gestor-financeiro
+[Unit]
+Description=Gestor Financeiro (docker compose)
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/gestor-financeiro
+ExecStart=/usr/bin/docker compose -f infra/docker-compose.yml up -d --remove-orphans
+ExecStop=/usr/bin/docker compose -f infra/docker-compose.yml stop
+TimeoutStartSec=300
+
+[Install]
+WantedBy=multi-user.target

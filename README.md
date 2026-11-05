@@ -52,6 +52,15 @@ cd ../frontend && npm ci && npm run dev
 
 Testes: `dotnet test backend/GestorFinanceiro.slnx` e `npm --prefix frontend run check`.
 
+## Sempre ligado (servidor de casa)
+
+O sistema sobe sozinho quando o PC liga:
+
+1. **Serviço:** copie `infra/systemd/gestor-financeiro.service` para `/etc/systemd/system/`, ajuste `WorkingDirectory` e rode `sudo systemctl enable --now docker gestor-financeiro`. Todo container já tem `restart: unless-stopped`.
+2. **Disco cifrado sem digitar senha no boot:** com LUKS, destrave pelo chip TPM2 (`sudo systemd-cryptenroll --tpm2-device=auto --tpm2-pcrs=7 /dev/<particao>`) e mantenha a senha do LUKS impressa como reserva.
+3. **Energia:** na BIOS, ative "Restore on AC Power Loss = Power On"; no Ubuntu, desligue a suspensão (`sudo systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target`). Um nobreak pequeno evita desligar no meio de uma gravação.
+4. **Atualizações:** `unattended-upgrades` ligado; reinício automático de madrugada (`Unattended-Upgrade::Automatic-Reboot-Time "04:00"`).
+
 ## Fases
 
 | Fase | Entrega | Pronto quando |
