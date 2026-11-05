@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using GestorFinanceiro.Modules.Identidade.Aplicacao;
 using GestorFinanceiro.Modules.Identidade.Contracts;
 using GestorFinanceiro.SharedKernel.Aplicacao;
@@ -25,8 +26,9 @@ internal static class EndpointsDeCredenciais
         .WithName("ListarCredenciais")
         .WithSummary("Passkeys e TOTPs ativos e confirmados do próprio usuário.");
 
-        grupo.MapDelete("/{id:guid}", async Task<Results<NoContent, NotFound, ProblemHttpResult>> (Guid id, GestaoDeCredenciais gestao, CancellationToken ct) =>
-            await gestao.RemoverAsync(id, ct) switch
+        grupo.MapDelete("/{id:guid}", async Task<Results<NoContent, NotFound, ProblemHttpResult>> (
+            Guid id, ClaimsPrincipal usuario, GestaoDeCredenciais gestao, CancellationToken ct) =>
+            await gestao.RemoverAsync(id, Guid.TryParse(usuario.FindFirstValue(NomesDoLogin.ClaimSessao), out var sessao) ? sessao : null, ct) switch
             {
                 ResultadoDaRemocao.Removida => TypedResults.NoContent(),
                 ResultadoDaRemocao.UltimaCredencial => TypedResults.Problem(title: MensagemUltimaCredencial, statusCode: StatusCodes.Status409Conflict),
@@ -34,7 +36,7 @@ internal static class EndpointsDeCredenciais
             })
         .AddEndpointFilter<ExigirConfirmacaoRecente>()
         .WithName("RemoverCredencial")
-        .WithSummary("Remove (soft delete) uma credencial do próprio usuário; exige confirmação recente. A última ativa e confirmada dá 409.")
+        .WithSummary("Remove (soft delete) uma credencial do próprio usuário e encerra as outras sessões dele; exige confirmação recente. A última ativa e confirmada dá 409.")
         .ProducesProblem(StatusCodes.Status403Forbidden)
         .ProducesProblem(StatusCodes.Status409Conflict);
 

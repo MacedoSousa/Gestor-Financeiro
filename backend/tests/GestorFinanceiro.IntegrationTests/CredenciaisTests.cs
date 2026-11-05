@@ -170,6 +170,33 @@ public class CredenciaisTests(PostgresFixture pg)
     }
 
     [Fact]
+    public async Task Remover_credencial_encerra_as_outras_sessoes_do_conjuge()
+    {
+        var relogio = NovoRelogio();
+        var banco = await pg.NovoBancoAsync();
+        await using var api = new ApiDeTeste(banco, relogio: relogio);
+        await CadastrarAsync(api);
+        var ana = await EscalarAsync<Guid>(banco, SqlAna);
+        var bruno = await EscalarAsync<Guid>(banco, SqlBruno);
+        await CriarAsync(api, ana, TipoCredencial.Passkey, "Notebook");
+        var celular = await CriarAsync(api, ana, TipoCredencial.Totp, "Celular");
+        var sessaoA = await api.ClienteLogadoAsync(ana, relogio.Agora);
+        var sessaoB = await api.ClienteLogadoAsync(ana, relogio.Agora); // o celular perdido
+        var doBruno = await api.ClienteLogadoAsync(bruno, relogio.Agora);
+        Assert.Equal(HttpStatusCode.OK, (await sessaoB.GetAsync("/api/v1/auth/eu")).StatusCode);
+
+        Assert.Equal(HttpStatusCode.NoContent, (await sessaoA.DeleteAsync($"{RotaCredenciais}/{celular}")).StatusCode);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, (await sessaoB.GetAsync("/api/v1/auth/eu")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await sessaoA.GetAsync("/api/v1/auth/eu")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await doBruno.GetAsync("/api/v1/auth/eu")).StatusCode);
+        // Soft delete: as linhas continuam lá.
+        Assert.Equal(2L, await EscalarAsync<long>(banco, $"SELECT count(*) FROM identidade.sessoes WHERE usuario_id = '{ana}'"));
+        Assert.Equal(1L, await EscalarAsync<long>(banco, $"SELECT count(*) FROM identidade.sessoes WHERE usuario_id = '{ana}' AND is_deleted"));
+        Assert.Equal(0L, await EscalarAsync<long>(banco, $"SELECT count(*) FROM identidade.sessoes WHERE usuario_id = '{bruno}' AND is_deleted"));
+    }
+
+    [Fact]
     public async Task Remover_sem_confirmacao_recente_responde_403()
     {
         var relogio = NovoRelogio();

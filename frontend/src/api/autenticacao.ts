@@ -13,6 +13,21 @@ const SEM_CONEXAO = "Sem conexão com o servidor. Tente de novo.";
 const MUITAS_TENTATIVAS = "Muitas tentativas. Aguarde alguns minutos e tente de novo.";
 const GENERICA = "Não foi possível concluir. Tente de novo.";
 
+/**
+ * Títulos fixos que a API escreve nos Problem Details (Modules/Identidade/Api). Só estes vão para a tela:
+ * títulos do framework ("Unauthorized", "Forbidden"…) e qualquer outro texto caem na mensagem genérica.
+ */
+const MENSAGENS_DA_API: ReadonlySet<string> = new Set([
+  "Não foi possível entrar. Confira os dados e tente de novo.",
+  "Conta bloqueada por excesso de tentativas. Tente mais tarde ou peça ao outro cônjuge para destravar.",
+  MENSAGEM_CONFIRMAR,
+  "Este acesso já foi configurado. Entre com sua passkey ou TOTP.",
+  "Você precisa manter pelo menos uma forma de entrar.",
+  "Informe o código TOTP ou a passkey.",
+  "Autorização de registro ausente ou expirada. Comece o acesso de novo.",
+  "Informe um nome para o dispositivo, com até 60 caracteres.",
+]);
+
 /** Erro de chamada à API: a mensagem já é a que a tela pode mostrar (fixa da API ou genérica). */
 export class ErroDeApi extends Error {
   readonly status: number;
@@ -36,7 +51,7 @@ export async function chamar<T>(chamada: () => Promise<Resposta<T>>, generica = 
   const status = r.response.status;
   if (status === 429) throw new ErroDeApi(status, MUITAS_TENTATIVAS);
   const titulo = (r.error as { title?: unknown } | undefined)?.title;
-  if ([401, 403, 409, 423].includes(status) && typeof titulo === "string" && titulo) throw new ErroDeApi(status, titulo);
+  if (typeof titulo === "string" && MENSAGENS_DA_API.has(titulo)) throw new ErroDeApi(status, titulo);
   throw new ErroDeApi(status, generica);
 }
 

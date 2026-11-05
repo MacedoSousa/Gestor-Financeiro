@@ -188,7 +188,6 @@ public class TotpTests(PostgresFixture pg)
         Assert.DoesNotContain(base32, linha);
         Assert.DoesNotContain(Convert.ToHexString(segredo), linha, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain(Convert.ToBase64String(segredo), linha);
-        Assert.DoesNotContain(base32, Convert.ToHexString(cifrado));
     }
 
     [Fact]

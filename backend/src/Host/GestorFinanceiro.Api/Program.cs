@@ -86,8 +86,12 @@ else
     });
 }
 
+// O build gera o OpenAPI subindo o app pelo GetDocument.Insider, sem configuração de produção nem de dev:
+// nesse modo a conferência de configuração na subida fica desligada (nenhuma requisição é atendida).
+var gerandoOpenApi = System.Reflection.Assembly.GetEntryAssembly()?.GetName().Name == "GetDocument.Insider";
+
 builder.Services
-    .AddIdentidade(conexao)
+    .AddIdentidade(conexao, validarNaSubida: !gerandoOpenApi)
     .AddContas(conexao)
     .AddLancamentos(conexao)
     .AddOrcamento(conexao)

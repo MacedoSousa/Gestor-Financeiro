@@ -30,10 +30,12 @@ internal sealed class GestaoDeCredenciais(IdentidadeDbContext db, TentativaDeLog
     /// <summary>
     /// Soft delete da credencial. "É a última?" e a remoção acontecem sob o lock do próprio usuário
     /// (o mesmo do login), para que duas remoções paralelas não deixem o usuário sem forma de entrar.
+    /// Na mesma transação encerra todas as outras sessões do usuário (só a <paramref name="sessaoAtual"/> fica):
+    /// quem remove uma credencial costuma estar tirando um celular perdido, e a sessão dele não pode continuar valendo.
     /// </summary>
-    public async Task<ResultadoDaRemocao> RemoverAsync(Guid id, CancellationToken ct)
+    public async Task<ResultadoDaRemocao> RemoverAsync(Guid id, Guid? sessaoAtual, CancellationToken ct)
     {
-        if (atual.UsuarioId is not { } eu) return ResultadoDaRemocao.NaoEncontrada;
+        if (atual.UsuarioId is not { } eu || sessaoAtual is not { } minhaSessao) return ResultadoDaRemocao.NaoEncontrada;
         ct.ThrowIfCancellationRequested();
         var semCancelar = CancellationToken.None;
 
@@ -58,6 +60,10 @@ internal sealed class GestaoDeCredenciais(IdentidadeDbContext db, TentativaDeLog
         }
 
         db.Credenciais.Remove(credencial); // o SoftDeleteInterceptor transforma em is_deleted = true
+        var outrasSessoes = await db.Sessoes.AsTracking()
+            .Where(s => s.UsuarioId == eu && s.Id != minhaSessao)
+            .ToListAsync(semCancelar);
+        db.Sessoes.RemoveRange(outrasSessoes); // idem: is_deleted = true
         await db.SaveChangesAsync(semCancelar);
         await transacao.CommitAsync(semCancelar);
         return ResultadoDaRemocao.Removida;

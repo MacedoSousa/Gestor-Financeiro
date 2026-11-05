@@ -407,7 +407,7 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Remove (soft delete) uma credencial do próprio usuário; exige confirmação recente. A última ativa e confirmada dá 409. */
+        /** Remove (soft delete) uma credencial do próprio usuário e encerra as outras sessões dele; exige confirmação recente. A última ativa e confirmada dá 409. */
         delete: operations["RemoverCredencial"];
         options?: never;
         head?: never;

@@ -850,7 +850,7 @@
         "tags": [
           "Dispositivos"
         ],
-        "summary": "Remove (soft delete) uma credencial do próprio usuário; exige confirmação recente. A última ativa e confirmada dá 409.",
+        "summary": "Remove (soft delete) uma credencial do próprio usuário e encerra as outras sessões dele; exige confirmação recente. A última ativa e confirmada dá 409.",
         "operationId": "RemoverCredencial",
         "parameters": [
           {
