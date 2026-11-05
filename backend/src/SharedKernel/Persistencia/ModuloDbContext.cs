@@ -42,11 +42,11 @@ public abstract class ModuloDbContext(DbContextOptions options, IUsuarioAtual us
 
     private void Invocar(string metodo, Type tipo, ModelBuilder modelBuilder) =>
         typeof(ModuloDbContext)
-            .GetMethod(metodo, BindingFlags.NonPublic | BindingFlags.Instance)!
+            .GetMethod(metodo, BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static)!
             .MakeGenericMethod(tipo)
             .Invoke(this, [modelBuilder]);
 
-    private void FiltrarSoftDelete<T>(ModelBuilder modelBuilder) where T : class, ISoftDeletable =>
+    private static void FiltrarSoftDelete<T>(ModelBuilder modelBuilder) where T : class, ISoftDeletable =>
         modelBuilder.Entity<T>().HasQueryFilter(Filtros.SoftDelete, e => !e.IsDeleted);
 
     private void FiltrarCasal<T>(ModelBuilder modelBuilder) where T : class, ICasalScoped =>
