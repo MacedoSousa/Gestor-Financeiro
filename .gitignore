@@ -1,0 +1,36 @@
+# .NET
+bin/
+obj/
+*.user
+.vs/
+TestResults/
+
+# Node / front
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Segredos — nunca versionar
+.env
+.env.*
+!.env.example
+infra/secrets/*
+!infra/secrets/README.md
+*.key
+*.pem
+chave-servico*
+
+# Dados locais
+infra/data/
+*.dump
+backups/
+
+# Editor / SO
+.idea/
+.vscode/*
+!.vscode/extensions.json
+.DS_Store
+Thumbs.db
+
+# Claude Code (local)
+.claude/settings.local.json

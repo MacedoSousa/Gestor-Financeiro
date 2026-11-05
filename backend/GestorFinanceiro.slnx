@@ -1,0 +1,21 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/SharedKernel/GestorFinanceiro.SharedKernel.csproj" />
+    <Project Path="src/Host/GestorFinanceiro.Api/GestorFinanceiro.Api.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/">
+    <Project Path="src/Modules/Identidade/GestorFinanceiro.Modules.Identidade.csproj" />
+    <Project Path="src/Modules/Contas/GestorFinanceiro.Modules.Contas.csproj" />
+    <Project Path="src/Modules/Lancamentos/GestorFinanceiro.Modules.Lancamentos.csproj" />
+    <Project Path="src/Modules/Orcamento/GestorFinanceiro.Modules.Orcamento.csproj" />
+    <Project Path="src/Modules/Boletos/GestorFinanceiro.Modules.Boletos.csproj" />
+    <Project Path="src/Modules/Investimentos/GestorFinanceiro.Modules.Investimentos.csproj" />
+    <Project Path="src/Modules/Integracoes/GestorFinanceiro.Modules.Integracoes.csproj" />
+    <Project Path="src/Modules/Assistente/GestorFinanceiro.Modules.Assistente.csproj" />
+    <Project Path="src/Modules/Auditoria/GestorFinanceiro.Modules.Auditoria.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/GestorFinanceiro.UnitTests/GestorFinanceiro.UnitTests.csproj" />
+    <Project Path="tests/GestorFinanceiro.ArchitectureTests/GestorFinanceiro.ArchitectureTests.csproj" />
+  </Folder>
+</Solution>

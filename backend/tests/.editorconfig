@@ -1,0 +1,3 @@
+# Só nos projetos de teste: nomes de método com _ descrevem o cenário (Aceita_cpf_valido).
+[*.cs]
+dotnet_diagnostic.CA1707.severity = none

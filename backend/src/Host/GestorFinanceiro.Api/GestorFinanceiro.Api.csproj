@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <RootNamespace>GestorFinanceiro.Api</RootNamespace>
+    <UserSecretsId>gestor-financeiro-api</UserSecretsId>
+    <!-- Gera contracts/openapi.v1.json a cada build; o front gera os tipos a partir dele. -->
+    <OpenApiGenerateDocuments>true</OpenApiGenerateDocuments>
+    <OpenApiDocumentsDirectory>$(MSBuildProjectDirectory)/../../../../contracts</OpenApiDocumentsDirectory>
+    <OpenApiGenerateDocumentsOptions>--file-name openapi</OpenApiGenerateDocumentsOptions>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+    <PackageReference Include="Microsoft.Extensions.ApiDescription.Server">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\SharedKernel\GestorFinanceiro.SharedKernel.csproj" />
+    <ProjectReference Include="..\..\Modules\Identidade\GestorFinanceiro.Modules.Identidade.csproj" />
+    <ProjectReference Include="..\..\Modules\Contas\GestorFinanceiro.Modules.Contas.csproj" />
+    <ProjectReference Include="..\..\Modules\Lancamentos\GestorFinanceiro.Modules.Lancamentos.csproj" />
+    <ProjectReference Include="..\..\Modules\Orcamento\GestorFinanceiro.Modules.Orcamento.csproj" />
+    <ProjectReference Include="..\..\Modules\Boletos\GestorFinanceiro.Modules.Boletos.csproj" />
+    <ProjectReference Include="..\..\Modules\Investimentos\GestorFinanceiro.Modules.Investimentos.csproj" />
+    <ProjectReference Include="..\..\Modules\Integracoes\GestorFinanceiro.Modules.Integracoes.csproj" />
+    <ProjectReference Include="..\..\Modules\Assistente\GestorFinanceiro.Modules.Assistente.csproj" />
+    <ProjectReference Include="..\..\Modules\Auditoria\GestorFinanceiro.Modules.Auditoria.csproj" />
+  </ItemGroup>
+
+  <!-- Migrações SQL vão junto com o binário para o modo de migração (flag "migrar"). -->
+  <ItemGroup>
+    <None Include="..\..\..\..\db\migrations\*.sql" Link="migrations\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

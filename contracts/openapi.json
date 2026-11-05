@@ -1,0 +1,121 @@
+{
+  "openapi": "3.1.1",
+  "info": {
+    "title": "GestorFinanceiro.Api | v1",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/api/v1/saude": {
+      "get": {
+        "tags": [
+          "Sistema"
+        ],
+        "summary": "Verificação simples de que a API está de pé.",
+        "operationId": "Saude",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SaudeDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/casal": {
+      "get": {
+        "tags": [
+          "Identidade"
+        ],
+        "summary": "Membros do casal do usuário logado (sem CPF).",
+        "operationId": "ObterCasal",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CasalDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "CasalDto": {
+        "required": [
+          "id",
+          "membros"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "membros": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MembroDto"
+            }
+          }
+        }
+      },
+      "MembroDto": {
+        "required": [
+          "id",
+          "apelido",
+          "ehVoce"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "apelido": {
+            "type": "string"
+          },
+          "ehVoce": {
+            "type": "boolean"
+          }
+        }
+      },
+      "SaudeDto": {
+        "required": [
+          "status",
+          "horario"
+        ],
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string"
+          },
+          "horario": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "Sistema"
+    },
+    {
+      "name": "Identidade"
+    }
+  ]
+}

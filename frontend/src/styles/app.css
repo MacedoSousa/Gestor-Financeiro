@@ -1,0 +1,182 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--fundo);
+  color: var(--texto);
+  font-family: var(--fonte);
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: var(--destaque-claro);
+}
+
+.num {
+  font-family: var(--fonte-num);
+  font-variant-numeric: tabular-nums;
+}
+
+.casca {
+  display: flex;
+  flex-wrap: wrap;
+  min-height: 100vh;
+}
+
+.lateral {
+  flex: 1 1 232px;
+  max-width: 272px;
+  padding: 24px 16px;
+  border-right: 1px solid var(--divisor);
+  background: var(--lateral);
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.marca {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 8px;
+}
+
+.marca-icone {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: var(--destaque);
+  color: var(--destaque-texto);
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.nav a {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: var(--raio-sm);
+  color: var(--texto-suave);
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.nav a:hover {
+  background: #141b25;
+  color: var(--texto);
+}
+
+.nav a.active {
+  background: #12262a;
+  color: var(--texto);
+}
+
+.conteudo {
+  flex: 999 1 560px;
+  min-width: 0;
+  padding: 28px 40px 48px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.titulo {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.subtitulo {
+  color: var(--texto-suave);
+  font-size: 13px;
+}
+
+.grade-kpi {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.cartao {
+  background: var(--superficie);
+  border: 1px solid var(--borda);
+  border-radius: var(--raio);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cartao.destaque {
+  background: var(--destaque-fundo);
+  border-color: var(--destaque-borda);
+}
+
+.cartao-rotulo {
+  font-size: 13px;
+  color: var(--texto-suave);
+  font-weight: 500;
+}
+
+.cartao.destaque .cartao-rotulo {
+  color: #99f6e4;
+}
+
+.cartao-valor {
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.cartao-nota {
+  font-size: 12px;
+  color: var(--texto-suave);
+}
+
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.ponto {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--texto-fraco);
+}
+
+.ponto.ok {
+  background: var(--positivo);
+}
+
+.ponto.erro {
+  background: var(--negativo);
+}
+
+@media (max-width: 900px) {
+  .lateral {
+    max-width: none;
+    border-right: 0;
+    border-bottom: 1px solid var(--divisor);
+  }
+  .conteudo {
+    padding: 20px 16px 40px;
+  }
+}

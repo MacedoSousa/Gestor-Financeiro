@@ -1,0 +1,126 @@
+# Gestor Financeiro — homelab (i5 10ª geração, 32 GB, RTX 2060 Super)
+#
+#   docker compose -f infra/docker-compose.yml up -d                      # núcleo
+#   docker compose -f infra/docker-compose.yml --profile whatsapp up -d   # + gateway (Fase 3)
+#   docker compose -f infra/docker-compose.yml --profile ocr up -d        # + leitor de comprovantes na GPU (Fase 3)
+#
+# Rede: só a porta 443 do Caddy fica aberta no roteador, para o domínio DuckDNS (ADR-006).
+# Postgres, gateway e OCR nunca são publicados. Variáveis em infra/.env (veja .env.example).
+
+name: gestor
+
+x-padrao: &padrao
+  restart: unless-stopped
+  security_opt: ["no-new-privileges:true"]
+  logging:
+    driver: json-file
+    options: { max-size: "10m", max-file: "3" }
+
+services:
+  postgres:
+    <<: *padrao
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: gestor
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD_FILE: /run/secrets/pg_superusuario
+    secrets: [pg_superusuario, pg_senha_app, pg_senha_migrador]
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    networks: [dados]
+    mem_limit: 1g
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d gestor"]
+      interval: 10s
+      retries: 6
+
+  api:
+    <<: *padrao
+    build:
+      context: ..
+      dockerfile: backend/src/Host/GestorFinanceiro.Api/Dockerfile
+    depends_on:
+      postgres: { condition: service_healthy }
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__App: "Host=postgres;Database=gestor;Username=gf_app;Passfile=/run/secrets/pgpass_app"
+      ConnectionStrings__Migrador: "Host=postgres;Database=gestor;Username=gf_migrator;Passfile=/run/secrets/pgpass_migrador"
+    secrets: [gf_chave_servico, pgpass_app, pgpass_migrador]
+    volumes:
+      - ./data/chaves:/var/lib/gestor/chaves
+    networks:
+      app: { ipv4_address: 172.30.0.10 }
+      dados: {}
+    read_only: true
+    tmpfs: [/tmp]
+    mem_limit: 512m
+
+  web:
+    <<: *padrao
+    build:
+      context: ..
+      dockerfile: frontend/Dockerfile
+    depends_on: [api]
+    ports:
+      - "443:443"
+    environment:
+      DOMINIO: ${DOMINIO:?defina DOMINIO em infra/.env}
+      DUCKDNS_TOKEN: ${DUCKDNS_TOKEN:?defina DUCKDNS_TOKEN em infra/.env}
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./data/caddy:/data
+    networks:
+      app: { ipv4_address: 172.30.0.2 }
+    mem_limit: 128m
+
+  # Mantém o IP de casa atualizado no DuckDNS a cada 5 minutos.
+  duckdns:
+    <<: *padrao
+    image: lscr.io/linuxserver/duckdns:latest
+    environment:
+      SUBDOMAINS: ${DUCKDNS_SUBDOMINIO:?defina DUCKDNS_SUBDOMINIO em infra/.env}
+      TOKEN: ${DUCKDNS_TOKEN}
+      TZ: America/Sao_Paulo
+    networks: [app]
+    mem_limit: 64m
+
+  whatsapp:
+    <<: *padrao
+    profiles: [whatsapp]
+    image: atendai/evolution-api:v2.2.3
+    env_file: ./whatsapp.env
+    networks: [app]
+    mem_limit: 512m
+
+  ocr:
+    <<: *padrao
+    profiles: [ocr]
+    image: ollama/ollama:latest
+    volumes:
+      - ./data/ollama:/root/.ollama
+    networks: [app]
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+networks:
+  # Caddy, API, gateway e OCR. A API precisa de saída para Pluggy e Gemini.
+  app:
+    ipam:
+      config: [{ subnet: 172.30.0.0/24 }]
+  # Só API ↔ Postgres; sem saída para a internet.
+  dados:
+    internal: true
+
+secrets:
+  pg_superusuario:   { file: ./secrets/pg_superusuario }
+  pg_senha_app:      { file: ./secrets/pg_senha_app }
+  pg_senha_migrador: { file: ./secrets/pg_senha_migrador }
+  pgpass_app:        { file: ./secrets/pgpass_app }
+  pgpass_migrador:   { file: ./secrets/pgpass_migrador }
+  gf_chave_servico:  { file: ./secrets/gf_chave_servico }
