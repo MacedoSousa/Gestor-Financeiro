@@ -32,14 +32,22 @@ export function useEstadoDoCadastro() {
 export function useCadastrarCasal() {
   return useMutation<CasalCadastrado, ErroDeCadastro, CadastroDoCasal>({
     mutationFn: async (corpo) => {
-      const { data, error, response } = await api.POST("/api/v1/casal", { body: corpo });
+      let resposta;
+      try {
+        resposta = await api.POST("/api/v1/casal", { body: corpo });
+      } catch {
+        throw new ErroDeCadastro(0, "Sem conexão com o servidor. Tente de novo.");
+      }
+      const { data, error, response } = resposta;
       if (data) return data;
       if (response.status === 404) throw new ErroDeCadastro(404, "O casal já foi cadastrado.");
-      const problema = error as { title?: string | null; errors?: Record<string, string[]> } | undefined;
+      const problema = error as { title?: unknown; errors?: unknown } | undefined;
       if (response.status === 400) {
-        throw new ErroDeCadastro(400, problema?.title ?? "Confira os campos.", problema?.errors ?? {});
+        const errors = problema?.errors && typeof problema.errors === "object" ? (problema.errors as Record<string, string[]>) : {};
+        throw new ErroDeCadastro(400, "Revise os dados do formulário.", errors);
       }
-      throw new ErroDeCadastro(response.status, problema?.title ?? "Não foi possível concluir o cadastro.");
+      if (response.status === 403 && typeof problema?.title === "string") throw new ErroDeCadastro(403, problema.title);
+      throw new ErroDeCadastro(response.status, "Não foi possível concluir o cadastro. Tente de novo.");
     },
   });
 }

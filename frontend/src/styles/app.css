@@ -308,4 +308,25 @@ a {
     background: #fff;
     color: #000;
   }
+  .lateral,
+  .marca,
+  button,
+  .campo-check {
+    display: none !important;
+  }
+  .cartao,
+  .cartao.destaque {
+    background: none;
+    border: 0;
+    padding: 0;
+  }
+  .cartao *,
+  .cartao.destaque *,
+  .titulo,
+  .codigo-recuperacao,
+  .cartao-nota,
+  .cartao.destaque .cartao-rotulo {
+    color: #000 !important;
+    background: none !important;
+  }
 }

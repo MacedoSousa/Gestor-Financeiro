@@ -1,4 +1,4 @@
-import { useId, useState, type FormEvent } from "react";
+import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { Navigate, useNavigate } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCadastrarCasal, useEstadoDoCadastro } from "../api/cadastro";
@@ -70,6 +70,13 @@ export function Cadastro() {
   const [c2, setC2] = useState<Conjuge>(vazio);
   const [confirmacaoErrada, setConfirmacaoErrada] = useState<{ c1?: string; c2?: string }>({});
 
+  const alertaRef = useRef<HTMLParagraphElement>(null);
+  const erroAtual = cadastrar.error;
+  useEffect(() => {
+    if (!erroAtual) return;
+    (alertaRef.current ?? document.querySelector<HTMLElement>('[aria-invalid="true"]'))?.focus();
+  }, [erroAtual]);
+
   if (cadastrar.data) {
     return (
       <CodigoDeRecuperacao
@@ -105,7 +112,18 @@ export function Cadastro() {
 
   const erroDe = cadastrar.error?.status === 400 ? cadastrar.error.errors : {};
   const erro = (chave: string) => erroDe[chave]?.[0];
-  const alerta = cadastrar.error && cadastrar.error.status !== 400 ? cadastrar.error.message : undefined;
+  const camposDesenhados = new Set([
+    "nomeFamilia",
+    "codigoInstalacao",
+    ...[1, 2].flatMap((n) => ["nomeCompleto", "cpf", "senha"].map((c) => `conjuge${n}.${c}`)),
+  ]);
+  const algumCampoMapeado = Object.keys(erroDe).some((k) => camposDesenhados.has(k));
+  const alerta =
+    cadastrar.error && cadastrar.error.status !== 400
+      ? cadastrar.error.message
+      : cadastrar.error && !algumCampoMapeado
+        ? "Revise os dados do formulário."
+        : undefined;
 
   function enviar(e: FormEvent) {
     e.preventDefault();
@@ -115,12 +133,21 @@ export function Cadastro() {
     };
     setConfirmacaoErrada(divergencia);
     if (divergencia.c1 || divergencia.c2) return;
-    cadastrar.mutate({
-      codigoInstalacao,
-      nomeFamilia,
-      conjuge1: { nomeCompleto: c1.nomeCompleto, cpf: c1.cpf, senha: c1.senha },
-      conjuge2: { nomeCompleto: c2.nomeCompleto, cpf: c2.cpf, senha: c2.senha },
-    });
+    cadastrar.mutate(
+      {
+        codigoInstalacao,
+        nomeFamilia,
+        conjuge1: { nomeCompleto: c1.nomeCompleto, cpf: c1.cpf, senha: c1.senha },
+        conjuge2: { nomeCompleto: c2.nomeCompleto, cpf: c2.cpf, senha: c2.senha },
+      },
+      {
+        // Senhas não ficam no estado do componente enquanto o código é mostrado.
+        onSuccess: () => {
+          setC1((c) => ({ ...c, senha: "", confirmacao: "" }));
+          setC2((c) => ({ ...c, senha: "", confirmacao: "" }));
+        },
+      },
+    );
   }
 
   const cartaoConjuge = (
@@ -185,7 +212,7 @@ export function Cadastro() {
       </header>
 
       {alerta && (
-        <p role="alert" className="alerta-form">
+        <p role="alert" className="alerta-form" tabIndex={-1} ref={alertaRef}>
           {alerta}
         </p>
       )}
