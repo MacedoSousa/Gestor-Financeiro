@@ -30,7 +30,7 @@
     <ProjectReference Include="..\..\Modules\Auditoria\GestorFinanceiro.Modules.Auditoria.csproj" />
   </ItemGroup>
 
-  <!-- Migrações SQL vão junto com o binário para o modo --migrar. -->
+  <!-- Migrações SQL vão junto com o binário para o modo de migração (flag "migrar"). -->
   <ItemGroup>
     <None Include="..\..\..\..\db\migrations\*.sql" Link="migrations\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
