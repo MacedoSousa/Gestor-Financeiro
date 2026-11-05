@@ -18,6 +18,7 @@ public static class NomesDoLogin
     public const string Esquema = "Sessao";
     public const string CookieDeSessao = "__Host-gf_sessao";
     public const string CookieDeRegistro = "__Host-gf_registro";
+    public const string CookieDePedido = "__Host-gf_pedido";
     public const string ClaimCasal = "casal_id";
     public const string ClaimSessao = "sessao_id";
     public const string ClaimConfirmadaEm = "confirmada_em";

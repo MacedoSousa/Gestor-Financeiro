@@ -14,6 +14,7 @@ internal static class EndpointsDeSessao
 {
     internal const string MensagemFalhaDeLogin = "Não foi possível entrar. Confira os dados e tente de novo.";
     internal const string MensagemContaBloqueada = "Conta bloqueada por excesso de tentativas. Tente mais tarde ou peça ao outro cônjuge para destravar.";
+    internal const string MensagemConfirmacaoInvalida = "Informe o código TOTP ou a passkey.";
     internal const string MensagemJaConfigurado = "Este acesso já foi configurado. Entre com sua passkey ou TOTP.";
 
     public static IEndpointRouteBuilder MapAutenticacao(this IEndpointRouteBuilder api)
@@ -70,6 +71,38 @@ internal static class EndpointsDeSessao
         .WithSummary("Primeiro acesso por CPF e senha do cadastro; responde 204 com o cookie de autorização de registro.")
         .ProducesProblem(StatusCodes.Status401Unauthorized)
         .ProducesProblem(StatusCodes.Status403Forbidden)
+        .ProducesProblem(StatusCodes.Status423Locked);
+
+        grupo.MapPost("/confirmar/opcoes", async Task<Results<Ok<OpcoesDeConfirmacaoDto>, UnauthorizedHttpResult>> (
+            ClaimsPrincipal usuario, IUsuarioAtual atual, ServicoDePasskeys passkeys, HttpResponse resposta, CancellationToken ct) =>
+        {
+            if (atual.UsuarioId is not { } usuarioId || !Guid.TryParse(usuario.FindFirstValue(NomesDoLogin.ClaimSessao), out var sessaoId))
+                return TypedResults.Unauthorized();
+            resposta.Headers.CacheControl = "no-store";
+            return TypedResults.Ok(await passkeys.OpcoesDeConfirmacaoAsync(usuarioId, sessaoId, ct));
+        })
+        .WithName("OpcoesDeConfirmacao")
+        .WithSummary("Opções de asserção para confirmar a identidade, com as passkeys do usuário da sessão; o desafio fica ligado à sessão.");
+
+        grupo.MapPost("/confirmar", async Task<Results<NoContent, ProblemHttpResult, UnauthorizedHttpResult>> (
+            ConfirmacaoDeIdentidadeDto pedido, ClaimsPrincipal usuario, IUsuarioAtual atual, ConfirmacaoDeIdentidade confirmacao,
+            HttpResponse resposta, CancellationToken ct) =>
+        {
+            if (atual.UsuarioId is not { } usuarioId || !Guid.TryParse(usuario.FindFirstValue(NomesDoLogin.ClaimSessao), out var sessaoId))
+                return TypedResults.Unauthorized();
+            resposta.Headers.CacheControl = "no-store";
+            return await confirmacao.ConfirmarAsync(usuarioId, sessaoId, pedido, ct) switch
+            {
+                ResultadoDaConfirmacao.Confirmado => TypedResults.NoContent(),
+                ResultadoDaConfirmacao.Bloqueado => TypedResults.Problem(title: MensagemContaBloqueada, statusCode: StatusCodes.Status423Locked),
+                ResultadoDaConfirmacao.Invalido => TypedResults.Problem(title: MensagemConfirmacaoInvalida, statusCode: StatusCodes.Status400BadRequest),
+                _ => TypedResults.Problem(title: MensagemFalhaDeLogin, statusCode: StatusCodes.Status401Unauthorized),
+            };
+        })
+        .WithName("ConfirmarIdentidade")
+        .WithSummary("Renova a confirmação recente com o TOTP ou uma passkey do próprio usuário; erro conta falha.")
+        .ProducesProblem(StatusCodes.Status400BadRequest)
+        .ProducesProblem(StatusCodes.Status401Unauthorized)
         .ProducesProblem(StatusCodes.Status423Locked);
 
         return api;

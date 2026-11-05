@@ -43,6 +43,11 @@ public static class IdentidadeModule
         services.AddSingleton<IFido2>(sp => new Fido2(sp.GetRequiredService<OpcoesDoWebAuthn>().ParaFido2(), metadataService: null));
         services.AddSingleton<DesafiosWebAuthn>();
         services.AddScoped<ServicoDePasskeys>();
+        services.AddScoped<RotacaoDoCodigoDeRecuperacao>();
+        services.AddScoped<RecuperacaoDeAcesso>();
+        services.AddScoped<PedidosDeDispositivo>();
+        services.AddScoped<ConfirmacaoDeIdentidade>();
+        services.AddScoped<DestravarConjuge>();
         services.AddScoped<ISessoes>(sp => sp.GetRequiredService<ServicoDeSessoes>());
         return services;
     }
@@ -66,6 +71,7 @@ public static class IdentidadeModule
         api.MapAutenticacao();
         api.MapTotp();
         api.MapPasskey();
+        api.MapDispositivo();
 
         return api;
     }

@@ -28,11 +28,32 @@
 	}
 
 	# Login e cadastro de passkey: no máximo 10 tentativas por minuto por IP.
-	@autenticacao path /api/v1/auth/*
+	# A consulta do estado do pedido de celular novo (GET) fica de fora: tem zona própria.
+	# O resgate do pedido (POST .../pedido/resgate) continua aqui.
+	@autenticacao {
+		path /api/v1/auth/*
+		not {
+			method GET
+			path /api/v1/auth/dispositivo/pedido
+		}
+	}
 	rate_limit @autenticacao {
 		zone autenticacao {
 			key {remote_host}
 			events 10
+			window 1m
+		}
+	}
+
+	# Consulta do estado do pedido de celular novo: o celular pergunta de tempos em tempos; 60 por minuto por IP.
+	@pedido {
+		method GET
+		path /api/v1/auth/dispositivo/pedido
+	}
+	rate_limit @pedido {
+		zone pedido {
+			key {remote_host}
+			events 60
 			window 1m
 		}
 	}

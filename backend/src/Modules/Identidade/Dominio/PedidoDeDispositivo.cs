@@ -28,11 +28,12 @@ internal sealed class PedidoDeDispositivo : Entidade, ICasalScoped
 
     public bool Expirou(DateTimeOffset agora) => agora >= ExpiraEm;
 
-    /// <summary>O pedido não pode ser aprovado pelo próprio dono.</summary>
-    public void Aprovar(Guid aprovadorId)
+    /// <summary>O pedido não pode ser aprovado pelo próprio dono, nem depois de expirar.</summary>
+    public void Aprovar(Guid aprovadorId, DateTimeOffset agora)
     {
         if (aprovadorId == UsuarioId) throw new InvalidOperationException("O pedido não pode ser aprovado pelo próprio dono.");
         if (Estado != EstadoDoPedido.Pendente) throw new InvalidOperationException("Só pedido pendente pode ser aprovado.");
+        if (Expirou(agora)) throw new InvalidOperationException("Pedido expirado não pode ser aprovado.");
         Estado = EstadoDoPedido.Aprovado;
         AprovadoPor = aprovadorId;
     }

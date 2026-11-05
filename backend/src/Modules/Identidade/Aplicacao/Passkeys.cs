@@ -65,6 +65,11 @@ internal sealed class DesafiosWebAuthn(IMemoryCache cache, ICofre cofre, TimePro
     public AssertionOptions? RetirarLogin(string? desafio) =>
         string.IsNullOrEmpty(desafio) || desafio.Length > TamanhoMaximoDoDesafio ? null : Retirar(ChaveDeLogin(desafio)) as AssertionOptions;
 
+    /// <summary>Na confirmação, o desafio fica ligado à sessão: um por sessão, e o novo substitui o anterior.</summary>
+    public void GuardarConfirmacao(Guid sessaoId, AssertionOptions opcoes) => Guardar(ChaveDeConfirmacao(sessaoId), opcoes);
+
+    public AssertionOptions? RetirarConfirmacao(Guid sessaoId) => Retirar(ChaveDeConfirmacao(sessaoId)) as AssertionOptions;
+
     private void Guardar(string chave, object valor) =>
         cache.Set(chave, new Pendente(valor, relogio.GetUtcNow() + TemposDoLogin.DesafioWebAuthn), TemposDoLogin.DesafioWebAuthn);
 
@@ -80,6 +85,8 @@ internal sealed class DesafiosWebAuthn(IMemoryCache cache, ICofre cofre, TimePro
         "webauthn:registro:" + Convert.ToBase64String(cofre.IndiceCego(token, AutorizacoesDeRegistro.PropositoDoToken));
 
     private static string ChaveDeLogin(string desafio) => "webauthn:login:" + desafio;
+
+    private static string ChaveDeConfirmacao(Guid sessaoId) => "webauthn:confirmacao:" + sessaoId.ToString("N");
 }
 
 internal abstract record ResultadoDaPasskey
@@ -263,35 +270,7 @@ internal sealed class ServicoDePasskeys(
                     .IgnoreQueryFilters([Filtros.Casal])
                     .AsTracking()
                     .FirstOrDefaultAsync(c => c.Id == conhecida.Id && c.Tipo == TipoCredencial.Passkey && c.Confirmada, semCancelar);
-                if (credencial is null) return false;
-
-                var dono = credencial.UsuarioId.ToByteArray();
-                if (resposta.Response.UserHandle is not { } handle || !handle.AsSpan().SequenceEqual(dono)) return false;
-
-                var anterior = credencial.Contador ?? 0;
-                VerifyAssertionResult verificado;
-                try
-                {
-                    verificado = await fido2.MakeAssertionAsync(new MakeAssertionParams
-                    {
-                        AssertionResponse = resposta,
-                        OriginalOptions = opcoes,
-                        StoredPublicKey = credencial.ChavePublica!,
-                        StoredSignatureCounter = (uint)anterior,
-                        IsUserHandleOwnerOfCredentialIdCallback = (p, _) => Task.FromResult(
-                            p.UserHandle.AsSpan().SequenceEqual(dono) && p.CredentialId.AsSpan().SequenceEqual(credencial.CredentialId)),
-                    }, semCancelar);
-                }
-                catch (Fido2VerificationException)
-                {
-                    return false;
-                }
-
-                // O contador tem que crescer; só um autenticador sem contador (0 e 0) passa sem crescer.
-                var contador = (long)verificado.SignCount;
-                if (contador <= anterior && !(contador == 0 && anterior == 0)) return false;
-                credencial.RegistrarUsoPasskey(contador, agora);
-                return true;
+                return credencial is not null && await VerificarAssercaoAsync(credencial, resposta, opcoes, agora, semCancelar);
             },
             ct: ct);
 
@@ -301,6 +280,78 @@ internal sealed class ServicoDePasskeys(
             ResultadoDaTentativa.Bloqueado => new ResultadoDaPasskey.Bloqueado(),
             _ => new ResultadoDaPasskey.Falhou(),
         };
+    }
+
+    /// <summary>Opções de asserção para confirmar a identidade do usuário da sessão: só as passkeys dele.</summary>
+    public async Task<OpcoesDeConfirmacaoDto> OpcoesDeConfirmacaoAsync(Guid usuarioId, Guid sessaoId, CancellationToken ct)
+    {
+        // Usuário da sessão: o filtro Casal continua ligado.
+        var ativas = await db.Credenciais
+            .AsNoTracking()
+            .Where(c => c.UsuarioId == usuarioId && c.Tipo == TipoCredencial.Passkey && c.Confirmada)
+            .Select(c => c.CredentialId!)
+            .ToListAsync(ct);
+        var opcoes = fido2.GetAssertionOptions(new GetAssertionOptionsParams
+        {
+            AllowedCredentials = ativas.Select(id => new PublicKeyCredentialDescriptor(id)).ToList(),
+            UserVerification = UserVerificationRequirement.Required,
+        });
+        desafios.GuardarConfirmacao(sessaoId, opcoes);
+        return new OpcoesDeConfirmacaoDto(
+            Base64Url.EncodeToString(opcoes.Challenge),
+            (long)TemposDoLogin.DesafioWebAuthn.TotalMilliseconds,
+            webAuthn.RpId,
+            ativas.Select(id => new DescritorDeCredencialDto(Base64Url.EncodeToString(id), TipoChavePublica)).ToList(),
+            Obrigatorio);
+    }
+
+    /// <summary>
+    /// Confere, dentro de <see cref="TentativaDeLogin"/>, a asserção de uma passkey do próprio usuário da sessão
+    /// contra o desafio ligado à sessão. Credencial de outra pessoa ou desconhecida é falha (contada pela tentativa).
+    /// </summary>
+    internal async Task<bool> ConferirConfirmacaoAsync(
+        Guid usuarioId, AuthenticatorAssertionRawResponse resposta, AssertionOptions opcoes, DateTimeOffset agora)
+    {
+        var semCancelar = CancellationToken.None;
+        var rawId = resposta.RawId;
+        var credencial = await db.Credenciais
+            .AsTracking()
+            .FirstOrDefaultAsync(c => c.CredentialId == rawId && c.UsuarioId == usuarioId
+                && c.Tipo == TipoCredencial.Passkey && c.Confirmada, semCancelar);
+        return credencial is not null && await VerificarAssercaoAsync(credencial, resposta, opcoes, agora, semCancelar);
+    }
+
+    /// <summary>User handle do dono, assinatura, desafio, origem, UV e contador crescente.</summary>
+    private async Task<bool> VerificarAssercaoAsync(
+        Credencial credencial, AuthenticatorAssertionRawResponse resposta, AssertionOptions opcoes, DateTimeOffset agora, CancellationToken ct)
+    {
+        var dono = credencial.UsuarioId.ToByteArray();
+        if (resposta.Response.UserHandle is not { } handle || !handle.AsSpan().SequenceEqual(dono)) return false;
+
+        var anterior = credencial.Contador ?? 0;
+        VerifyAssertionResult verificado;
+        try
+        {
+            verificado = await fido2.MakeAssertionAsync(new MakeAssertionParams
+            {
+                AssertionResponse = resposta,
+                OriginalOptions = opcoes,
+                StoredPublicKey = credencial.ChavePublica!,
+                StoredSignatureCounter = (uint)anterior,
+                IsUserHandleOwnerOfCredentialIdCallback = (p, _) => Task.FromResult(
+                    p.UserHandle.AsSpan().SequenceEqual(dono) && p.CredentialId.AsSpan().SequenceEqual(credencial.CredentialId)),
+            }, ct);
+        }
+        catch (Fido2VerificationException)
+        {
+            return false;
+        }
+
+        // O contador tem que crescer; só um autenticador sem contador (0 e 0) passa sem crescer.
+        var contador = (long)verificado.SignCount;
+        if (contador <= anterior && !(contador == 0 && anterior == 0)) return false;
+        credencial.RegistrarUsoPasskey(contador, agora);
+        return true;
     }
 
     private static AuthenticatorAttestationRawResponse? ParaAtestacao(RespostaDeRegistroDePasskeyDto? dto)
@@ -324,7 +375,7 @@ internal sealed class ServicoDePasskeys(
         };
     }
 
-    private static AuthenticatorAssertionRawResponse? ParaAssercao(RespostaDeLoginComPasskeyDto? dto)
+    internal static AuthenticatorAssertionRawResponse? ParaAssercao(RespostaDeLoginComPasskeyDto? dto)
     {
         if (dto?.Response is null) return null;
         if (Decodificar(dto.RawId) is not { } rawId

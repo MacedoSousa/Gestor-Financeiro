@@ -114,30 +114,7 @@ internal sealed class ServicoDeTotp(
 
         var agora = relogio.GetUtcNow();
         var id = usuarioId.Value;
-        var resultado = await tentativa.ExecutarAsync(
-            id,
-            async (_, _) =>
-            {
-                var credenciais = await db.Credenciais
-                    .IgnoreQueryFilters([Filtros.Casal])
-                    .AsTracking()
-                    .Where(c => c.UsuarioId == id && c.Tipo == TipoCredencial.Totp && c.Confirmada)
-                    .ToListAsync(CancellationToken.None);
-                if (credenciais.Count == 0)
-                {
-                    Totp.Conferir(SegredoFalso, codigo, long.MinValue, agora, out _);
-                    return false;
-                }
-                foreach (var credencial in credenciais)
-                {
-                    if (!Totp.Conferir(Totp.DeBase32(credencial.LerSegredo(cofre)), codigo, credencial.UltimoPasso ?? long.MinValue, agora, out var passo))
-                        continue;
-                    credencial.RegistrarUsoTotp(passo, agora);
-                    return true;
-                }
-                return false;
-            },
-            ct: ct);
+        var resultado = await tentativa.ExecutarAsync(id, (_, _) => ConferirCodigoAsync(id, codigo, agora), ct: ct);
 
         return resultado switch
         {
@@ -145,6 +122,33 @@ internal sealed class ServicoDeTotp(
             ResultadoDaTentativa.Bloqueado => new ResultadoDoTotp.Bloqueado(),
             _ => new ResultadoDoTotp.Falhou(),
         };
+    }
+
+    /// <summary>
+    /// Confere o código contra os TOTPs confirmados do cônjuge e registra o passo usado (sem reuso).
+    /// Só deve rodar dentro de <see cref="TentativaDeLogin"/>, que conta a falha e grava o uso.
+    /// </summary>
+    internal async Task<bool> ConferirCodigoAsync(Guid usuarioId, string? codigo, DateTimeOffset agora)
+    {
+        codigo ??= string.Empty;
+        var credenciais = await db.Credenciais
+            .IgnoreQueryFilters([Filtros.Casal])
+            .AsTracking()
+            .Where(c => c.UsuarioId == usuarioId && c.Tipo == TipoCredencial.Totp && c.Confirmada)
+            .ToListAsync(CancellationToken.None);
+        if (credenciais.Count == 0)
+        {
+            Totp.Conferir(SegredoFalso, codigo, long.MinValue, agora, out _);
+            return false;
+        }
+        foreach (var credencial in credenciais)
+        {
+            if (!Totp.Conferir(Totp.DeBase32(credencial.LerSegredo(cofre)), codigo, credencial.UltimoPasso ?? long.MinValue, agora, out var passo))
+                continue;
+            credencial.RegistrarUsoTotp(passo, agora);
+            return true;
+        }
+        return false;
     }
 
     private async Task<Guid?> BuscarUsuarioComTotpAsync(string cpf, CancellationToken ct)

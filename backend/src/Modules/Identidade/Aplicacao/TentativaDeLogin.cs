@@ -32,10 +32,9 @@ internal sealed class TentativaDeLogin(IdentidadeDbContext db, TimeProvider relo
         ct.ThrowIfCancellationRequested();
         // Daqui em diante sem o token da requisição: uma desconexão não pode deixar estado pela metade.
         var semCancelar = CancellationToken.None;
-        var chave = $"identidade.login:{usuarioId}";
 
         await using var transacao = await db.Database.BeginTransactionAsync(semCancelar);
-        await db.Database.ExecuteSqlAsync($"SELECT pg_advisory_xact_lock(hashtextextended({chave}, 0))", semCancelar);
+        await TravarAsync(usuarioId);
 
         // O casal ainda não é conhecido: só o filtro de soft delete continua ativo.
         var usuario = await db.Usuarios
@@ -67,5 +66,16 @@ internal sealed class TentativaDeLogin(IdentidadeDbContext db, TimeProvider relo
         await db.SaveChangesAsync(semCancelar);
         await transacao.CommitAsync(semCancelar);
         return ok ? ResultadoDaTentativa.Sucesso : ResultadoDaTentativa.Falha;
+    }
+
+    /// <summary>
+    /// O lock por cônjuge, na transação já aberta pelo chamador. Quem mexe no estado de login de um cônjuge
+    /// fora de uma tentativa (destravar, resgatar pedido) usa o mesmo lock, para não sobrescrever uma tentativa em curso.
+    /// </summary>
+    public async Task TravarAsync(Guid usuarioId)
+    {
+        if (db.Database.CurrentTransaction is null) throw new InvalidOperationException("O lock do cônjuge exige uma transação aberta.");
+        var chave = $"identidade.login:{usuarioId}";
+        await db.Database.ExecuteSqlAsync($"SELECT pg_advisory_xact_lock(hashtextextended({chave}, 0))", CancellationToken.None);
     }
 }
