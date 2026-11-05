@@ -48,11 +48,123 @@
             "description": "Not Found"
           }
         }
+      },
+      "post": {
+        "tags": [
+          "Identidade"
+        ],
+        "summary": "Cadastra o casal, os dois cônjuges e os envelopes da DEK. Devolve o código de recuperação uma única vez.",
+        "operationId": "CadastrarCasal",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CadastroDoCasalDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CasalCadastradoDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/casal/cadastro": {
+      "get": {
+        "tags": [
+          "Identidade"
+        ],
+        "summary": "Informa se o cadastro do casal ainda está aberto nesta instalação.",
+        "operationId": "ObterEstadoDoCadastro",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EstadoDoCadastroDto"
+                }
+              }
+            }
+          }
+        }
       }
     }
   },
   "components": {
     "schemas": {
+      "CadastroDoCasalDto": {
+        "required": [
+          "codigoInstalacao",
+          "nomeFamilia",
+          "conjuge1",
+          "conjuge2"
+        ],
+        "type": "object",
+        "properties": {
+          "codigoInstalacao": {
+            "type": "string"
+          },
+          "nomeFamilia": {
+            "type": "string"
+          },
+          "conjuge1": {
+            "$ref": "#/components/schemas/ConjugeNovoDto"
+          },
+          "conjuge2": {
+            "$ref": "#/components/schemas/ConjugeNovoDto"
+          }
+        }
+      },
+      "CasalCadastradoDto": {
+        "required": [
+          "casalId",
+          "codigoRecuperacao"
+        ],
+        "type": "object",
+        "properties": {
+          "casalId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "codigoRecuperacao": {
+            "type": "string"
+          }
+        }
+      },
       "CasalDto": {
         "required": [
           "id",
@@ -68,6 +180,83 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/MembroDto"
+            }
+          }
+        }
+      },
+      "ConjugeNovoDto": {
+        "required": [
+          "nomeCompleto",
+          "cpf",
+          "senha"
+        ],
+        "type": "object",
+        "properties": {
+          "nomeCompleto": {
+            "type": "string"
+          },
+          "cpf": {
+            "type": "string"
+          },
+          "senha": {
+            "type": "string"
+          }
+        }
+      },
+      "EstadoDoCadastroDto": {
+        "required": [
+          "disponivel"
+        ],
+        "type": "object",
+        "properties": {
+          "disponivel": {
+            "type": "boolean"
+          }
+        }
+      },
+      "HttpValidationProblemDetails": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "title": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "status": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "detail": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "instance": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "errors": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
             }
           }
         }
@@ -89,6 +278,44 @@
           },
           "ehVoce": {
             "type": "boolean"
+          }
+        }
+      },
+      "ProblemDetails": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "title": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "status": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "detail": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "instance": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
