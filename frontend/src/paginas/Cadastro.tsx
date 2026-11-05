@@ -7,6 +7,13 @@ import { CodigoDeRecuperacao } from "./CodigoDeRecuperacao";
 type Conjuge = { nomeCompleto: string; cpf: string; senha: string; confirmacao: string };
 const vazio: Conjuge = { nomeCompleto: "", cpf: "", senha: "", confirmacao: "" };
 
+/** Mesma regra e mensagem da API (NFC, 12 a 128): erro de digitação não gasta o limite de tentativas. */
+const mensagemSenha = "A senha precisa ter de 12 a 128 caracteres.";
+function senhaValida(senha: string) {
+  const tamanho = senha.normalize("NFC").length;
+  return tamanho >= 12 && tamanho <= 128;
+}
+
 /** Máscara 000.000.000-00 aplicada só enquanto digita. */
 function mascararCpf(valor: string) {
   const d = valor.replace(/\D/g, "").slice(0, 11);
@@ -69,6 +76,7 @@ export function Cadastro() {
   const [c1, setC1] = useState<Conjuge>(vazio);
   const [c2, setC2] = useState<Conjuge>(vazio);
   const [confirmacaoErrada, setConfirmacaoErrada] = useState<{ c1?: string; c2?: string }>({});
+  const [senhaInvalida, setSenhaInvalida] = useState<{ c1?: string; c2?: string }>({});
 
   const alertaRef = useRef<HTMLParagraphElement>(null);
   const erroAtual = cadastrar.error;
@@ -83,6 +91,8 @@ export function Cadastro() {
         codigo={cadastrar.data.codigoRecuperacao}
         aoConcluir={() => {
           cadastrar.reset();
+          // Sem isto, o "/" ainda veria disponivel: true em cache e voltaria para cá por um instante.
+          consultas.setQueryData(["cadastro"], { disponivel: false });
           void consultas.invalidateQueries({ queryKey: ["cadastro"] });
           void navegar("/");
         }}
@@ -108,7 +118,8 @@ export function Cadastro() {
       </div>
     );
   }
-  if (!estado.data.disponivel) return <Navigate to="/" replace />;
+  // Durante o envio, um refetch pode já ver o casal criado; sair agora perderia o código de recuperação.
+  if (!estado.data.disponivel && !cadastrar.isPending) return <Navigate to="/" replace />;
 
   const erroDe = cadastrar.error?.status === 400 ? cadastrar.error.errors : {};
   const erro = (chave: string) => erroDe[chave]?.[0];
@@ -131,8 +142,17 @@ export function Cadastro() {
       c1: c1.senha !== c1.confirmacao ? "A confirmação não confere com a senha." : undefined,
       c2: c2.senha !== c2.confirmacao ? "A confirmação não confere com a senha." : undefined,
     };
+    const tamanho = {
+      c1: senhaValida(c1.senha) ? undefined : mensagemSenha,
+      c2: senhaValida(c2.senha) ? undefined : mensagemSenha,
+    };
     setConfirmacaoErrada(divergencia);
-    if (divergencia.c1 || divergencia.c2) return;
+    setSenhaInvalida(tamanho);
+    if (divergencia.c1 || divergencia.c2 || tamanho.c1 || tamanho.c2) {
+      // O foco vai para o primeiro campo com erro depois que o React aplicar aria-invalid.
+      requestAnimationFrame(() => document.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus());
+      return;
+    }
     cadastrar.mutate(
       {
         codigoInstalacao,
@@ -155,6 +175,7 @@ export function Cadastro() {
     valor: Conjuge,
     mudar: (c: Conjuge) => void,
     divergencia?: string,
+    senhaCurta?: string,
   ) => {
     const chave = `conjuge${numero}`;
     return (
@@ -184,7 +205,7 @@ export function Cadastro() {
           autoComplete="new-password"
           nota="Mínimo de 12 caracteres. Ela protege a chave dos dados — não é recuperável."
           aoMudar={(v) => mudar({ ...valor, senha: v })}
-          erro={erro(`${chave}.senha`)}
+          erro={senhaCurta ?? erro(`${chave}.senha`)}
         />
         <Campo
           rotulo="Confirmar senha"
@@ -233,8 +254,8 @@ export function Cadastro() {
       </section>
 
       <div className="grade-form">
-        {cartaoConjuge(1, c1, setC1, confirmacaoErrada.c1)}
-        {cartaoConjuge(2, c2, setC2, confirmacaoErrada.c2)}
+        {cartaoConjuge(1, c1, setC1, confirmacaoErrada.c1, senhaInvalida.c1)}
+        {cartaoConjuge(2, c2, setC2, confirmacaoErrada.c2, senhaInvalida.c2)}
       </div>
 
       <div>

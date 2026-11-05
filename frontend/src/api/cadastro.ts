@@ -41,6 +41,8 @@ export function useCadastrarCasal() {
       const { data, error, response } = resposta;
       if (data) return data;
       if (response.status === 404) throw new ErroDeCadastro(404, "O casal já foi cadastrado.");
+      if (response.status === 429)
+        throw new ErroDeCadastro(429, "Muitas tentativas. Aguarde alguns minutos e tente de novo.");
       const problema = error as { title?: unknown; errors?: unknown } | undefined;
       if (response.status === 400) {
         const errors = problema?.errors && typeof problema.errors === "object" ? (problema.errors as Record<string, string[]>) : {};
