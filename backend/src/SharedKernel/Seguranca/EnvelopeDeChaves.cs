@@ -22,7 +22,7 @@ public static class EnvelopeDeChaves
 
     public static byte[] DerivarKek(string segredo, byte[] salt, ParametrosArgon2 parametros)
     {
-        var bytes = Encoding.UTF8.GetBytes(segredo);
+        var bytes = Encoding.UTF8.GetBytes(segredo.Normalize(NormalizationForm.FormC));
         try
         {
             var argon = new Argon2id(bytes)

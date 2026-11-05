@@ -11,19 +11,22 @@ internal static class CofreDoServidor
 {
     public static ICofre Carregar(IConfiguration config, IHostEnvironment ambiente)
     {
-        if (ambiente.IsDevelopment() && Environment.GetEnvironmentVariable("GF_DEV_CHAVE_EFEMERA") == "1")
-            return new CofreAesGcm(EnvelopeDeChaves.GerarDek());
+        var dek = LerDek(config, ambiente);
+        try { return new CofreAesGcm(dek); }
+        finally { CryptographicOperations.ZeroMemory(dek); }
+    }
 
+    /// <summary>Desembrulha a DEK de serviço. Devolve uma cópia: quem chama deve zerá-la.</summary>
+    internal static byte[] LerDek(IConfiguration config, IHostEnvironment ambiente)
+    {
         var raiz = ambiente.ContentRootPath;
-        var arquivoChave = Exigir(config, "Seguranca:ArquivoChaveServico", raiz);
-        var arquivoDek = Exigir(config, "Seguranca:ArquivoDekServico", raiz);
+        var arquivoChave = CaminhoObrigatorio(config, "Seguranca:ArquivoChaveServico", raiz);
+        var arquivoDek = CaminhoObrigatorio(config, "Seguranca:ArquivoDekServico", raiz);
 
         var kek = ChaveDeServico.Ler(arquivoChave);
         try
         {
-            var dek = EnvelopeDeChaves.Desembrulhar(File.ReadAllBytes(arquivoDek), kek);
-            try { return new CofreAesGcm(dek); }
-            finally { CryptographicOperations.ZeroMemory(dek); }
+            return EnvelopeDeChaves.Desembrulhar(File.ReadAllBytes(arquivoDek), kek);
         }
         finally
         {
@@ -37,9 +40,9 @@ internal static class CofreDoServidor
     /// </summary>
     public static async Task InicializarAsync(IConfiguration config, string raiz, TextWriter saida)
     {
-        var arquivoChave = Exigir(config, "Seguranca:ArquivoChaveServico", raiz);
-        var arquivoDek = Exigir(config, "Seguranca:ArquivoDekServico", raiz);
-        var arquivoRecuperacao = Exigir(config, "Seguranca:ArquivoDekRecuperacao", raiz);
+        var arquivoChave = CaminhoObrigatorio(config, "Seguranca:ArquivoChaveServico", raiz);
+        var arquivoDek = CaminhoObrigatorio(config, "Seguranca:ArquivoDekServico", raiz);
+        var arquivoRecuperacao = CaminhoObrigatorio(config, "Seguranca:ArquivoDekRecuperacao", raiz);
 
         if (File.Exists(arquivoDek))
             throw new InvalidOperationException("Já existe uma DEK. Inicializar de novo tornaria os dados ilegíveis.");
@@ -75,7 +78,7 @@ internal static class CofreDoServidor
     }
 
     /// <summary>Caminhos relativos são resolvidos a partir da raiz do projeto, não do diretório atual.</summary>
-    private static string Exigir(IConfiguration config, string chave, string raiz) =>
+    internal static string CaminhoObrigatorio(IConfiguration config, string chave, string raiz) =>
         config[chave] is { Length: > 0 } valor
             ? Path.GetFullPath(valor, raiz)
             : throw new InvalidOperationException($"Configuração obrigatória ausente: {chave}");

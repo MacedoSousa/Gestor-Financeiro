@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Text;
 using GestorFinanceiro.SharedKernel.Aplicacao;
 using GestorFinanceiro.SharedKernel.Dominio;
 using GestorFinanceiro.SharedKernel.Persistencia;
@@ -98,6 +99,47 @@ public class EnvelopeDeChavesTests
     {
         var codigo = EnvelopeDeChaves.GerarCodigoRecuperacao();
         Assert.Matches("^([A-Z2-9]{4}-){7}[A-Z2-9]{4}$", codigo);
+    }
+}
+
+public class EnvelopesDaDekTests
+{
+    private static readonly ParametrosArgon2 Barato = new(MemoriaKiB: 1024, Iteracoes: 1, Paralelismo: 1);
+
+    [Fact]
+    public void Envelope_desembrulha_a_mesma_dek_com_o_mesmo_segredo()
+    {
+        var dek = EnvelopeDeChaves.GerarDek();
+        var envelope = new EnvelopesDaDek(() => dek.ToArray(), Barato).Embrulhar("senha longa de teste");
+
+        var kek = EnvelopeDeChaves.DerivarKek("senha longa de teste", envelope.Salt, Barato);
+        Assert.Equal(dek, EnvelopeDeChaves.Desembrulhar(envelope.DekCifrada, kek));
+    }
+
+    [Fact]
+    public void Segredo_errado_nao_desembrulha()
+    {
+        var envelope = new EnvelopesDaDek(EnvelopeDeChaves.GerarDek, Barato).Embrulhar("senha longa de teste");
+        var kek = EnvelopeDeChaves.DerivarKek("outra senha qualquer", envelope.Salt, Barato);
+        Assert.ThrowsAny<CryptographicException>(() => EnvelopeDeChaves.Desembrulhar(envelope.DekCifrada, kek));
+    }
+
+    [Fact]
+    public void Cada_envelope_tem_salt_proprio()
+    {
+        var envelopes = new EnvelopesDaDek(EnvelopeDeChaves.GerarDek, Barato);
+        Assert.NotEqual(envelopes.Embrulhar("a mesma senha!!").Salt, envelopes.Embrulhar("a mesma senha!!").Salt);
+    }
+
+    [Fact]
+    public void Senha_em_nfd_desembrulha_envelope_feito_em_nfc()
+    {
+        var dek = EnvelopeDeChaves.GerarDek();
+        var nfc = "coração de açúcar".Normalize(NormalizationForm.FormC);
+        var envelope = new EnvelopesDaDek(() => dek.ToArray(), Barato).Embrulhar(nfc);
+
+        var kek = EnvelopeDeChaves.DerivarKek(nfc.Normalize(NormalizationForm.FormD), envelope.Salt, Barato);
+        Assert.Equal(dek, EnvelopeDeChaves.Desembrulhar(envelope.DekCifrada, kek));
     }
 }
 

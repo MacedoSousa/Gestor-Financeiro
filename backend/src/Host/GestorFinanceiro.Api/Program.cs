@@ -45,7 +45,23 @@ builder.Services.AddScoped<SoftDeleteInterceptor>();
 builder.Services.AddScoped<ContextoAuditoriaInterceptor>();
 
 // A DEK só é carregada quando algo precisa dela (nunca no build do OpenAPI).
-builder.Services.AddSingleton<ICofre>(sp => CofreDoServidor.Carregar(sp.GetRequiredService<IConfiguration>(), sp.GetRequiredService<IHostEnvironment>()));
+if (builder.Environment.IsDevelopment() && Environment.GetEnvironmentVariable("GF_DEV_CHAVE_EFEMERA") == "1")
+{
+    // Modo efêmero: uma DEK por processo, a mesma para o cofre e para os envelopes.
+    var dekEfemera = EnvelopeDeChaves.GerarDek();
+    builder.Services.AddSingleton<ICofre>(_ => new CofreAesGcm(dekEfemera));
+    builder.Services.AddSingleton<IEnvelopesDaDek>(_ => new EnvelopesDaDek(() => dekEfemera.ToArray(), new ParametrosArgon2()));
+}
+else
+{
+    builder.Services.AddSingleton<ICofre>(sp => CofreDoServidor.Carregar(sp.GetRequiredService<IConfiguration>(), sp.GetRequiredService<IHostEnvironment>()));
+    builder.Services.AddSingleton<IEnvelopesDaDek>(sp =>
+    {
+        var config = sp.GetRequiredService<IConfiguration>();
+        var ambiente = sp.GetRequiredService<IHostEnvironment>();
+        return new EnvelopesDaDek(() => CofreDoServidor.LerDek(config, ambiente), new ParametrosArgon2());
+    });
+}
 
 builder.Services
     .AddIdentidade(conexao)
