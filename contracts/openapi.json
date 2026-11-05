@@ -157,6 +157,60 @@
           }
         }
       }
+    },
+    "/api/v1/auth/primeiro-acesso": {
+      "post": {
+        "tags": [
+          "Autenticacao"
+        ],
+        "summary": "Primeiro acesso por CPF e senha do cadastro; responde 204 com o cookie de autorização de registro.",
+        "operationId": "PrimeiroAcesso",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PrimeiroAcessoDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "423": {
+            "description": "Locked",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -337,6 +391,21 @@
           },
           "ehVoce": {
             "type": "boolean"
+          }
+        }
+      },
+      "PrimeiroAcessoDto": {
+        "required": [
+          "cpf",
+          "senha"
+        ],
+        "type": "object",
+        "properties": {
+          "cpf": {
+            "type": "string"
+          },
+          "senha": {
+            "type": "string"
           }
         }
       },
