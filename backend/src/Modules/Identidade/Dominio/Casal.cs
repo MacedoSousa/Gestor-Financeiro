@@ -31,6 +31,12 @@ internal sealed class Usuario : Entidade, ICasalScoped
     public byte[]? TelefoneCifrado { get; private set; }
     public byte[]? TelefoneHmac { get; private set; }
     public Guid? ConjugeId { get; private set; }
+    public int FalhasSeguidas { get; private set; }
+    public int Bloqueios { get; private set; }
+    public DateTimeOffset? BloqueadoAte { get; private set; }
+    public DateTimeOffset? PrimeiroAcessoEncerradoEm { get; private set; }
+
+    public bool PrimeiroAcessoEncerrado => PrimeiroAcessoEncerradoEm is not null;
 
     private Usuario() { }
 
@@ -58,6 +64,35 @@ internal sealed class Usuario : Entidade, ICasalScoped
         a.ConjugeId = b.Id;
         b.ConjugeId = a.Id;
     }
+
+    public bool EstaBloqueado(DateTimeOffset agora) => BloqueadoAte is { } ate && agora < ate;
+
+    /// <summary>Na 5ª falha seguida bloqueia por 15 min x 2^bloqueios (teto 24 h) e zera as falhas.</summary>
+    public void RegistrarFalha(DateTimeOffset agora)
+    {
+        FalhasSeguidas++;
+        if (FalhasSeguidas < PoliticaDeBloqueio.FalhasParaBloquear) return;
+        BloqueadoAte = agora + PoliticaDeBloqueio.DuracaoDoBloqueio(Bloqueios);
+        Bloqueios++;
+        FalhasSeguidas = 0;
+    }
+
+    public void RegistrarSucesso()
+    {
+        FalhasSeguidas = 0;
+        Bloqueios = 0;
+        BloqueadoAte = null;
+    }
+
+    /// <summary>Destrava na hora (pelo outro cônjuge); a contagem de bloqueios continua.</summary>
+    public void Destravar()
+    {
+        FalhasSeguidas = 0;
+        BloqueadoAte = null;
+    }
+
+    /// <summary>Marca o fim do primeiro acesso por senha; só grava se ainda estiver nulo.</summary>
+    public void EncerrarPrimeiroAcesso(DateTimeOffset agora) => PrimeiroAcessoEncerradoEm ??= agora;
 
     public string LerCpf(ICofre cofre) => cofre.Decifrar(CpfCifrado, Cofre.Aad(Tabela, "cpf_cifrado", Id));
 }
