@@ -78,6 +78,8 @@ internal sealed class ApiDeTeste : WebApplicationFactory<Program>
     protected override void Dispose(bool disposing)
     {
         base.Dispose(disposing);
+        // Cada teste usa um banco novo; sem isto os pools acumulam e o Postgres do teste fica sem conexões (53300).
+        if (disposing) Npgsql.NpgsqlConnection.ClearAllPools();
         if (disposing && Directory.Exists(_pasta)) Directory.Delete(_pasta, recursive: true);
     }
 }

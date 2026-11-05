@@ -107,6 +107,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/totp/registro": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Gera um segredo TOTP não confirmado e devolve a URI otpauth (no-store). Exige o cookie de autorização de registro. */
+        post: operations["RegistrarTotp"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/totp/confirmacao": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirma o TOTP com o primeiro código, encerra o primeiro acesso e abre a sessão (204 com cookie). */
+        post: operations["ConfirmarTotp"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/totp": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Entra com CPF e código TOTP; 204 com o cookie de sessão. */
+        post: operations["EntrarComTotp"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -127,10 +178,19 @@ export interface components {
             id: string;
             membros: components["schemas"]["MembroDto"][];
         };
+        ConfirmarTotpDto: {
+            /** Format: uuid */
+            credencialId: string;
+            codigo: string;
+        };
         ConjugeNovoDto: {
             nomeCompleto: string;
             cpf: string;
             senha: string;
+        };
+        EntrarComTotpDto: {
+            cpf: string;
+            codigo: string;
         };
         EstadoDoCadastroDto: {
             disponivel: boolean;
@@ -159,6 +219,9 @@ export interface components {
             apelido: string;
             ehVoce: boolean;
         };
+        NovoTotpDto: {
+            apelido: string;
+        };
         PrimeiroAcessoDto: {
             cpf: string;
             senha: string;
@@ -175,6 +238,11 @@ export interface components {
             status: string;
             /** Format: date-time */
             horario: string;
+        };
+        TotpGeradoDto: {
+            /** Format: uuid */
+            credencialId: string;
+            otpauthUri: string;
         };
     };
     responses: never;
@@ -370,6 +438,128 @@ export interface operations {
             };
             /** @description Forbidden */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Locked */
+            423: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    RegistrarTotp: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NovoTotpDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TotpGeradoDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    ConfirmarTotp: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfirmarTotpDto"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Locked */
+            423: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    EntrarComTotp: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EntrarComTotpDto"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };

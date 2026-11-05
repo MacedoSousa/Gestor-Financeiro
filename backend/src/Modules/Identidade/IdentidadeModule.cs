@@ -30,6 +30,7 @@ public static class IdentidadeModule
         services.AddSingleton<AutorizacoesDeRegistro>();
         services.AddScoped<TentativaDeLogin>();
         services.AddScoped<PrimeiroAcesso>();
+        services.AddScoped<ServicoDeTotp>();
         services.AddScoped<ISessoes>(sp => sp.GetRequiredService<ServicoDeSessoes>());
         return services;
     }
@@ -51,6 +52,7 @@ public static class IdentidadeModule
 
         grupo.MapCadastro();
         api.MapAutenticacao();
+        api.MapTotp();
 
         return api;
     }

@@ -211,6 +211,145 @@
           }
         }
       }
+    },
+    "/api/v1/auth/totp/registro": {
+      "post": {
+        "tags": [
+          "Autenticacao"
+        ],
+        "summary": "Gera um segredo TOTP não confirmado e devolve a URI otpauth (no-store). Exige o cookie de autorização de registro.",
+        "operationId": "RegistrarTotp",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NovoTotpDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TotpGeradoDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/totp/confirmacao": {
+      "post": {
+        "tags": [
+          "Autenticacao"
+        ],
+        "summary": "Confirma o TOTP com o primeiro código, encerra o primeiro acesso e abre a sessão (204 com cookie).",
+        "operationId": "ConfirmarTotp",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmarTotpDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "423": {
+            "description": "Locked",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/totp": {
+      "post": {
+        "tags": [
+          "Autenticacao"
+        ],
+        "summary": "Entra com CPF e código TOTP; 204 com o cookie de sessão.",
+        "operationId": "EntrarComTotp",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EntrarComTotpDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "423": {
+            "description": "Locked",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -273,6 +412,22 @@
           }
         }
       },
+      "ConfirmarTotpDto": {
+        "required": [
+          "credencialId",
+          "codigo"
+        ],
+        "type": "object",
+        "properties": {
+          "credencialId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "codigo": {
+            "type": "string"
+          }
+        }
+      },
       "ConjugeNovoDto": {
         "required": [
           "nomeCompleto",
@@ -288,6 +443,21 @@
             "type": "string"
           },
           "senha": {
+            "type": "string"
+          }
+        }
+      },
+      "EntrarComTotpDto": {
+        "required": [
+          "cpf",
+          "codigo"
+        ],
+        "type": "object",
+        "properties": {
+          "cpf": {
+            "type": "string"
+          },
+          "codigo": {
             "type": "string"
           }
         }
@@ -394,6 +564,17 @@
           }
         }
       },
+      "NovoTotpDto": {
+        "required": [
+          "apelido"
+        ],
+        "type": "object",
+        "properties": {
+          "apelido": {
+            "type": "string"
+          }
+        }
+      },
       "PrimeiroAcessoDto": {
         "required": [
           "cpf",
@@ -460,6 +641,22 @@
           "horario": {
             "type": "string",
             "format": "date-time"
+          }
+        }
+      },
+      "TotpGeradoDto": {
+        "required": [
+          "credencialId",
+          "otpauthUri"
+        ],
+        "type": "object",
+        "properties": {
+          "credencialId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "otpauthUri": {
+            "type": "string"
           }
         }
       }

@@ -9,6 +9,7 @@
     <PackageReference Include="xunit.runner.visualstudio" />
     <PackageReference Include="Testcontainers.PostgreSql" />
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+    <PackageReference Include="Otp.NET" />
   </ItemGroup>
   <ItemGroup>
     <Using Include="Xunit" />

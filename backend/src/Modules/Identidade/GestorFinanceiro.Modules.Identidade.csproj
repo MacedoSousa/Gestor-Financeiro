@@ -5,6 +5,7 @@
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+    <PackageReference Include="Otp.NET" />
     <ProjectReference Include="..\..\SharedKernel\GestorFinanceiro.SharedKernel.csproj" />
   </ItemGroup>
 </Project>
