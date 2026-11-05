@@ -1,7 +1,9 @@
 using System.Security.Cryptography;
+using GestorFinanceiro.SharedKernel.Aplicacao;
 using GestorFinanceiro.SharedKernel.Dominio;
 using GestorFinanceiro.SharedKernel.Persistencia;
 using GestorFinanceiro.SharedKernel.Seguranca;
+using Microsoft.EntityFrameworkCore;
 
 namespace GestorFinanceiro.UnitTests;
 
@@ -109,4 +111,34 @@ public class SnakeCaseTests
     [InlineData("DekCifrada", "dek_cifrada")]
     public void Converte_nomes_de_propriedade(string entrada, string esperado) =>
         Assert.Equal(esperado, ModuloDbContext.ParaSnakeCase(entrada));
+}
+
+public class FiltrosNomeadosTests
+{
+    [Fact]
+    public void Entidade_do_casal_recebe_os_filtros_SoftDelete_e_Casal()
+    {
+        using var contexto = new ContextoDeTeste();
+
+        var filtros = contexto.Model.FindEntityType(typeof(ItemDoCasal))!
+            .GetDeclaredQueryFilters()
+            .Select(f => f.Key)
+            .Order();
+
+        Assert.Equal([Filtros.Casal, Filtros.SoftDelete], filtros);
+    }
+
+    private sealed class ItemDoCasal : Entidade, ICasalScoped
+    {
+        public Guid CasalId { get; init; }
+    }
+
+    private sealed class ContextoDeTeste() : ModuloDbContext(
+        new DbContextOptionsBuilder().UseNpgsql("Host=localhost").Options,
+        new UsuarioSistema())
+    {
+        protected override string Schema => "teste";
+
+        public DbSet<ItemDoCasal> Itens => Set<ItemDoCasal>();
+    }
 }
