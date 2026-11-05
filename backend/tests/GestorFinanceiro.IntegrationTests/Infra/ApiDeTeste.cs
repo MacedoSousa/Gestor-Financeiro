@@ -70,7 +70,7 @@ internal sealed class ApiDeTeste : WebApplicationFactory<Program>
         }
 
         // Cookie à mão: o container do handler não leria o Set-Cookie de um serviço chamado fora do HTTP.
-        var cliente = CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = false });
+        var cliente = CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = false, BaseAddress = ClientOptions.BaseAddress });
         cliente.DefaultRequestHeaders.Add("Cookie", $"__Host-gf_sessao={token}");
         return cliente;
     }

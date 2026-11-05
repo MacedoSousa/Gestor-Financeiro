@@ -149,7 +149,7 @@
         "tags": [
           "Autenticacao"
         ],
-        "summary": "Encerra a sessão e apaga o cookie.",
+        "summary": "Encerra a sessão (se houver) e apaga o cookie; sempre 204.",
         "operationId": "Sair",
         "responses": {
           "204": {

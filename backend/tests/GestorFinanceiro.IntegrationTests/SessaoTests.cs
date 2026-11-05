@@ -68,7 +68,7 @@ public class SessaoTests(PostgresFixture pg)
     }
 
     [Fact]
-    public async Task Sessao_valida_da_acesso_e_cookie_tem_atributos_certos()
+    public async Task Sessao_valida_da_acesso()
     {
         var banco = await pg.NovoBancoAsync();
         await using var api = new ApiDeTeste(banco);
@@ -126,7 +126,7 @@ public class SessaoTests(PostgresFixture pg)
         var sair = await cliente.PostAsync(RotaSair, null);
 
         Assert.Equal(HttpStatusCode.NoContent, sair.StatusCode);
-        Assert.Contains("__Host-gf_sessao=", sair.Headers.GetValues("Set-Cookie").Single());
+        AssertCookieDeSaidaApaga(sair.Headers.GetValues("Set-Cookie").Single());
         Assert.Equal(HttpStatusCode.Unauthorized, (await cliente.GetAsync(RotaEu)).StatusCode);
         Assert.Equal(1L, await ContarAsync(banco, "SELECT count(*) FROM identidade.sessoes WHERE is_deleted"));
         Assert.Equal(1L, await ContarAsync(banco, "SELECT count(*) FROM identidade.sessoes"));
@@ -255,5 +255,54 @@ public class SessaoTests(PostgresFixture pg)
         var eu = (await cliente.GetFromJsonAsync<EuDto>(RotaEu))!;
 
         Assert.False(eu.ConfirmacaoRecente);
+    }
+
+    private static void AssertCookieDeSaidaApaga(string cookie)
+    {
+        Assert.StartsWith("__Host-gf_sessao=;", cookie);
+        Assert.Contains("secure", cookie, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("path=/", cookie, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("httponly", cookie, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("samesite=strict", cookie, StringComparison.OrdinalIgnoreCase);
+        Assert.True(
+            cookie.Contains("max-age=0", StringComparison.OrdinalIgnoreCase) || cookie.Contains("expires=Thu, 01 Jan 1970", StringComparison.OrdinalIgnoreCase),
+            "O cookie de saída precisa estar expirado.");
+    }
+
+    [Fact]
+    public async Task Sessao_de_usuario_removido_responde_401()
+    {
+        var banco = await pg.NovoBancoAsync();
+        await using var api = new ApiDeTeste(banco);
+        var (ana, _) = await CadastrarAsync(api, banco);
+        var cliente = await api.ClienteLogadoAsync(ana);
+        Assert.Equal(HttpStatusCode.OK, (await cliente.GetAsync(RotaEu)).StatusCode);
+
+        await using (var db = new NpgsqlConnection(banco.ConexaoSuperusuario))
+        {
+            await db.OpenAsync();
+            await using var cmd = new NpgsqlCommand("UPDATE identidade.usuarios SET is_deleted = true, deleted_at = now() WHERE id = @id", db);
+            cmd.Parameters.AddWithValue("id", ana);
+            await cmd.ExecuteNonQueryAsync();
+        }
+
+        Assert.Equal(HttpStatusCode.Unauthorized, (await cliente.GetAsync(RotaEu)).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await cliente.GetAsync("/api/v1/casal")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Sair_com_sessao_expirada_apaga_o_cookie()
+    {
+        var banco = await pg.NovoBancoAsync();
+        var relogio = NovoRelogio();
+        await using var api = new ApiDeTeste(banco, relogio: relogio);
+        var (ana, _) = await CadastrarAsync(api, banco);
+        var cliente = await api.ClienteLogadoAsync(ana);
+        relogio.Agora += TimeSpan.FromDays(31);
+
+        var sair = await cliente.PostAsync(RotaSair, null);
+
+        Assert.Equal(HttpStatusCode.NoContent, sair.StatusCode);
+        AssertCookieDeSaidaApaga(sair.Headers.GetValues("Set-Cookie").Single());
     }
 }

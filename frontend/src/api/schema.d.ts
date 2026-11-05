@@ -82,7 +82,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Encerra a sessão e apaga o cookie. */
+        /** Encerra a sessão (se houver) e apaga o cookie; sempre 204. */
         post: operations["Sair"];
         delete?: never;
         options?: never;

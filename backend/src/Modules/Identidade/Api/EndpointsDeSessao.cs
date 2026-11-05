@@ -40,8 +40,9 @@ internal static class EndpointsDeSessao
             ServicoDeSessoes.ApagarCookie(resposta);
             return TypedResults.NoContent();
         })
+        .AllowAnonymous()
         .WithName("Sair")
-        .WithSummary("Encerra a sessão e apaga o cookie.");
+        .WithSummary("Encerra a sessão (se houver) e apaga o cookie; sempre 204.");
 
         return api;
     }

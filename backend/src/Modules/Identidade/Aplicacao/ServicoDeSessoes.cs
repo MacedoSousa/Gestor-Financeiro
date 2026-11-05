@@ -41,6 +41,12 @@ internal sealed class ServicoDeSessoes(IdentidadeDbContext db, ICofre cofre, Tim
         var agora = relogio.GetUtcNow();
         if (sessao is null || !sessao.Valida(agora)) return null;
 
+        // A sessão só vale enquanto o usuário estiver ativo (filtro SoftDelete mantido).
+        var usuarioAtivo = await db.Usuarios
+            .IgnoreQueryFilters([Filtros.Casal])
+            .AnyAsync(u => u.Id == sessao.UsuarioId, ct);
+        if (!usuarioAtivo) return null;
+
         if (sessao.RegistrarUso(agora)) await db.SaveChangesAsync(ct);
         return new SessaoValida(sessao.Id, sessao.UsuarioId, sessao.CasalId, sessao.ConfirmadaEm);
     }
