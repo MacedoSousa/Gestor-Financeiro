@@ -1,5 +1,6 @@
-import { NavLink, Outlet } from "react-router";
+import { Navigate, NavLink, Outlet } from "react-router";
 import type { ReactNode } from "react";
+import { useEstadoDoCadastro } from "../api/cadastro";
 
 const icone = (filhos: ReactNode) => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
@@ -56,6 +57,10 @@ const itens = [
 ];
 
 export function Layout() {
+  const cadastro = useEstadoDoCadastro();
+  if (cadastro.isPending) return null;
+  if (cadastro.data?.disponivel) return <Navigate to="/cadastro" replace />;
+
   return (
     <div className="casca">
       <aside className="lateral">

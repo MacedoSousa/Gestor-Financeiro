@@ -180,3 +180,153 @@ a {
     padding: 20px 16px 40px;
   }
 }
+
+/* Cadastro do casal */
+.pagina-centro {
+  width: 100%;
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 40px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.grade-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 16px;
+}
+
+.campo {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.campo-rotulo {
+  font-size: 13px;
+  color: var(--texto-2);
+  font-weight: 500;
+}
+
+.campo-erro {
+  color: var(--negativo);
+  font-size: 12px;
+}
+
+.entrada {
+  height: 44px;
+  padding: 0 14px;
+  border-radius: 12px;
+  border: 1px solid var(--borda);
+  background: var(--superficie);
+  color: var(--texto);
+  font: inherit;
+  font-size: 14px;
+}
+
+.entrada:focus-visible {
+  outline: 2px solid var(--destaque);
+  outline-offset: 1px;
+}
+
+.entrada[aria-invalid="true"] {
+  border-color: var(--negativo);
+}
+
+.botao-primario,
+.botao-secundario {
+  height: 44px;
+  padding: 0 24px;
+  border-radius: 12px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.botao-primario {
+  border: 0;
+  background: var(--destaque);
+  color: var(--destaque-texto);
+}
+
+.botao-primario:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.botao-secundario {
+  border: 1px solid var(--borda);
+  background: var(--superficie-2);
+  color: var(--texto);
+}
+
+.botao-primario:focus-visible,
+.botao-secundario:focus-visible,
+.campo-check input:focus-visible {
+  outline: 2px solid var(--destaque-claro);
+  outline-offset: 2px;
+}
+
+.alerta-form {
+  margin: 0;
+  padding: 12px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--negativo);
+  background: var(--superficie);
+  color: var(--negativo);
+  font-size: 14px;
+}
+
+.campo-check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+}
+
+.campo-check input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--destaque);
+}
+
+.codigo-recuperacao {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  margin: 0;
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+
+@media print {
+  body {
+    background: #fff;
+    color: #000;
+  }
+  .lateral,
+  .marca,
+  button,
+  .campo-check {
+    display: none !important;
+  }
+  .cartao,
+  .cartao.destaque {
+    background: none;
+    border: 0;
+    padding: 0;
+  }
+  .cartao *,
+  .cartao.destaque *,
+  .titulo,
+  .codigo-recuperacao,
+  .cartao-nota,
+  .cartao.destaque .cartao-rotulo {
+    color: #000 !important;
+    background: none !important;
+  }
+}

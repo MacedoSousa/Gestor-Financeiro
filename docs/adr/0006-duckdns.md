@@ -10,6 +10,8 @@
 - Caddy com limite de requisições (10/min por IP em `/api/v1/auth/*`), cabeçalhos de segurança e CSP restrita.
 - CrowdSec lendo o log do Caddy e bloqueio de IPs fora do Brasil (Fase 5).
 - Roteador com só a 443 encaminhada; firewall do host (`ufw`) negando o resto.
+- A 443 só é encaminhada no roteador depois que o login (passkey/TOTP) existir; até lá o cadastro é feito pela rede de casa.
+- Cadastro do casal: no máximo 5 tentativas a cada 10 minutos por IP em `POST /api/v1/casal`.
 
 **Pré-requisito:** o provedor precisa entregar IP público (sem CGNAT). Se não entregar, o plano B é um Cloudflare Tunnel apontando para o mesmo Caddy.
 

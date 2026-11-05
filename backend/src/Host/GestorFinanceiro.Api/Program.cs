@@ -25,10 +25,21 @@ if (args.Contains("--migrar"))
     return;
 }
 
-// Primeira instalação: cria a DEK e imprime o código de recuperação uma única vez.
+// Primeira instalação: cria a DEK de serviço.
 if (args.Contains("--inicializar-chaves"))
 {
     await CofreDoServidor.InicializarAsync(builder.Configuration, builder.Environment.ContentRootPath, Console.Out);
+    return;
+}
+
+// Gera o código de uso único que autoriza o cadastro do casal; imprime e sai.
+if (args.Contains("--codigo-instalacao"))
+{
+    var caminhoCodigo = CofreDoServidor.CaminhoObrigatorio(builder.Configuration, "Seguranca:ArquivoCodigoInstalacao", builder.Environment.ContentRootPath);
+    var codigoInstalacao = CodigoDeInstalacaoEmArquivo.Gerar(caminhoCodigo, TimeProvider.System);
+    Console.WriteLine("Código de instalação (uso único, vale 24 h):");
+    Console.WriteLine();
+    Console.WriteLine($"    {codigoInstalacao}");
     return;
 }
 
@@ -40,12 +51,32 @@ builder.Services.AddProblemDetails();
 builder.Services.AddOpenApi("v1");
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddSingleton<ICodigoDeInstalacao>(sp => new CodigoDeInstalacaoEmArquivo(
+    CofreDoServidor.CaminhoObrigatorio(sp.GetRequiredService<IConfiguration>(), "Seguranca:ArquivoCodigoInstalacao", sp.GetRequiredService<IHostEnvironment>().ContentRootPath),
+    sp.GetRequiredService<TimeProvider>(),
+    sp.GetRequiredService<ILogger<CodigoDeInstalacaoEmArquivo>>()));
 builder.Services.AddScoped<IUsuarioAtual, UsuarioAtualHttp>();
 builder.Services.AddScoped<SoftDeleteInterceptor>();
 builder.Services.AddScoped<ContextoAuditoriaInterceptor>();
 
 // A DEK só é carregada quando algo precisa dela (nunca no build do OpenAPI).
-builder.Services.AddSingleton<ICofre>(sp => CofreDoServidor.Carregar(sp.GetRequiredService<IConfiguration>(), sp.GetRequiredService<IHostEnvironment>()));
+if (builder.Environment.IsDevelopment() && Environment.GetEnvironmentVariable("GF_DEV_CHAVE_EFEMERA") == "1")
+{
+    // Modo efêmero: uma DEK por processo, a mesma para o cofre e para os envelopes.
+    var dekEfemera = EnvelopeDeChaves.GerarDek();
+    builder.Services.AddSingleton<ICofre>(_ => new CofreAesGcm(dekEfemera));
+    builder.Services.AddSingleton<IEnvelopesDaDek>(_ => new EnvelopesDaDek(() => dekEfemera.ToArray(), new ParametrosArgon2()));
+}
+else
+{
+    builder.Services.AddSingleton<ICofre>(sp => CofreDoServidor.Carregar(sp.GetRequiredService<IConfiguration>(), sp.GetRequiredService<IHostEnvironment>()));
+    builder.Services.AddSingleton<IEnvelopesDaDek>(sp =>
+    {
+        var config = sp.GetRequiredService<IConfiguration>();
+        var ambiente = sp.GetRequiredService<IHostEnvironment>();
+        return new EnvelopesDaDek(() => CofreDoServidor.LerDek(config, ambiente), new ParametrosArgon2());
+    });
+}
 
 builder.Services
     .AddIdentidade(conexao)

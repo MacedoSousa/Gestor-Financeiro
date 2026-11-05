@@ -22,7 +22,7 @@ public static class EnvelopeDeChaves
 
     public static byte[] DerivarKek(string segredo, byte[] salt, ParametrosArgon2 parametros)
     {
-        var bytes = Encoding.UTF8.GetBytes(segredo);
+        var bytes = Encoding.UTF8.GetBytes(segredo.Normalize(NormalizationForm.FormC));
         try
         {
             var argon = new Argon2id(bytes)
@@ -58,6 +58,23 @@ public static class EnvelopeDeChaves
         using var aes = new AesGcm(kek, 16);
         aes.Decrypt(envelope.AsSpan(0, 12), envelope.AsSpan(28), envelope.AsSpan(12, 16), dek, AadDek);
         return dek;
+    }
+
+    /// <summary>
+    /// Forma canônica de um código (recuperação ou instalação): maiúsculas e só A–Z e 0–9.
+    /// Hífens, espaços e qualquer outro caractere são descartados. É dessa forma que a KEK
+    /// de recuperação é derivada e o código de instalação é conferido; quem recebe um código
+    /// digitado deve canonizá-lo antes de usar.
+    /// </summary>
+    public static string CanonizarCodigo(string codigo)
+    {
+        ArgumentNullException.ThrowIfNull(codigo);
+        var sb = new StringBuilder(codigo.Length);
+        foreach (var c in codigo.ToUpperInvariant())
+        {
+            if (c is (>= 'A' and <= 'Z') or (>= '0' and <= '9')) sb.Append(c);
+        }
+        return sb.ToString();
     }
 
     /// <summary>Código de recuperação impresso no cadastro: 160 bits em base32, grupos de 4.</summary>

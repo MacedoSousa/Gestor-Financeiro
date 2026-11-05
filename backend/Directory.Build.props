@@ -11,5 +11,6 @@
   <!-- Testes enxergam os tipos internal dos módulos; outros módulos não. -->
   <ItemGroup Condition="'$(IsTestProject)' != 'true'">
     <InternalsVisibleTo Include="GestorFinanceiro.UnitTests" />
+    <InternalsVisibleTo Include="GestorFinanceiro.IntegrationTests" />
   </ItemGroup>
 </Project>

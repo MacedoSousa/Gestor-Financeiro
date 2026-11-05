@@ -31,6 +31,24 @@ export interface paths {
         /** Membros do casal do usuário logado (sem CPF). */
         get: operations["ObterCasal"];
         put?: never;
+        /** Cadastra o casal, os dois cônjuges e os envelopes da DEK. Devolve o código de recuperação uma única vez. */
+        post: operations["CadastrarCasal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/casal/cadastro": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Informa se o cadastro do casal ainda está aberto nesta instalação. */
+        get: operations["ObterEstadoDoCadastro"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -42,16 +60,54 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        CadastroDoCasalDto: {
+            codigoInstalacao: string;
+            nomeFamilia: string;
+            conjuge1: components["schemas"]["ConjugeNovoDto"];
+            conjuge2: components["schemas"]["ConjugeNovoDto"];
+        };
+        CasalCadastradoDto: {
+            /** Format: uuid */
+            casalId: string;
+            codigoRecuperacao: string;
+        };
         CasalDto: {
             /** Format: uuid */
             id: string;
             membros: components["schemas"]["MembroDto"][];
+        };
+        ConjugeNovoDto: {
+            nomeCompleto: string;
+            cpf: string;
+            senha: string;
+        };
+        EstadoDoCadastroDto: {
+            disponivel: boolean;
+        };
+        HttpValidationProblemDetails: {
+            type?: null | string;
+            title?: null | string;
+            /** Format: int32 */
+            status?: null | number | string;
+            detail?: null | string;
+            instance?: null | string;
+            errors?: {
+                [key: string]: string[];
+            };
         };
         MembroDto: {
             /** Format: uuid */
             id: string;
             apelido: string;
             ehVoce: boolean;
+        };
+        ProblemDetails: {
+            type?: null | string;
+            title?: null | string;
+            /** Format: int32 */
+            status?: null | number | string;
+            detail?: null | string;
+            instance?: null | string;
         };
         SaudeDto: {
             status: string;
@@ -111,6 +167,75 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    CadastrarCasal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CadastroDoCasalDto"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CasalCadastradoDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ObterEstadoDoCadastro: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EstadoDoCadastroDto"];
+                };
             };
         };
     };

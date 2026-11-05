@@ -1,3 +1,5 @@
+using GestorFinanceiro.Modules.Identidade.Api;
+using GestorFinanceiro.Modules.Identidade.Aplicacao;
 using GestorFinanceiro.Modules.Identidade.Contracts;
 using GestorFinanceiro.Modules.Identidade.Infra;
 using GestorFinanceiro.SharedKernel.Aplicacao;
@@ -22,6 +24,7 @@ public static class IdentidadeModule
                 sp.GetRequiredService<ContextoAuditoriaInterceptor>()));
 
         services.AddScoped<IConsultaDeUsuarios, ConsultaDeUsuarios>();
+        services.AddScoped<CadastroDoCasal>();
         return services;
     }
 
@@ -39,6 +42,8 @@ public static class IdentidadeModule
         })
         .WithName("ObterCasal")
         .WithSummary("Membros do casal do usuário logado (sem CPF).");
+
+        grupo.MapCadastro();
 
         return api;
     }
