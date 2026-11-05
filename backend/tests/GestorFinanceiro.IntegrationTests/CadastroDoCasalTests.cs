@@ -17,10 +17,13 @@ public class CadastroDoCasalTests(PostgresFixture pg)
     private const string RotaCadastro = "/api/v1/casal";
     private const string RotaEstado = "/api/v1/casal/cadastro";
 
-    private static CadastroDoCasalDto Pedido(string codigo) => new(
+    private static CadastroDoCasalDto Pedido(string codigo) => Pedido(codigo, semente: 1);
+
+    // Sementes diferentes dão CPFs diferentes: o 404 não pode vir do índice único de cpf_hmac.
+    private static CadastroDoCasalDto Pedido(string codigo, int semente) => new(
         codigo, "Família Teste",
-        new ConjugeNovoDto("Ana Teste", CpfSintetico.Gerar(1), "senha-da-ana-123"),
-        new ConjugeNovoDto("Bruno Teste", CpfSintetico.Gerar(2), "senha-do-bruno-1"));
+        new ConjugeNovoDto("Ana Teste", CpfSintetico.Gerar(semente), "senha-da-ana-123"),
+        new ConjugeNovoDto("Bruno Teste", CpfSintetico.Gerar(semente + 1), "senha-do-bruno-1"));
 
     [Fact]
     public async Task Instalacao_nova_esta_disponivel_para_cadastro()
@@ -179,7 +182,7 @@ public class CadastroDoCasalTests(PostgresFixture pg)
         var primeira = await cliente.PostAsJsonAsync(RotaCadastro, Pedido(api.CodigoInstalacao));
         Assert.Equal(HttpStatusCode.Created, primeira.StatusCode);
 
-        var segunda = await cliente.PostAsJsonAsync(RotaCadastro, Pedido(api.CodigoInstalacao));
+        var segunda = await cliente.PostAsJsonAsync(RotaCadastro, Pedido(api.CodigoInstalacao, semente: 3));
         Assert.Equal(HttpStatusCode.NotFound, segunda.StatusCode);
 
         var conteudo = await File.ReadAllBytesAsync(api.CaminhoCodigoInstalacao);
@@ -206,8 +209,8 @@ public class CadastroDoCasalTests(PostgresFixture pg)
         var cliente = api.CreateClient();
 
         var respostas = await Task.WhenAll(
-            Task.Run(() => cliente.PostAsJsonAsync(RotaCadastro, Pedido(api.CodigoInstalacao))),
-            Task.Run(() => cliente.PostAsJsonAsync(RotaCadastro, Pedido(api.CodigoInstalacao))));
+            Task.Run(() => cliente.PostAsJsonAsync(RotaCadastro, Pedido(api.CodigoInstalacao, semente: 1))),
+            Task.Run(() => cliente.PostAsJsonAsync(RotaCadastro, Pedido(api.CodigoInstalacao, semente: 3))));
 
         var status = respostas.Select(r => (int)r.StatusCode).Order().ToArray();
         Assert.Equal([201, 404], status);

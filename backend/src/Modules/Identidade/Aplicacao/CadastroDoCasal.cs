@@ -69,23 +69,27 @@ internal sealed partial class CadastroDoCasal(
         try
         {
             // 4. Serializa cadastros concorrentes e confere de novo.
-            await using var transacao = await db.Database.BeginTransactionAsync(ct);
-            await db.Database.ExecuteSqlRawAsync(SqlTrava, ct);
-            if (await db.Casais.AnyAsync(ct))
+            // Daqui em diante, sem o token da requisição: se o cliente desconectar depois que o commit
+            // chegou ao banco, um OperationCanceledException viraria 500, o código de instalação não
+            // seria consumido e o código de recuperação se perderia.
+            var semCancelar = CancellationToken.None;
+            await using var transacao = await db.Database.BeginTransactionAsync(semCancelar);
+            await db.Database.ExecuteSqlRawAsync(SqlTrava, semCancelar);
+            if (await db.Casais.AnyAsync(semCancelar))
             {
-                await transacao.RollbackAsync(ct);
+                await transacao.RollbackAsync(semCancelar);
                 return new ResultadoDoCadastro.JaCadastrado();
             }
 
             // 5. Casal e usuários sem vínculo (conjuge_id é FK para a própria tabela).
             var casal = Casal.Criar(pedido.NomeFamilia);
             db.Casais.Add(casal);
-            await db.SaveChangesAsync(ct);
+            await db.SaveChangesAsync(semCancelar);
 
             var u1 = Usuario.Criar(casal.Id, pedido.Conjuge1.NomeCompleto, cpf1, cofre);
             var u2 = Usuario.Criar(casal.Id, pedido.Conjuge2.NomeCompleto, cpf2, cofre);
             db.Usuarios.AddRange(u1, u2);
-            await db.SaveChangesAsync(ct);
+            await db.SaveChangesAsync(semCancelar);
 
             // 6. Vínculo e os três envelopes.
             Usuario.Vincular(u1, u2);
@@ -93,8 +97,8 @@ internal sealed partial class CadastroDoCasal(
                 ChaveDoCasal.Criar(casal.Id, TipoChave.Usuario, u1.Id, envelope1.DekCifrada, envelope1.Salt),
                 ChaveDoCasal.Criar(casal.Id, TipoChave.Usuario, u2.Id, envelope2.DekCifrada, envelope2.Salt),
                 ChaveDoCasal.Criar(casal.Id, TipoChave.Recuperacao, null, envelopeRecuperacao.DekCifrada, envelopeRecuperacao.Salt));
-            await db.SaveChangesAsync(ct);
-            await transacao.CommitAsync(ct);
+            await db.SaveChangesAsync(semCancelar);
+            await transacao.CommitAsync(semCancelar);
             casalId = casal.Id;
         }
         catch (DbUpdateException e) when (e.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
