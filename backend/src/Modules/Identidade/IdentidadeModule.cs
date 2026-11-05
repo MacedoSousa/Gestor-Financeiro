@@ -28,6 +28,7 @@ public static class IdentidadeModule
         services.AddScoped<ServicoDeSessoes>();
         services.AddMemoryCache();
         services.AddSingleton<AutorizacoesDeRegistro>();
+        services.AddScoped<TentativaDeLogin>();
         services.AddScoped<PrimeiroAcesso>();
         services.AddScoped<ISessoes>(sp => sp.GetRequiredService<ServicoDeSessoes>());
         return services;

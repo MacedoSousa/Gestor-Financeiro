@@ -159,4 +159,58 @@ public class PrimeiroAcessoTests(PostgresFixture pg)
         Assert.DoesNotContain(senha, corpo);
         Assert.Equal("PrimeiroAcessoDto", new PrimeiroAcessoDto(CpfDaAna, senha).ToString());
     }
+
+    [Fact]
+    public async Task Cpf_malformado_responde_igual_a_senha_errada()
+    {
+        var banco = await pg.NovoBancoAsync();
+        await using var api = new ApiDeTeste(banco);
+        await CadastrarAsync(api);
+        var cliente = api.CreateClient();
+
+        var errada = await EntrarAsync(cliente, CpfDaAna, "senha-errada-xyz");
+        var malformado = await EntrarAsync(cliente, "abc", "senha-errada-xyz");
+
+        Assert.Equal(errada.StatusCode, malformado.StatusCode);
+        Assert.Equal(await ProblemaAsync(errada), await ProblemaAsync(malformado));
+    }
+
+    [Fact]
+    public async Task Bloqueado_e_encerrado_responde_423()
+    {
+        var banco = await pg.NovoBancoAsync();
+        await using var api = new ApiDeTeste(banco);
+        await CadastrarAsync(api);
+        await using (var db = new NpgsqlConnection(banco.ConexaoSuperusuario))
+        {
+            await db.OpenAsync();
+            await using var cmd = new NpgsqlCommand(
+                "UPDATE identidade.usuarios SET primeiro_acesso_encerrado_em = now(), bloqueado_ate = now() + interval '1 hour' WHERE nome_completo = 'Ana Teste'", db);
+            await cmd.ExecuteNonQueryAsync();
+        }
+
+        var resposta = await EntrarAsync(api.CreateClient(), CpfDaAna, SenhaDaAna);
+
+        Assert.Equal(HttpStatusCode.Locked, resposta.StatusCode);
+    }
+
+    [Fact]
+    public async Task Senhas_erradas_em_paralelo_bloqueiam()
+    {
+        var banco = await pg.NovoBancoAsync();
+        await using var api = new ApiDeTeste(banco);
+        await CadastrarAsync(api);
+        var cliente = api.CreateClient();
+
+        var respostas = await Task.WhenAll(Enumerable.Range(0, 10)
+            .Select(_ => Task.Run(() => EntrarAsync(cliente, CpfDaAna, "senha-errada-xyz"))));
+
+        var status = respostas.Select(r => r.StatusCode).ToList();
+        Assert.All(status, s => Assert.True(s is HttpStatusCode.Unauthorized or HttpStatusCode.Locked, s.ToString()));
+        Assert.Contains(HttpStatusCode.Locked, status);
+        Assert.True(await EscalarAsync<bool>(banco, "SELECT bloqueado_ate IS NOT NULL FROM identidade.usuarios WHERE nome_completo = 'Ana Teste'"));
+        var falhas = await EscalarAsync<int>(banco, "SELECT falhas_seguidas FROM identidade.usuarios WHERE nome_completo = 'Ana Teste'");
+        var bloqueios = await EscalarAsync<int>(banco, "SELECT bloqueios FROM identidade.usuarios WHERE nome_completo = 'Ana Teste'");
+        Assert.Equal(status.Count(s => s == HttpStatusCode.Unauthorized), falhas + 5 * bloqueios);
+    }
 }

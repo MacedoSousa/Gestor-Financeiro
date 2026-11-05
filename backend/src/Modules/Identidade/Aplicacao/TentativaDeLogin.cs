@@ -1,0 +1,71 @@
+using GestorFinanceiro.Modules.Identidade.Dominio;
+using GestorFinanceiro.Modules.Identidade.Infra;
+using GestorFinanceiro.SharedKernel.Persistencia;
+using Microsoft.EntityFrameworkCore;
+
+namespace GestorFinanceiro.Modules.Identidade.Aplicacao;
+
+internal enum ResultadoDaTentativa
+{
+    Sucesso,
+    Falha,
+    Bloqueado,
+    /// <summary>O impedimento específico do fluxo (ex.: primeiro acesso encerrado) se aplicou; nada foi contado.</summary>
+    Impedido,
+}
+
+/// <summary>
+/// Toda conferência de segredo que conta falha passa por aqui. Serializa as tentativas por cônjuge
+/// (advisory lock na transação), recarrega o usuário já com o lock e só então confere e conta,
+/// para que tentativas paralelas não percam falhas nem passem do bloqueio.
+/// </summary>
+internal sealed class TentativaDeLogin(IdentidadeDbContext db, TimeProvider relogio)
+{
+    /// <param name="conferir">A conferência cara (Argon2, TOTP...). Roda com o lock e o usuário recarregado.</param>
+    /// <param name="impedido">Regra do fluxo avaliada depois do bloqueio e antes da conferência; não conta falha.</param>
+    public async Task<ResultadoDaTentativa> ExecutarAsync(
+        Guid usuarioId,
+        Func<Usuario, CancellationToken, Task<bool>> conferir,
+        Func<Usuario, bool>? impedido = null,
+        CancellationToken ct = default)
+    {
+        ct.ThrowIfCancellationRequested();
+        // Daqui em diante sem o token da requisição: uma desconexão não pode deixar estado pela metade.
+        var semCancelar = CancellationToken.None;
+        var chave = $"identidade.login:{usuarioId}";
+
+        await using var transacao = await db.Database.BeginTransactionAsync(semCancelar);
+        await db.Database.ExecuteSqlAsync($"SELECT pg_advisory_xact_lock(hashtextextended({chave}, 0))", semCancelar);
+
+        // O casal ainda não é conhecido: só o filtro de soft delete continua ativo.
+        var usuario = await db.Usuarios
+            .IgnoreQueryFilters([Filtros.Casal])
+            .AsTracking()
+            .FirstOrDefaultAsync(u => u.Id == usuarioId, semCancelar);
+        if (usuario is null)
+        {
+            await transacao.RollbackAsync(semCancelar);
+            return ResultadoDaTentativa.Falha;
+        }
+        await db.Entry(usuario).ReloadAsync(semCancelar);
+
+        var agora = relogio.GetUtcNow();
+        if (usuario.EstaBloqueado(agora))
+        {
+            await transacao.RollbackAsync(semCancelar);
+            return ResultadoDaTentativa.Bloqueado;
+        }
+        if (impedido?.Invoke(usuario) == true)
+        {
+            await transacao.RollbackAsync(semCancelar);
+            return ResultadoDaTentativa.Impedido;
+        }
+
+        var ok = await conferir(usuario, semCancelar);
+        if (ok) usuario.RegistrarSucesso();
+        else usuario.RegistrarFalha(agora);
+        await db.SaveChangesAsync(semCancelar);
+        await transacao.CommitAsync(semCancelar);
+        return ok ? ResultadoDaTentativa.Sucesso : ResultadoDaTentativa.Falha;
+    }
+}

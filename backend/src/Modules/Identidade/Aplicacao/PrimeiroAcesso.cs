@@ -27,6 +27,7 @@ internal abstract record ResultadoDoPrimeiroAcesso
 internal sealed class PrimeiroAcesso(
     IdentidadeDbContext db,
     ICofre cofre,
+    TentativaDeLogin tentativa,
     AutorizacoesDeRegistro autorizacoes,
     TimeProvider relogio)
 {
@@ -45,30 +46,36 @@ internal sealed class PrimeiroAcesso(
             return new ResultadoDoPrimeiroAcesso.Falhou();
         }
 
-        // 2. Bloqueado: não testa a senha e não conta outra falha.
+        // 2. Bloqueado (423), depois encerrado (403), depois senha. Antes do Argon2 é só uma olhada barata;
+        // a decisão que vale é refeita dentro de TentativaDeLogin, com o lock e o usuário recarregado.
         var agora = relogio.GetUtcNow();
         if (usuario.EstaBloqueado(agora)) return new ResultadoDoPrimeiroAcesso.Bloqueado();
-
-        // 3. Primeiro acesso encerrado: nunca mais por senha.
         if (usuario.PrimeiroAcessoEncerrado) return new ResultadoDoPrimeiroAcesso.JaConfigurado();
 
-        // 4. Senha: abre o envelope USUARIO desse cônjuge.
-        var envelope = await db.Chaves
-            .IgnoreQueryFilters([Filtros.Casal])
-            .AsNoTracking()
-            .FirstOrDefaultAsync(c => c.UsuarioId == usuario.Id && c.Tipo == TipoChave.Usuario, ct);
+        var usuarioId = usuario.Id;
+        var casalId = usuario.CasalId;
+        var resultado = await tentativa.ExecutarAsync(
+            usuarioId,
+            async (_, token) =>
+            {
+                // Envelope USUARIO desse cônjuge.
+                var envelope = await db.Chaves
+                    .IgnoreQueryFilters([Filtros.Casal])
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(c => c.UsuarioId == usuarioId && c.Tipo == TipoChave.Usuario, token);
+                return envelope is not null && ConferenciaDeSegredo.SenhaAbreEnvelope(envelope, senha);
+            },
+            u => u.PrimeiroAcessoEncerrado,
+            ct);
 
-        if (envelope is null || !ConferenciaDeSegredo.SenhaAbreEnvelope(envelope, senha))
+        return resultado switch
         {
-            usuario.RegistrarFalha(agora);
-            await db.SaveChangesAsync(ct);
-            return new ResultadoDoPrimeiroAcesso.Falhou();
-        }
-
-        // 5. Certa: zera as falhas e emite a autorização.
-        usuario.RegistrarSucesso();
-        await db.SaveChangesAsync(ct);
-        return new ResultadoDoPrimeiroAcesso.Autorizado(autorizacoes.Emitir(usuario.Id, usuario.CasalId, OrigemDoRegistro.PrimeiroAcesso));
+            ResultadoDaTentativa.Sucesso => new ResultadoDoPrimeiroAcesso.Autorizado(
+                autorizacoes.Emitir(usuarioId, casalId, OrigemDoRegistro.PrimeiroAcesso)),
+            ResultadoDaTentativa.Bloqueado => new ResultadoDoPrimeiroAcesso.Bloqueado(),
+            ResultadoDaTentativa.Impedido => new ResultadoDoPrimeiroAcesso.JaConfigurado(),
+            _ => new ResultadoDoPrimeiroAcesso.Falhou(),
+        };
     }
 
     private async Task<Usuario?> BuscarAsync(string cpf, CancellationToken ct)
@@ -79,6 +86,7 @@ internal sealed class PrimeiroAcesso(
         // O casal ainda não é conhecido: só o filtro de soft delete continua ativo.
         return await db.Usuarios
             .IgnoreQueryFilters([Filtros.Casal])
+            .AsNoTracking()
             .FirstOrDefaultAsync(u => u.CpfHmac == hmac, ct);
     }
 }
