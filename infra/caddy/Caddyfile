@@ -1,0 +1,61 @@
+{
+	# Sem painel admin exposto; certificado da tailnet vem do tailscaled (socket montado).
+	admin off
+	servers {
+		trusted_proxies static private_ranges
+	}
+}
+
+(seguranca) {
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "no-referrer"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		Content-Security-Policy "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+		-Server
+	}
+}
+
+# App: só na tailnet (porta 443 publicada apenas no IP do Tailscale).
+{$DOMINIO_TAILNET} {
+	import seguranca
+	encode zstd gzip
+
+	handle /api/* {
+		reverse_proxy 172.30.0.10:8080
+	}
+
+	# O webhook nunca é servido pela tailnet; só pelo listener público abaixo.
+	handle /webhooks/* {
+		respond 404
+	}
+
+	handle {
+		root * /srv/web
+		try_files {path} /index.html
+		file_server
+	}
+}
+
+# Público via Tailscale Funnel → 127.0.0.1:8081. Só o webhook da Pluggy passa.
+:8081 {
+	import seguranca
+
+	@pluggy {
+		method POST
+		path /webhooks/pluggy
+	}
+	handle @pluggy {
+		request_body {
+			max_size 64KB
+		}
+		rewrite * /api/v1/integracoes/pluggy/webhook
+		reverse_proxy 172.30.0.10:8080
+	}
+
+	handle {
+		respond 404
+	}
+}

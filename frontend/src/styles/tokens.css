@@ -1,0 +1,33 @@
+/* Tokens do tema "escuro fintech" — os mesmos das telas no canvas de design. */
+:root {
+  --fundo: #0b0f14;
+  --lateral: #0d1218;
+  --superficie: #111720;
+  --superficie-2: #161e29;
+  --borda: #1f2935;
+  --divisor: #18212c;
+
+  --texto: #e6edf3;
+  --texto-2: #c9d3df;
+  --texto-suave: #9aa7b8;
+  --texto-fraco: #7d8a9b;
+
+  --destaque: #2dd4bf;
+  --destaque-texto: #04211e;
+  --destaque-fundo: #0f2a2a;
+  --destaque-borda: #1d4a45;
+  --destaque-claro: #5eead4;
+
+  --positivo: #34d399;
+  --alerta: #fbbf24;
+  --alerta-fundo: #3b2a0a;
+  --negativo: #fb7185;
+  --roxo: #a78bfa;
+  --azul: #60a5fa;
+
+  --raio: 16px;
+  --raio-sm: 10px;
+
+  --fonte: "Geist Sans", system-ui, sans-serif;
+  --fonte-num: "Geist Mono", ui-monospace, monospace;
+}

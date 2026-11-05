@@ -1,0 +1,116 @@
+# Gestor Financeiro — homelab (i5 10ª geração, 32 GB, RTX 2060 Super)
+#
+#   docker compose -f infra/docker-compose.yml up -d                      # núcleo
+#   docker compose -f infra/docker-compose.yml --profile whatsapp up -d   # + gateway (Fase 3)
+#   docker compose -f infra/docker-compose.yml --profile ocr up -d        # + leitor de comprovantes na GPU (Fase 3)
+#
+# Rede: o app só aparece no IP da tailnet (TAILSCALE_IP). O único caminho público é
+# /webhooks/pluggy, publicado em 127.0.0.1:8081 e exposto pelo Tailscale Funnel no host.
+
+name: gestor
+
+x-padrao: &padrao
+  restart: unless-stopped
+  security_opt: ["no-new-privileges:true"]
+  logging:
+    driver: json-file
+    options: { max-size: "10m", max-file: "3" }
+
+services:
+  postgres:
+    <<: *padrao
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: gestor
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD_FILE: /run/secrets/pg_superusuario
+    secrets: [pg_superusuario, pg_senha_app, pg_senha_migrador]
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    networks: [dados]
+    mem_limit: 1g
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d gestor"]
+      interval: 10s
+      retries: 6
+
+  api:
+    <<: *padrao
+    build:
+      context: ..
+      dockerfile: backend/src/Host/GestorFinanceiro.Api/Dockerfile
+    depends_on:
+      postgres: { condition: service_healthy }
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__App: "Host=postgres;Database=gestor;Username=gf_app;Passfile=/run/secrets/pgpass_app"
+      ConnectionStrings__Migrador: "Host=postgres;Database=gestor;Username=gf_migrator;Passfile=/run/secrets/pgpass_migrador"
+    secrets: [gf_chave_servico, pgpass_app, pgpass_migrador]
+    volumes:
+      - ./data/chaves:/var/lib/gestor/chaves
+    networks:
+      app: { ipv4_address: 172.30.0.10 }
+      dados: {}
+    read_only: true
+    tmpfs: [/tmp]
+    mem_limit: 512m
+
+  web:
+    <<: *padrao
+    build:
+      context: ..
+      dockerfile: frontend/Dockerfile
+    depends_on: [api]
+    ports:
+      - "${TAILSCALE_IP:?defina TAILSCALE_IP no .env}:443:443"
+      - "127.0.0.1:8081:8081"
+    environment:
+      DOMINIO_TAILNET: ${DOMINIO_TAILNET:?defina DOMINIO_TAILNET no .env}
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./data/caddy:/data
+      - /var/run/tailscale/tailscaled.sock:/var/run/tailscale/tailscaled.sock
+    networks:
+      app: { ipv4_address: 172.30.0.2 }
+    mem_limit: 128m
+
+  whatsapp:
+    <<: *padrao
+    profiles: [whatsapp]
+    image: atendai/evolution-api:v2.2.3
+    env_file: ./whatsapp.env
+    networks: [app]
+    mem_limit: 512m
+
+  ocr:
+    <<: *padrao
+    profiles: [ocr]
+    image: ollama/ollama:latest
+    volumes:
+      - ./data/ollama:/root/.ollama
+    networks: [app]
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+networks:
+  # Caddy, API, gateway e OCR. A API precisa de saída para Pluggy e Gemini.
+  app:
+    ipam:
+      config: [{ subnet: 172.30.0.0/24 }]
+  # Só API ↔ Postgres; sem saída para a internet.
+  dados:
+    internal: true
+
+secrets:
+  pg_superusuario:   { file: ./secrets/pg_superusuario }
+  pg_senha_app:      { file: ./secrets/pg_senha_app }
+  pg_senha_migrador: { file: ./secrets/pg_senha_migrador }
+  pgpass_app:        { file: ./secrets/pgpass_app }
+  pgpass_migrador:   { file: ./secrets/pgpass_migrador }
+  gf_chave_servico:  { file: ./secrets/gf_chave_servico }
