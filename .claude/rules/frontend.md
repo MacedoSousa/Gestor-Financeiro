@@ -11,3 +11,4 @@ paths:
 - Visual: tokens em `src/styles/tokens.css` (tema escuro, Geist / Geist Mono). Valores monetários sempre com a classe `num` e `formatarReais`.
 - Acessibilidade: `<button>` e `<a>` reais, `label` em todo input, contraste 4.5:1.
 - Desktop primeiro; abaixo de 900 px a barra lateral vira topo.
+- Referência visual das telas: `docs/design/` (HTML exportado do canvas; leia o README de lá antes de criar uma tela).
