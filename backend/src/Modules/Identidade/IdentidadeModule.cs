@@ -4,11 +4,13 @@ using GestorFinanceiro.Modules.Identidade.Contracts;
 using GestorFinanceiro.Modules.Identidade.Infra;
 using GestorFinanceiro.SharedKernel.Aplicacao;
 using GestorFinanceiro.SharedKernel.Persistencia;
+using Fido2NetLib;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace GestorFinanceiro.Modules.Identidade;
@@ -31,6 +33,16 @@ public static class IdentidadeModule
         services.AddScoped<TentativaDeLogin>();
         services.AddScoped<PrimeiroAcesso>();
         services.AddScoped<ServicoDeTotp>();
+        services.AddSingleton<OpcoesDoWebAuthn>(sp =>
+        {
+            var opcoes = sp.GetRequiredService<IConfiguration>().GetSection(OpcoesDoWebAuthn.Secao).Get<OpcoesDoWebAuthn>() ?? new OpcoesDoWebAuthn();
+            return opcoes.EhValida()
+                ? opcoes
+                : throw new InvalidOperationException($"Configure {OpcoesDoWebAuthn.Secao}:RpId e {OpcoesDoWebAuthn.Secao}:Origens.");
+        });
+        services.AddSingleton<IFido2>(sp => new Fido2(sp.GetRequiredService<OpcoesDoWebAuthn>().ParaFido2(), metadataService: null));
+        services.AddSingleton<DesafiosWebAuthn>();
+        services.AddScoped<ServicoDePasskeys>();
         services.AddScoped<ISessoes>(sp => sp.GetRequiredService<ServicoDeSessoes>());
         return services;
     }
@@ -53,6 +65,7 @@ public static class IdentidadeModule
         grupo.MapCadastro();
         api.MapAutenticacao();
         api.MapTotp();
+        api.MapPasskey();
 
         return api;
     }

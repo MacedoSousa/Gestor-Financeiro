@@ -158,10 +158,89 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/passkey/registro/opcoes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Opções de criação da passkey (credencial descobrível, UV obrigatória, attestation none). Exige o cookie de autorização de registro. */
+        post: operations["OpcoesDeRegistroDePasskey"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/passkey/registro": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Grava a passkey, encerra o primeiro acesso e abre a sessão (204 com cookie). */
+        post: operations["RegistrarPasskey"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/passkey/opcoes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Opções de asserção sem allowCredentials (credencial descobrível) e com UV obrigatória. */
+        post: operations["OpcoesDeLoginComPasskey"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/passkey": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Entra com a asserção da passkey; 204 com o cookie de sessão. */
+        post: operations["EntrarComPasskey"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        AssercaoDePasskeyDto: {
+            clientDataJSON: string;
+            authenticatorData: string;
+            signature: string;
+            userHandle: null | string;
+        };
+        AtestacaoDePasskeyDto: {
+            clientDataJSON: string;
+            attestationObject: string;
+            transports: null | string[];
+        };
         CadastroDoCasalDto: {
             codigoInstalacao: string;
             nomeFamilia: string;
@@ -187,6 +266,10 @@ export interface components {
             nomeCompleto: string;
             cpf: string;
             senha: string;
+        };
+        DescritorDeCredencialDto: {
+            id: string;
+            type: string;
         };
         EntrarComTotpDto: {
             cpf: string;
@@ -219,8 +302,35 @@ export interface components {
             apelido: string;
             ehVoce: boolean;
         };
+        NovaPasskeyDto: {
+            apelido: string;
+            resposta: components["schemas"]["RespostaDeRegistroDePasskeyDto"];
+        };
         NovoTotpDto: {
             apelido: string;
+        };
+        OpcoesDeLoginComPasskeyDto: {
+            challenge: string;
+            /** Format: int64 */
+            timeout: number | string;
+            rpId: string;
+            userVerification: string;
+        };
+        OpcoesDeRegistroDePasskeyDto: {
+            rp: components["schemas"]["RpDePasskeyDto"];
+            user: components["schemas"]["UsuarioDePasskeyDto"];
+            challenge: string;
+            pubKeyCredParams: components["schemas"]["ParametroDeChaveDto"][];
+            /** Format: int64 */
+            timeout: number | string;
+            excludeCredentials: components["schemas"]["DescritorDeCredencialDto"][];
+            authenticatorSelection: components["schemas"]["SelecaoDeAutenticadorDto"];
+            attestation: string;
+        };
+        ParametroDeChaveDto: {
+            type: string;
+            /** Format: int32 */
+            alg: number | string;
         };
         PrimeiroAcessoDto: {
             cpf: string;
@@ -234,15 +344,41 @@ export interface components {
             detail?: null | string;
             instance?: null | string;
         };
+        RespostaDeLoginComPasskeyDto: {
+            id: string;
+            rawId: string;
+            type: string;
+            response: components["schemas"]["AssercaoDePasskeyDto"];
+        };
+        RespostaDeRegistroDePasskeyDto: {
+            id: string;
+            rawId: string;
+            type: string;
+            response: components["schemas"]["AtestacaoDePasskeyDto"];
+        };
+        RpDePasskeyDto: {
+            id: string;
+            name: string;
+        };
         SaudeDto: {
             status: string;
             /** Format: date-time */
             horario: string;
         };
+        SelecaoDeAutenticadorDto: {
+            residentKey: string;
+            requireResidentKey: boolean;
+            userVerification: string;
+        };
         TotpGeradoDto: {
             /** Format: uuid */
             credencialId: string;
             otpauthUri: string;
+        };
+        UsuarioDePasskeyDto: {
+            id: string;
+            name: string;
+            displayName: string;
         };
     };
     responses: never;
@@ -548,6 +684,144 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["EntrarComTotpDto"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Locked */
+            423: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    OpcoesDeRegistroDePasskey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpcoesDeRegistroDePasskeyDto"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    RegistrarPasskey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NovaPasskeyDto"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Locked */
+            423: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    OpcoesDeLoginComPasskey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpcoesDeLoginComPasskeyDto"];
+                };
+            };
+        };
+    };
+    EntrarComPasskey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RespostaDeLoginComPasskeyDto"];
             };
         };
         responses: {

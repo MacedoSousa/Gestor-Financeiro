@@ -46,6 +46,8 @@ services:
       ASPNETCORE_ENVIRONMENT: Production
       ConnectionStrings__App: "Host=postgres;Database=gestor;Username=gf_app;Passfile=/run/secrets/pgpass_app"
       ConnectionStrings__Migrador: "Host=postgres;Database=gestor;Username=gf_migrator;Passfile=/run/secrets/pgpass_migrador"
+      Seguranca__WebAuthn__RpId: ${DOMINIO:?defina DOMINIO em infra/.env}
+      Seguranca__WebAuthn__Origens__0: https://${DOMINIO:?defina DOMINIO em infra/.env}
     secrets: [gf_chave_servico, pgpass_app, pgpass_migrador]
     volumes:
       - ./data/chaves:/var/lib/gestor/chaves

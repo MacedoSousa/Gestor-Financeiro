@@ -350,10 +350,211 @@
           }
         }
       }
+    },
+    "/api/v1/auth/passkey/registro/opcoes": {
+      "post": {
+        "tags": [
+          "Autenticacao"
+        ],
+        "summary": "Opções de criação da passkey (credencial descobrível, UV obrigatória, attestation none). Exige o cookie de autorização de registro.",
+        "operationId": "OpcoesDeRegistroDePasskey",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpcoesDeRegistroDePasskeyDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/passkey/registro": {
+      "post": {
+        "tags": [
+          "Autenticacao"
+        ],
+        "summary": "Grava a passkey, encerra o primeiro acesso e abre a sessão (204 com cookie).",
+        "operationId": "RegistrarPasskey",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NovaPasskeyDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "423": {
+            "description": "Locked",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/passkey/opcoes": {
+      "post": {
+        "tags": [
+          "Autenticacao"
+        ],
+        "summary": "Opções de asserção sem allowCredentials (credencial descobrível) e com UV obrigatória.",
+        "operationId": "OpcoesDeLoginComPasskey",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpcoesDeLoginComPasskeyDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/passkey": {
+      "post": {
+        "tags": [
+          "Autenticacao"
+        ],
+        "summary": "Entra com a asserção da passkey; 204 com o cookie de sessão.",
+        "operationId": "EntrarComPasskey",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RespostaDeLoginComPasskeyDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "423": {
+            "description": "Locked",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
     "schemas": {
+      "AssercaoDePasskeyDto": {
+        "required": [
+          "clientDataJSON",
+          "authenticatorData",
+          "signature",
+          "userHandle"
+        ],
+        "type": "object",
+        "properties": {
+          "clientDataJSON": {
+            "type": "string"
+          },
+          "authenticatorData": {
+            "type": "string"
+          },
+          "signature": {
+            "type": "string"
+          },
+          "userHandle": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "AtestacaoDePasskeyDto": {
+        "required": [
+          "clientDataJSON",
+          "attestationObject",
+          "transports"
+        ],
+        "type": "object",
+        "properties": {
+          "clientDataJSON": {
+            "type": "string"
+          },
+          "attestationObject": {
+            "type": "string"
+          },
+          "transports": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
       "CadastroDoCasalDto": {
         "required": [
           "codigoInstalacao",
@@ -443,6 +644,21 @@
             "type": "string"
           },
           "senha": {
+            "type": "string"
+          }
+        }
+      },
+      "DescritorDeCredencialDto": {
+        "required": [
+          "id",
+          "type"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "type": {
             "type": "string"
           }
         }
@@ -564,6 +780,21 @@
           }
         }
       },
+      "NovaPasskeyDto": {
+        "required": [
+          "apelido",
+          "resposta"
+        ],
+        "type": "object",
+        "properties": {
+          "apelido": {
+            "type": "string"
+          },
+          "resposta": {
+            "$ref": "#/components/schemas/RespostaDeRegistroDePasskeyDto"
+          }
+        }
+      },
       "NovoTotpDto": {
         "required": [
           "apelido"
@@ -572,6 +803,104 @@
         "properties": {
           "apelido": {
             "type": "string"
+          }
+        }
+      },
+      "OpcoesDeLoginComPasskeyDto": {
+        "required": [
+          "challenge",
+          "timeout",
+          "rpId",
+          "userVerification"
+        ],
+        "type": "object",
+        "properties": {
+          "challenge": {
+            "type": "string"
+          },
+          "timeout": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "rpId": {
+            "type": "string"
+          },
+          "userVerification": {
+            "type": "string"
+          }
+        }
+      },
+      "OpcoesDeRegistroDePasskeyDto": {
+        "required": [
+          "rp",
+          "user",
+          "challenge",
+          "pubKeyCredParams",
+          "timeout",
+          "excludeCredentials",
+          "authenticatorSelection",
+          "attestation"
+        ],
+        "type": "object",
+        "properties": {
+          "rp": {
+            "$ref": "#/components/schemas/RpDePasskeyDto"
+          },
+          "user": {
+            "$ref": "#/components/schemas/UsuarioDePasskeyDto"
+          },
+          "challenge": {
+            "type": "string"
+          },
+          "pubKeyCredParams": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ParametroDeChaveDto"
+            }
+          },
+          "timeout": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "excludeCredentials": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DescritorDeCredencialDto"
+            }
+          },
+          "authenticatorSelection": {
+            "$ref": "#/components/schemas/SelecaoDeAutenticadorDto"
+          },
+          "attestation": {
+            "type": "string"
+          }
+        }
+      },
+      "ParametroDeChaveDto": {
+        "required": [
+          "type",
+          "alg"
+        ],
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string"
+          },
+          "alg": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
           }
         }
       },
@@ -628,6 +957,67 @@
           }
         }
       },
+      "RespostaDeLoginComPasskeyDto": {
+        "required": [
+          "id",
+          "rawId",
+          "type",
+          "response"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "rawId": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "response": {
+            "$ref": "#/components/schemas/AssercaoDePasskeyDto"
+          }
+        }
+      },
+      "RespostaDeRegistroDePasskeyDto": {
+        "required": [
+          "id",
+          "rawId",
+          "type",
+          "response"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "rawId": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "response": {
+            "$ref": "#/components/schemas/AtestacaoDePasskeyDto"
+          }
+        }
+      },
+      "RpDePasskeyDto": {
+        "required": [
+          "id",
+          "name"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
       "SaudeDto": {
         "required": [
           "status",
@@ -644,6 +1034,25 @@
           }
         }
       },
+      "SelecaoDeAutenticadorDto": {
+        "required": [
+          "residentKey",
+          "requireResidentKey",
+          "userVerification"
+        ],
+        "type": "object",
+        "properties": {
+          "residentKey": {
+            "type": "string"
+          },
+          "requireResidentKey": {
+            "type": "boolean"
+          },
+          "userVerification": {
+            "type": "string"
+          }
+        }
+      },
       "TotpGeradoDto": {
         "required": [
           "credencialId",
@@ -656,6 +1065,25 @@
             "format": "uuid"
           },
           "otpauthUri": {
+            "type": "string"
+          }
+        }
+      },
+      "UsuarioDePasskeyDto": {
+        "required": [
+          "id",
+          "name",
+          "displayName"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "displayName": {
             "type": "string"
           }
         }

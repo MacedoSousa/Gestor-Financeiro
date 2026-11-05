@@ -23,6 +23,9 @@ internal sealed class ApiDeTeste : WebApplicationFactory<Program>
     private readonly BancoDeTeste _banco;
     private readonly RelogioFixo? _relogio;
 
+    /// <summary>Origem que o <see cref="AutenticadorDeTeste"/> grava no clientDataJSON; a API de teste a aceita.</summary>
+    public const string OrigemWebAuthn = "https://localhost";
+
     public string CodigoInstalacao { get; }
     public string CaminhoCodigoInstalacao { get; }
 
@@ -43,6 +46,8 @@ internal sealed class ApiDeTeste : WebApplicationFactory<Program>
         builder.UseEnvironment("Development");
         builder.UseSetting("ConnectionStrings:App", _banco.ConexaoApp);
         builder.UseSetting("Seguranca:ArquivoCodigoInstalacao", CaminhoCodigoInstalacao);
+        builder.UseSetting("Seguranca:WebAuthn:RpId", "localhost");
+        builder.UseSetting("Seguranca:WebAuthn:Origens:0", OrigemWebAuthn);
         if (_relogio is not null)
             builder.ConfigureTestServices(s => s.Replace(ServiceDescriptor.Singleton<TimeProvider>(_relogio)));
     }
