@@ -26,7 +26,7 @@ Um casal (dois CPFs, uma conta conjunta Itaú) vê num só lugar contas, cartõe
 - **Auditoria**: trigger `audit.registrar()` grava cada INSERT/UPDATE em `audit.eventos` (append-only), com autor, IP e hash encadeado por casal. `audit.verificar_cadeia(casal)` acusa adulteração.
 - **Sem duplicatas**: chave natural por origem `(origem, id_externo)` com índice único parcial; chaves fortes (E2E do Pix, NFC-e, linha digitável) para mesclar; o resto vai para a caixa "Conciliar". Nada é descartado em silêncio.
 - **Sigilo**: AES-256-GCM com AAD por linha; HMAC (índice cego) para busca; envelope encryption (senha de cada cônjuge, código de recuperação, chave de serviço).
-- **Exposição**: app só na tailnet; único caminho público é `POST /webhooks/pluggy` via Tailscale Funnel.
+- **Exposição**: só a porta 443 aberta, em `seu-nome.duckdns.org`, atrás do Caddy (TLS por DNS-01, limite de requisições, CSP); passkey/TOTP obrigatórios. Banco, gateway e OCR nunca publicados (ADR-006).
 
 ## Fases
 

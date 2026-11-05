@@ -12,7 +12,7 @@ Sistema financeiro do casal: conta conjunta Itaú, cartões, investimentos, bole
 | API | .NET 10 (ASP.NET Core Minimal APIs), EF Core 10, monólito modular |
 | Banco | PostgreSQL 17 — schema por módulo, auditoria por trigger, sem DELETE físico |
 | Front | React 19 + TypeScript + Vite, cliente gerado do OpenAPI |
-| Infra | Docker Compose, Caddy, Tailscale, Ubuntu 24.04 com LUKS |
+| Infra | Docker Compose, Caddy, DuckDNS, Ubuntu 24.04 com LUKS |
 | Integrações | Meu Pluggy (Open Finance), gateway WhatsApp, Gemini (tier pago), OCR local na GPU |
 
 ## Estrutura
