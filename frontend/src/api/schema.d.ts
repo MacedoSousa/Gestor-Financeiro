@@ -269,7 +269,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Entra com a asserção da passkey; 204 com o cookie de sessão. */
+        /** Entra com a asserção da passkey; 204 com o cookie de sessão. Vale com a conta bloqueada e encerra o bloqueio. */
         post: operations["EntrarComPasskey"];
         delete?: never;
         options?: never;
@@ -287,7 +287,7 @@ export interface paths {
         /** Só o estado do pedido (PENDENTE, APROVADO ou EXPIRADO), sem efeito colateral. Sem cookie válido: PENDENTE. */
         get: operations["ConsultarPedidoDeDispositivo"];
         put?: never;
-        /** Pede a entrada de um celular novo; devolve o código de 6 dígitos (no-store) e o cookie do pedido, exista o CPF ou não. */
+        /** Pede a entrada de um celular novo; devolve o código de 6 dígitos (no-store) e o cookie do pedido, exista o CPF ou não. 429 quando o cônjuge já tem pedidos pendentes demais (nada é gravado). */
         post: operations["PedirDispositivo"];
         delete?: never;
         options?: never;
@@ -1129,15 +1129,6 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
-            /** @description Locked */
-            423: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
         };
     };
     OpcoesDeLoginComPasskey: {
@@ -1189,15 +1180,6 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
-            /** @description Locked */
-            423: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
         };
     };
     ConsultarPedidoDeDispositivo: {
@@ -1240,6 +1222,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PedidoCriadoDto"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
         };

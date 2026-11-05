@@ -109,13 +109,13 @@ internal abstract record ResultadoDaPasskey
     public sealed record ApelidoInvalido : ResultadoDaPasskey;
 
     public sealed record Falhou : ResultadoDaPasskey;
-
-    public sealed record Bloqueado : ResultadoDaPasskey;
 }
 
 /// <summary>
 /// Registro e login por passkey (credencial descobrível, verificação do usuário obrigatória, attestation none).
-/// Toda conferência de uma credencial conhecida passa por <see cref="TentativaDeLogin"/>.
+/// Toda conferência de uma credencial conhecida passa por <see cref="TentativaDeLogin"/>, sob o lock do cônjuge, com
+/// <see cref="RegraDeBloqueio.NaoSeAplica"/>: a passkey entra com a conta bloqueada, erro dela não conta falha e o
+/// sucesso encerra o bloqueio (ADR-011).
 /// </summary>
 internal sealed class ServicoDePasskeys(
     IdentidadeDbContext db,
@@ -220,12 +220,12 @@ internal sealed class ServicoDePasskeys(
                 autorizacoes.Consumir(token!);
                 return true;
             },
+            regra: RegraDeBloqueio.NaoSeAplica,
             ct: ct);
 
         return resultado switch
         {
             ResultadoDaTentativa.Sucesso => await CriarSessaoAsync(usuarioId, ct),
-            ResultadoDaTentativa.Bloqueado => new ResultadoDaPasskey.Bloqueado(),
             _ => new ResultadoDaPasskey.Falhou(),
         };
     }
@@ -272,12 +272,12 @@ internal sealed class ServicoDePasskeys(
                     .FirstOrDefaultAsync(c => c.Id == conhecida.Id && c.Tipo == TipoCredencial.Passkey && c.Confirmada, semCancelar);
                 return credencial is not null && await VerificarAssercaoAsync(credencial, resposta, opcoes, agora, semCancelar);
             },
+            regra: RegraDeBloqueio.NaoSeAplica,
             ct: ct);
 
         return resultado switch
         {
             ResultadoDaTentativa.Sucesso => await CriarSessaoAsync(conhecida.UsuarioId, ct),
-            ResultadoDaTentativa.Bloqueado => new ResultadoDaPasskey.Bloqueado(),
             _ => new ResultadoDaPasskey.Falhou(),
         };
     }
@@ -307,7 +307,7 @@ internal sealed class ServicoDePasskeys(
 
     /// <summary>
     /// Confere, dentro de <see cref="TentativaDeLogin"/>, a asserção de uma passkey do próprio usuário da sessão
-    /// contra o desafio ligado à sessão. Credencial de outra pessoa ou desconhecida é falha (contada pela tentativa).
+    /// contra o desafio ligado à sessão. Credencial de outra pessoa ou desconhecida é falha (401, sem contar).
     /// </summary>
     internal async Task<bool> ConferirConfirmacaoAsync(
         Guid usuarioId, AuthenticatorAssertionRawResponse resposta, AssertionOptions opcoes, DateTimeOffset agora)

@@ -14,8 +14,21 @@ internal enum ResultadoDaTentativa
     Impedido,
 }
 
+/// <summary>Se o bloqueio por falhas vale para a conferência (ADR-011).</summary>
+internal enum RegraDeBloqueio
+{
+    /// <summary>Senha, TOTP e código de recuperação: conta bloqueada não confere, e erro conta falha.</summary>
+    Aplica,
+
+    /// <summary>
+    /// Passkey: confere mesmo com a conta bloqueada e erro não conta falha. O sucesso zera o contador e encerra o
+    /// bloqueio, como qualquer sucesso.
+    /// </summary>
+    NaoSeAplica,
+}
+
 /// <summary>
-/// Toda conferência de segredo que conta falha passa por aqui. Serializa as tentativas por cônjuge
+/// Toda conferência de segredo de login passa por aqui. Serializa as tentativas por cônjuge
 /// (advisory lock na transação), recarrega o usuário já com o lock e só então confere e conta,
 /// para que tentativas paralelas não percam falhas nem passem do bloqueio.
 /// </summary>
@@ -23,10 +36,12 @@ internal sealed class TentativaDeLogin(IdentidadeDbContext db, TimeProvider relo
 {
     /// <param name="conferir">A conferência cara (Argon2, TOTP...). Roda com o lock e o usuário recarregado.</param>
     /// <param name="impedido">Regra do fluxo avaliada depois do bloqueio e antes da conferência; não conta falha.</param>
+    /// <param name="regra">Passkey usa <see cref="RegraDeBloqueio.NaoSeAplica"/>; o resto, o padrão.</param>
     public async Task<ResultadoDaTentativa> ExecutarAsync(
         Guid usuarioId,
         Func<Usuario, CancellationToken, Task<bool>> conferir,
         Func<Usuario, bool>? impedido = null,
+        RegraDeBloqueio regra = RegraDeBloqueio.Aplica,
         CancellationToken ct = default)
     {
         ct.ThrowIfCancellationRequested();
@@ -49,7 +64,8 @@ internal sealed class TentativaDeLogin(IdentidadeDbContext db, TimeProvider relo
         await db.Entry(usuario).ReloadAsync(semCancelar);
 
         var agora = relogio.GetUtcNow();
-        if (usuario.EstaBloqueado(agora))
+        var contaFalhas = regra == RegraDeBloqueio.Aplica;
+        if (contaFalhas && usuario.EstaBloqueado(agora))
         {
             await transacao.RollbackAsync(semCancelar);
             return ResultadoDaTentativa.Bloqueado;
@@ -61,6 +77,11 @@ internal sealed class TentativaDeLogin(IdentidadeDbContext db, TimeProvider relo
         }
 
         var ok = await conferir(usuario, semCancelar);
+        if (!ok && !contaFalhas)
+        {
+            await transacao.RollbackAsync(semCancelar);
+            return ResultadoDaTentativa.Falha;
+        }
         if (ok) usuario.RegistrarSucesso();
         else usuario.RegistrarFalha(agora);
         await db.SaveChangesAsync(semCancelar);

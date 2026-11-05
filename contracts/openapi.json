@@ -528,16 +528,6 @@
                 }
               }
             }
-          },
-          "423": {
-            "description": "Locked",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
           }
         }
       }
@@ -568,7 +558,7 @@
         "tags": [
           "Autenticacao"
         ],
-        "summary": "Entra com a asserção da passkey; 204 com o cookie de sessão.",
+        "summary": "Entra com a asserção da passkey; 204 com o cookie de sessão. Vale com a conta bloqueada e encerra o bloqueio.",
         "operationId": "EntrarComPasskey",
         "requestBody": {
           "content": {
@@ -593,16 +583,6 @@
                 }
               }
             }
-          },
-          "423": {
-            "description": "Locked",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
           }
         }
       }
@@ -612,7 +592,7 @@
         "tags": [
           "Autenticacao"
         ],
-        "summary": "Pede a entrada de um celular novo; devolve o código de 6 dígitos (no-store) e o cookie do pedido, exista o CPF ou não.",
+        "summary": "Pede a entrada de um celular novo; devolve o código de 6 dígitos (no-store) e o cookie do pedido, exista o CPF ou não. 429 quando o cônjuge já tem pedidos pendentes demais (nada é gravado).",
         "operationId": "PedirDispositivo",
         "requestBody": {
           "content": {
@@ -631,6 +611,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/PedidoCriadoDto"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             }

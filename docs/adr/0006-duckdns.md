@@ -5,9 +5,9 @@
 **Por quê:** o casal troca de celular com frequência e não quer depender de um app de VPN em cada aparelho.
 
 **Camadas de proteção (obrigatórias antes de abrir a porta):**
-- Login de cada cônjuge com passkey ou TOTP; sessão em cookie `HttpOnly`/`Secure`/`SameSite=Strict` (ADR-011); bloqueio após 5 falhas.
+- Login de cada cônjuge com passkey ou TOTP; sessão em cookie `HttpOnly`/`Secure`/`SameSite=Strict` (ADR-011); bloqueio após 5 falhas de senha, TOTP ou código de recuperação (a passkey fica fora do bloqueio e destrava).
 - Celular novo entra cadastrando uma passkey nova, aprovada pelo outro cônjuge ou pelo código de recuperação.
-- Caddy com limite de requisições (10/min por IP em `/api/v1/auth/*`), cabeçalhos de segurança e CSP restrita.
+- Caddy com limite de requisições (10/min por IP em `/api/v1/auth/*`; e, na criação do pedido de celular novo, também a zona `pedido-criacao`: 5 a cada 10 min por IP), cabeçalhos de segurança e CSP restrita.
 - CrowdSec lendo o log do Caddy e bloqueio de IPs fora do Brasil (Fase 5).
 - Roteador com só a 443 encaminhada; firewall do host (`ufw`) negando o resto.
 - A 443 só é encaminhada no roteador depois que o login (passkey/TOTP) existir; até lá o cadastro é feito pela rede de casa.

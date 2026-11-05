@@ -45,6 +45,20 @@
 		}
 	}
 
+	# Criação do pedido de celular novo: no máximo 5 a cada 10 minutos por IP.
+	# Vale junto com a zona autenticacao (o POST continua lá também).
+	@pedido_criacao {
+		method POST
+		path /api/v1/auth/dispositivo/pedido
+	}
+	rate_limit @pedido_criacao {
+		zone pedido-criacao {
+			key {remote_host}
+			events 5
+			window 10m
+		}
+	}
+
 	# Consulta do estado do pedido de celular novo: o celular pergunta de tempos em tempos; 60 por minuto por IP.
 	@pedido {
 		method GET

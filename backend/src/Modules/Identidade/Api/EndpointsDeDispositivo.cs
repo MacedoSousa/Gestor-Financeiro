@@ -12,20 +12,26 @@ namespace GestorFinanceiro.Modules.Identidade.Api;
 /// </summary>
 internal static class EndpointsDeDispositivo
 {
+    public const string MensagemPedidosDemais =
+        "Há pedidos demais aguardando aprovação. Aguarde alguns minutos ou peça ao outro cônjuge para aprovar.";
+
     public static IEndpointRouteBuilder MapDispositivo(this IEndpointRouteBuilder api)
     {
         var anonimo = api.MapGroup("/auth").WithTags("Autenticacao").AllowAnonymous();
 
-        anonimo.MapPost("/dispositivo/pedido", async Task<Ok<PedidoCriadoDto>> (
+        anonimo.MapPost("/dispositivo/pedido", async Task<Results<Ok<PedidoCriadoDto>, ProblemHttpResult>> (
             NovoPedidoDeDispositivoDto pedido, PedidosDeDispositivo pedidos, HttpResponse resposta, CancellationToken ct) =>
         {
-            var (codigo, cookie) = await pedidos.CriarAsync(pedido.Cpf, ct);
-            PedidosDeDispositivo.EscreverCookie(resposta, cookie);
             resposta.Headers.CacheControl = "no-store";
+            if (await pedidos.CriarAsync(pedido.Cpf, ct) is not var (codigo, cookie))
+                return TypedResults.Problem(title: MensagemPedidosDemais, statusCode: StatusCodes.Status429TooManyRequests);
+            PedidosDeDispositivo.EscreverCookie(resposta, cookie);
             return TypedResults.Ok(new PedidoCriadoDto(codigo));
         })
         .WithName("PedirDispositivo")
-        .WithSummary("Pede a entrada de um celular novo; devolve o código de 6 dígitos (no-store) e o cookie do pedido, exista o CPF ou não.");
+        .WithSummary("Pede a entrada de um celular novo; devolve o código de 6 dígitos (no-store) e o cookie do pedido, exista o CPF ou não. "
+            + "429 quando o cônjuge já tem pedidos pendentes demais (nada é gravado).")
+        .ProducesProblem(StatusCodes.Status429TooManyRequests);
 
         anonimo.MapGet("/dispositivo/pedido", async Task<Ok<EstadoDoPedidoDto>> (
             PedidosDeDispositivo pedidos, HttpRequest requisicao, HttpResponse resposta, CancellationToken ct) =>

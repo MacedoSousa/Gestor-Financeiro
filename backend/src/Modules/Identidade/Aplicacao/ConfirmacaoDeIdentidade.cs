@@ -13,7 +13,8 @@ internal enum ResultadoDaConfirmacao
 
 /// <summary>
 /// Confirmação recente (<c>POST /auth/confirmar</c>): o usuário da sessão prova de novo que é ele, com o TOTP ou
-/// uma passkey dele. Toda conferência passa por <see cref="TentativaDeLogin"/> (erro conta falha; bloqueado é 423).
+/// uma passkey dele. Toda conferência passa por <see cref="TentativaDeLogin"/>. Por TOTP, erro conta falha e conta
+/// bloqueada é 423; por passkey, o bloqueio não se aplica (ADR-011).
 /// </summary>
 internal sealed class ConfirmacaoDeIdentidade(
     TentativaDeLogin tentativa,
@@ -41,7 +42,9 @@ internal sealed class ConfirmacaoDeIdentidade(
             // Sem desafio pendente ou com resposta malformada: 401 sem contar, como no login.
             if (desafios.RetirarConfirmacao(sessaoId) is not { } opcoes) return ResultadoDaConfirmacao.Falhou;
             if (ServicoDePasskeys.ParaAssercao(pedido.Passkey) is not { } resposta) return ResultadoDaConfirmacao.Falhou;
-            resultado = await tentativa.ExecutarAsync(usuarioId, (_, _) => passkeys.ConferirConfirmacaoAsync(usuarioId, resposta, opcoes, agora), ct: ct);
+            resultado = await tentativa.ExecutarAsync(
+                usuarioId, (_, _) => passkeys.ConferirConfirmacaoAsync(usuarioId, resposta, opcoes, agora),
+                regra: RegraDeBloqueio.NaoSeAplica, ct: ct);
         }
 
         switch (resultado)

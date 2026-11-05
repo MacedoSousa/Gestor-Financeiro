@@ -26,6 +26,7 @@ const MENSAGENS_DA_API: ReadonlySet<string> = new Set([
   "Informe o código TOTP ou a passkey.",
   "Autorização de registro ausente ou expirada. Comece o acesso de novo.",
   "Informe um nome para o dispositivo, com até 60 caracteres.",
+  "Há pedidos demais aguardando aprovação. Aguarde alguns minutos ou peça ao outro cônjuge para aprovar.",
 ]);
 
 /** Erro de chamada à API: a mensagem já é a que a tela pode mostrar (fixa da API ou genérica). */
@@ -49,9 +50,10 @@ export async function chamar<T>(chamada: () => Promise<Resposta<T>>, generica = 
   }
   if (r.response.ok) return r.data as T;
   const status = r.response.status;
-  if (status === 429) throw new ErroDeApi(status, MUITAS_TENTATIVAS);
   const titulo = (r.error as { title?: unknown } | undefined)?.title;
   if (typeof titulo === "string" && MENSAGENS_DA_API.has(titulo)) throw new ErroDeApi(status, titulo);
+  // 429 sem título conhecido (o do Caddy não tem corpo da API): mensagem genérica de muitas tentativas.
+  if (status === 429) throw new ErroDeApi(status, MUITAS_TENTATIVAS);
   throw new ErroDeApi(status, generica);
 }
 

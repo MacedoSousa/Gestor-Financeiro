@@ -66,7 +66,7 @@ internal sealed class PrimeiroAcesso(
                 return envelope is not null && ConferenciaDeSegredo.SenhaAbreEnvelope(envelope, senha);
             },
             u => u.PrimeiroAcessoEncerrado,
-            ct);
+            ct: ct);
 
         return resultado switch
         {

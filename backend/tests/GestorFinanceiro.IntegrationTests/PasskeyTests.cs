@@ -180,16 +180,16 @@ public class PasskeyTests(PostgresFixture pg)
         Assert.Equal(6L, await EscalarAsync<long>(banco, "SELECT contador FROM identidade.credenciais"));
         Assert.True(await EscalarAsync<bool>(banco, "SELECT ultimo_uso_em IS NOT NULL FROM identidade.credenciais"));
 
-        // Contador que não cresce (clone do autenticador): rejeitado e contado como falha.
+        // Contador que não cresce (clone do autenticador): rejeitado, sem contar falha (passkey fica fora do bloqueio).
         autenticador.Contador = 5;
         var clonado = await EntrarAsync(anonimo, autenticador.Autenticar(await OpcoesDeLoginAsync(anonimo)));
         Assert.Equal(HttpStatusCode.Unauthorized, clonado.StatusCode);
-        Assert.Equal(1, await EscalarAsync<int>(banco, SqlFalhas));
+        Assert.Equal(0, await EscalarAsync<int>(banco, SqlFalhas));
         Assert.Equal(6L, await EscalarAsync<long>(banco, "SELECT contador FROM identidade.credenciais"));
     }
 
     [Fact]
-    public async Task Assinatura_invalida_conta_falha()
+    public async Task Falha_de_passkey_nao_conta_para_o_bloqueio()
     {
         var banco = await pg.NovoBancoAsync();
         await using var api = new ApiDeTeste(banco, relogio: NovoRelogio());
@@ -198,37 +198,23 @@ public class PasskeyTests(PostgresFixture pg)
         await ConfigurarAsync(api, autenticador);
         var anonimo = ClienteSemCookies(api);
 
-        var resposta = await EntrarAsync(anonimo, autenticador.Autenticar(await OpcoesDeLoginAsync(anonimo), assinaturaValida: false));
+        // Mais asserções inválidas do que o limite de falhas: nenhuma conta, nenhuma bloqueia.
+        for (var i = 0; i < 6; i++)
+        {
+            var resposta = await EntrarAsync(anonimo, autenticador.Autenticar(await OpcoesDeLoginAsync(anonimo), assinaturaValida: false));
+            Assert.Equal(HttpStatusCode.Unauthorized, resposta.StatusCode);
+            Assert.Equal(MensagemFalha, await TituloAsync(resposta));
+        }
 
-        Assert.Equal(HttpStatusCode.Unauthorized, resposta.StatusCode);
-        Assert.Equal(MensagemFalha, await TituloAsync(resposta));
-        Assert.Equal(1, await EscalarAsync<int>(banco, SqlFalhas));
+        Assert.Equal(0, await EscalarAsync<int>(banco, SqlFalhas));
+        Assert.True(await EscalarAsync<bool>(banco, "SELECT bloqueado_ate IS NULL FROM identidade.usuarios WHERE nome_completo = 'Ana Teste'"));
 
         // Credencial desconhecida: mesma resposta, nada contado.
         using var estranho = new AutenticadorDeTeste { UserHandle = autenticador.UserHandle };
         var desconhecida = await EntrarAsync(anonimo, estranho.Autenticar(await OpcoesDeLoginAsync(anonimo)));
         Assert.Equal(HttpStatusCode.Unauthorized, desconhecida.StatusCode);
         Assert.Equal(MensagemFalha, await TituloAsync(desconhecida));
-        Assert.Equal(1, await EscalarAsync<int>(banco, SqlFalhas));
-    }
-
-    [Fact]
-    public async Task Conta_bloqueada_responde_423_sem_conferir()
-    {
-        var banco = await pg.NovoBancoAsync();
-        await using var api = new ApiDeTeste(banco, relogio: NovoRelogio());
-        await CadastrarAsync(api);
-        using var autenticador = new AutenticadorDeTeste();
-        await ConfigurarAsync(api, autenticador);
-        await EscalarAsync<int>(banco,
-            "WITH u AS (UPDATE identidade.usuarios SET bloqueado_ate = '2026-11-05 13:00:00+00' WHERE nome_completo = 'Ana Teste' RETURNING 1) SELECT count(*)::int FROM u");
-        var anonimo = ClienteSemCookies(api);
-
-        var resposta = await EntrarAsync(anonimo, autenticador.Autenticar(await OpcoesDeLoginAsync(anonimo)));
-
-        Assert.Equal((HttpStatusCode)423, resposta.StatusCode);
         Assert.Equal(0, await EscalarAsync<int>(banco, SqlFalhas));
-        Assert.Equal(0L, await EscalarAsync<long>(banco, "SELECT contador FROM identidade.credenciais"));
     }
 
     [Fact]
@@ -280,15 +266,14 @@ public class PasskeyTests(PostgresFixture pg)
         Assert.True(await EscalarAsync<bool>(banco,
             "SELECT primeiro_acesso_encerrado_em IS NULL FROM identidade.usuarios WHERE nome_completo = 'Ana Teste'"));
 
-        // No login: a passkey é conhecida, então conta como falha.
+        // No login: rejeitada, sem contar falha (passkey fica fora do bloqueio).
         using var autenticador = new AutenticadorDeTeste();
         await ConfigurarAsync(api, autenticador);
-        var antes = await EscalarAsync<int>(banco, SqlFalhas);
         autenticador.Origem = "https://localhost.evil.example";
         var anonimo = ClienteSemCookies(api);
         var login = await EntrarAsync(anonimo, autenticador.Autenticar(await OpcoesDeLoginAsync(anonimo)));
         Assert.Equal(HttpStatusCode.Unauthorized, login.StatusCode);
-        Assert.Equal(antes + 1, await EscalarAsync<int>(banco, SqlFalhas));
+        Assert.Equal(0, await EscalarAsync<int>(banco, SqlFalhas));
     }
 
     [Fact]

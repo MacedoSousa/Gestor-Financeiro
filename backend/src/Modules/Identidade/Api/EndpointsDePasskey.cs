@@ -37,8 +37,7 @@ internal static class EndpointsDePasskey
         .WithName("RegistrarPasskey")
         .WithSummary("Grava a passkey, encerra o primeiro acesso e abre a sessão (204 com cookie).")
         .ProducesProblem(StatusCodes.Status400BadRequest)
-        .ProducesProblem(StatusCodes.Status401Unauthorized)
-        .ProducesProblem(StatusCodes.Status423Locked);
+        .ProducesProblem(StatusCodes.Status401Unauthorized);
 
         grupo.MapPost("/opcoes", Ok<OpcoesDeLoginComPasskeyDto> (ServicoDePasskeys passkeys, HttpResponse resposta) =>
         {
@@ -55,9 +54,8 @@ internal static class EndpointsDePasskey
             return Resposta(await passkeys.EntrarAsync(pedido, ct), resposta);
         })
         .WithName("EntrarComPasskey")
-        .WithSummary("Entra com a asserção da passkey; 204 com o cookie de sessão.")
-        .ProducesProblem(StatusCodes.Status401Unauthorized)
-        .ProducesProblem(StatusCodes.Status423Locked);
+        .WithSummary("Entra com a asserção da passkey; 204 com o cookie de sessão. Vale com a conta bloqueada e encerra o bloqueio.")
+        .ProducesProblem(StatusCodes.Status401Unauthorized);
 
         return api;
     }
@@ -69,8 +67,6 @@ internal static class EndpointsDePasskey
             case ResultadoDaPasskey.Entrou entrou:
                 ServicoDeSessoes.EscreverCookie(resposta, entrou.Token, entrou.ExpiraEm);
                 return TypedResults.NoContent();
-            case ResultadoDaPasskey.Bloqueado:
-                return TypedResults.Problem(title: EndpointsDeSessao.MensagemContaBloqueada, statusCode: StatusCodes.Status423Locked);
             case ResultadoDaPasskey.NaoAutorizado:
                 return TypedResults.Problem(title: EndpointsDeTotp.MensagemSemAutorizacao, statusCode: StatusCodes.Status401Unauthorized);
             case ResultadoDaPasskey.ApelidoInvalido:

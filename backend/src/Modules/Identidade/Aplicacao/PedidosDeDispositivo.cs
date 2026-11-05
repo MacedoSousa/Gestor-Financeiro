@@ -50,8 +50,12 @@ internal sealed class PedidosDeDispositivo(
     private const string PropositoDoCookie = "pedido-cookie";
     private const int TamanhoMaximoDoCookie = 128;
 
-    /// <summary>Cria o pedido (se o CPF existir) e devolve o código e o valor do cookie. A resposta não depende do CPF.</summary>
-    public async Task<(string Codigo, string Cookie)> CriarAsync(string cpf, CancellationToken ct)
+    /// <summary>
+    /// Cria o pedido (se o CPF existir) e devolve o código e o valor do cookie; a resposta não depende do CPF.
+    /// Null quando o cônjuge já tem <see cref="TemposDoLogin.PedidosPendentesPorConjuge"/> pedidos pendentes no prazo:
+    /// nada é gravado. CPF desconhecido nunca chega ao limite (não há cônjuge para contar).
+    /// </summary>
+    public async Task<(string Codigo, string Cookie)?> CriarAsync(string cpf, CancellationToken ct)
     {
         var token = ServicoDeSessoes.GerarToken();
         var codigo = RandomNumberGenerator.GetInt32(0, 1_000_000).ToString("D6", CultureInfo.InvariantCulture);
@@ -61,9 +65,25 @@ internal sealed class PedidosDeDispositivo(
 
         if (await BuscarUsuarioAsync(cpf, ct) is { } usuario)
         {
+            ct.ThrowIfCancellationRequested();
+            var semCancelar = CancellationToken.None;
+            // Contagem e INSERT sob o lock do cônjuge: criações paralelas não passam juntas do limite.
+            await using var transacao = await db.Database.BeginTransactionAsync(semCancelar);
+            await tentativa.TravarAsync(usuario.Id);
+            var instante = relogio.GetUtcNow();
+            var pendentes = await db.PedidosDeDispositivo
+                .IgnoreQueryFilters([Filtros.Casal])
+                .CountAsync(p => p.UsuarioId == usuario.Id && p.Estado == EstadoDoPedido.Pendente && p.ExpiraEm > instante, semCancelar);
+            if (pendentes >= TemposDoLogin.PedidosPendentesPorConjuge)
+            {
+                await transacao.RollbackAsync(semCancelar);
+                return null;
+            }
+
             db.PedidosDeDispositivo.Add(PedidoDeDispositivo.Criar(
                 usuario.CasalId, usuario.Id, cofre.IndiceCego(token, PropositoDoToken), codigo, agora));
-            await db.SaveChangesAsync(ct);
+            await db.SaveChangesAsync(semCancelar);
+            await transacao.CommitAsync(semCancelar);
         }
 
         return (codigo, MontarCookie(token, expiraEm));

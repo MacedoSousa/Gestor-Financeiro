@@ -472,14 +472,14 @@ public class DispositivoTests(PostgresFixture pg)
         await ConfigurarPasskeyAsync(api, banco, brunoId, doBruno);
         var ana = await api.ClienteLogadoAsync(anaId, relogio.Agora.AddMinutes(-6));
 
-        // Passkey do Bruno assinando o desafio da sessão da Ana: 401 e falha contada para a Ana.
+        // Passkey do Bruno assinando o desafio da sessão da Ana: 401, sem contar falha (passkey fica fora do bloqueio).
         var opcoes = await OpcoesDeConfirmacaoAsync(ana);
         var allow = opcoes.GetProperty("allowCredentials").EnumerateArray().ToArray();
         Assert.Equal(daAna.IdBase64Url, Assert.Single(allow).GetProperty("id").GetString());
         Assert.Equal("required", opcoes.GetProperty("userVerification").GetString());
         var alheia = await ana.PostAsJsonAsync("/api/v1/auth/confirmar", new JsonObject { ["passkey"] = doBruno.Autenticar(opcoes) });
         Assert.Equal(HttpStatusCode.Unauthorized, alheia.StatusCode);
-        Assert.Equal(1, await EscalarAsync<int>(banco, "SELECT falhas_seguidas FROM identidade.usuarios WHERE nome_completo = 'Ana Teste'"));
+        Assert.Equal(0, await EscalarAsync<int>(banco, "SELECT falhas_seguidas FROM identidade.usuarios WHERE nome_completo = 'Ana Teste'"));
 
         // O desafio é de uso único: reaproveitá-lo com a passkey certa não passa.
         var reuso = await ana.PostAsJsonAsync("/api/v1/auth/confirmar", new JsonObject { ["passkey"] = daAna.Autenticar(opcoes) });
@@ -517,6 +517,176 @@ public class DispositivoTests(PostgresFixture pg)
             "SELECT count(*) FROM audit.eventos WHERE tabela = 'identidade.chaves' AND acao = 'SOFT_DELETE'") >= 1);
         Assert.True(await EscalarAsync<long>(banco,
             "SELECT count(*) FROM audit.eventos WHERE tabela = 'identidade.pedidos_dispositivo'") >= 3);
+    }
+
+    private const string MensagemPedidosDemais = "Há pedidos demais aguardando aprovação. Aguarde alguns minutos ou peça ao outro cônjuge para aprovar.";
+    private const string SqlPendentesDaAna =
+        "SELECT count(*) FROM identidade.pedidos_dispositivo p JOIN identidade.usuarios u ON u.id = p.usuario_id WHERE u.nome_completo = 'Ana Teste' AND p.estado = 'PENDENTE'";
+    private const string SqlEstadoDoBloqueio =
+        "SELECT falhas_seguidas = 0 AND bloqueios = 0 AND bloqueado_ate IS NULL FROM identidade.usuarios WHERE nome_completo = 'Ana Teste'";
+
+    [Fact]
+    public async Task Quarto_pedido_pendente_responde_429()
+    {
+        var banco = await pg.NovoBancoAsync();
+        await using var api = new ApiDeTeste(banco, relogio: NovoRelogio());
+        await CadastrarAsync(api);
+        for (var i = 0; i < 3; i++) await PedirAsync(api, CpfDaAna);
+
+        var quarto = await ClienteSemCookies(api).PostAsJsonAsync(RotaPedido, new { cpf = CpfDaAna });
+
+        Assert.Equal(HttpStatusCode.TooManyRequests, quarto.StatusCode);
+        Assert.Equal(MensagemPedidosDemais, await TituloAsync(quarto));
+        Assert.False(quarto.Headers.Contains("Set-Cookie"));
+        Assert.Equal(3L, await EscalarAsync<long>(banco, SqlPendentesDaAna));
+        Assert.Equal(3L, await EscalarAsync<long>(banco, "SELECT count(*) FROM identidade.pedidos_dispositivo"));
+    }
+
+    [Fact]
+    public async Task Pedido_expirado_nao_conta_para_o_limite()
+    {
+        var relogio = NovoRelogio();
+        var banco = await pg.NovoBancoAsync();
+        await using var api = new ApiDeTeste(banco, relogio: relogio);
+        await CadastrarAsync(api);
+        for (var i = 0; i < 3; i++) await PedirAsync(api, CpfDaAna);
+
+        relogio.Agora = relogio.Agora.AddMinutes(11);
+        var novo = await ClienteSemCookies(api).PostAsJsonAsync(RotaPedido, new { cpf = CpfDaAna });
+
+        Assert.Equal(HttpStatusCode.OK, novo.StatusCode);
+        Assert.Equal(4L, await EscalarAsync<long>(banco, "SELECT count(*) FROM identidade.pedidos_dispositivo"));
+    }
+
+    [Fact]
+    public async Task Pedidos_em_paralelo_respeitam_o_limite()
+    {
+        var banco = await pg.NovoBancoAsync();
+        await using var api = new ApiDeTeste(banco, relogio: NovoRelogio());
+        await CadastrarAsync(api);
+
+        var respostas = await Task.WhenAll(Enumerable.Range(0, 6).Select(_ =>
+            Task.Run(() => ClienteSemCookies(api).PostAsJsonAsync(RotaPedido, new { cpf = CpfDaAna }))));
+
+        Assert.Equal(3, respostas.Count(r => r.StatusCode == HttpStatusCode.OK));
+        Assert.Equal(3, respostas.Count(r => r.StatusCode == HttpStatusCode.TooManyRequests));
+        Assert.Equal(3L, await EscalarAsync<long>(banco, SqlPendentesDaAna));
+    }
+
+    [Fact]
+    public async Task Cpf_inexistente_nunca_recebe_429()
+    {
+        var banco = await pg.NovoBancoAsync();
+        await using var api = new ApiDeTeste(banco, relogio: NovoRelogio());
+        await CadastrarAsync(api);
+        var inexistente = CpfSintetico.Gerar(3);
+
+        for (var i = 0; i < 5; i++)
+        {
+            var resposta = await ClienteSemCookies(api).PostAsJsonAsync(RotaPedido, new { cpf = inexistente });
+            Assert.Equal(HttpStatusCode.OK, resposta.StatusCode);
+            Assert.Contains(resposta.Headers.GetValues("Set-Cookie"), c => c.StartsWith("__Host-gf_pedido=", StringComparison.Ordinal));
+        }
+        Assert.Equal(0L, await EscalarAsync<long>(banco, "SELECT count(*) FROM identidade.pedidos_dispositivo"));
+    }
+
+    [Fact]
+    public async Task Passkey_entra_com_a_conta_bloqueada_e_encerra_o_bloqueio()
+    {
+        var relogio = NovoRelogio();
+        var banco = await pg.NovoBancoAsync();
+        await using var api = new ApiDeTeste(banco, relogio: relogio);
+        await CadastrarAsync(api);
+        using var passkey = new AutenticadorDeTeste();
+        var segredo = await ConfigurarTotpEPasskeyDaAnaAsync(api, banco, relogio, passkey);
+        await BloquearComTotpErradoAsync(api, banco, segredo, relogio);
+
+        var resposta = await EntrarComPasskeyAsync(api, passkey);
+
+        Assert.Equal(HttpStatusCode.NoContent, resposta.StatusCode);
+        var sessao = Cookie(resposta, "__Host-gf_sessao").Split(';')[0];
+        Assert.Equal(HttpStatusCode.OK, (await ClienteSemCookies(api, sessao).GetAsync("/api/v1/auth/eu")).StatusCode);
+        Assert.True(await EscalarAsync<bool>(banco, SqlEstadoDoBloqueio));
+        Assert.Equal(HttpStatusCode.NoContent, (await EntrarComTotpAsync(api, segredo, relogio)).StatusCode);
+    }
+
+    [Fact]
+    public async Task Confirmar_por_passkey_com_conta_bloqueada_funciona()
+    {
+        var relogio = NovoRelogio();
+        var banco = await pg.NovoBancoAsync();
+        await using var api = new ApiDeTeste(banco, relogio: relogio);
+        await CadastrarAsync(api);
+        using var passkey = new AutenticadorDeTeste();
+        var segredo = await ConfigurarTotpEPasskeyDaAnaAsync(api, banco, relogio, passkey);
+        var ana = await api.ClienteLogadoAsync(await EscalarAsync<Guid>(banco, SqlAna), relogio.Agora.AddMinutes(-6));
+        await BloquearComTotpErradoAsync(api, banco, segredo, relogio);
+
+        // Por TOTP a confirmação continua sujeita ao bloqueio.
+        var porTotp = await ana.PostAsJsonAsync("/api/v1/auth/confirmar", new { codigoTotp = new Totp(segredo).ComputeTotp(relogio.Agora.UtcDateTime) });
+        Assert.Equal(HttpStatusCode.Locked, porTotp.StatusCode);
+        Assert.Equal(MensagemBloqueio, await TituloAsync(porTotp));
+
+        var porPasskey = await ana.PostAsJsonAsync("/api/v1/auth/confirmar", new JsonObject { ["passkey"] = passkey.Autenticar(await OpcoesDeConfirmacaoAsync(ana)) });
+
+        Assert.Equal(HttpStatusCode.NoContent, porPasskey.StatusCode);
+        Assert.True((await JsonAsync(await ana.GetAsync("/api/v1/auth/eu"))).GetProperty("confirmacaoRecente").GetBoolean());
+        Assert.True(await EscalarAsync<bool>(banco, SqlEstadoDoBloqueio));
+    }
+
+    [Fact]
+    public async Task Totp_continua_bloqueado_ate_entrar_por_passkey()
+    {
+        var relogio = NovoRelogio();
+        var banco = await pg.NovoBancoAsync();
+        await using var api = new ApiDeTeste(banco, relogio: relogio);
+        await CadastrarAsync(api);
+        using var passkey = new AutenticadorDeTeste();
+        var segredo = await ConfigurarTotpEPasskeyDaAnaAsync(api, banco, relogio, passkey);
+        await BloquearComTotpErradoAsync(api, banco, segredo, relogio);
+
+        var bloqueado = await EntrarComTotpAsync(api, segredo, relogio);
+        Assert.Equal(HttpStatusCode.Locked, bloqueado.StatusCode);
+        Assert.Equal(MensagemBloqueio, await TituloAsync(bloqueado));
+
+        Assert.Equal(HttpStatusCode.NoContent, (await EntrarComPasskeyAsync(api, passkey)).StatusCode);
+
+        Assert.Equal(HttpStatusCode.NoContent, (await EntrarComTotpAsync(api, segredo, relogio)).StatusCode);
+    }
+
+    /// <summary>TOTP e passkey confirmados para a Ana; o relógio anda um minuto para o código da confirmação não ser reusado.</summary>
+    private static async Task<byte[]> ConfigurarTotpEPasskeyDaAnaAsync(
+        ApiDeTeste api, BancoDeTeste banco, RelogioFixo relogio, AutenticadorDeTeste passkey)
+    {
+        var anaId = await EscalarAsync<Guid>(banco, SqlAna);
+        var segredo = await ConfigurarTotpAsync(api, banco, anaId, relogio);
+        await ConfigurarPasskeyAsync(api, banco, anaId, passkey);
+        relogio.Agora = relogio.Agora.AddMinutes(1);
+        return segredo;
+    }
+
+    /// <summary>5 TOTPs errados bloqueiam; o 6º, mesmo certo, responde 423.</summary>
+    private static async Task BloquearComTotpErradoAsync(ApiDeTeste api, BancoDeTeste banco, byte[] segredo, RelogioFixo relogio)
+    {
+        var anonimo = ClienteSemCookies(api);
+        for (var i = 0; i < 5; i++)
+            Assert.Equal(HttpStatusCode.Unauthorized,
+                (await anonimo.PostAsJsonAsync("/api/v1/auth/totp", new EntrarComTotpDto(CpfDaAna, "abcdef"))).StatusCode);
+        Assert.Equal(HttpStatusCode.Locked, (await EntrarComTotpAsync(api, segredo, relogio)).StatusCode);
+        Assert.True(await EscalarAsync<bool>(banco,
+            "SELECT bloqueado_ate IS NOT NULL AND bloqueios = 1 FROM identidade.usuarios WHERE nome_completo = 'Ana Teste'"));
+    }
+
+    private static Task<HttpResponseMessage> EntrarComTotpAsync(ApiDeTeste api, byte[] segredo, RelogioFixo relogio) =>
+        ClienteSemCookies(api).PostAsJsonAsync("/api/v1/auth/totp",
+            new EntrarComTotpDto(CpfDaAna, new Totp(segredo).ComputeTotp(relogio.Agora.UtcDateTime)));
+
+    private static async Task<HttpResponseMessage> EntrarComPasskeyAsync(ApiDeTeste api, AutenticadorDeTeste passkey)
+    {
+        var anonimo = ClienteSemCookies(api);
+        var opcoes = await anonimo.PostAsync("/api/v1/auth/passkey/opcoes", null);
+        Assert.Equal(HttpStatusCode.OK, opcoes.StatusCode);
+        return await anonimo.PostAsJsonAsync("/api/v1/auth/passkey", passkey.Autenticar(await JsonAsync(opcoes)));
     }
 
     private static async Task<JsonElement> OpcoesDeConfirmacaoAsync(HttpClient logado)
