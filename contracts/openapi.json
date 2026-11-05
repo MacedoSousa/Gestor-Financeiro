@@ -26,6 +26,37 @@
         }
       }
     },
+    "/api/v1/casal/codigo-recuperacao": {
+      "post": {
+        "tags": [
+          "Identidade"
+        ],
+        "summary": "Gera um código de recuperação novo para o casal (o anterior deixa de valer); mostrado uma única vez, no-store. Exige confirmação recente.",
+        "operationId": "GerarCodigoDeRecuperacao",
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodigoRecuperacaoDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/casal": {
       "get": {
         "tags": [
@@ -789,6 +820,102 @@
           }
         }
       }
+    },
+    "/api/v1/dispositivos/credenciais": {
+      "get": {
+        "tags": [
+          "Dispositivos"
+        ],
+        "summary": "Passkeys e TOTPs ativos e confirmados do próprio usuário.",
+        "operationId": "ListarCredenciais",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CredencialDto"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dispositivos/credenciais/{id}": {
+      "delete": {
+        "tags": [
+          "Dispositivos"
+        ],
+        "summary": "Remove (soft delete) uma credencial do próprio usuário; exige confirmação recente. A última ativa e confirmada dá 409.",
+        "operationId": "RemoverCredencial",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dispositivos/credenciais/autorizacao": {
+      "post": {
+        "tags": [
+          "Dispositivos"
+        ],
+        "summary": "Emite o cookie de autorização de registro para o próprio usuário adicionar outra passkey ou TOTP; exige confirmação recente.",
+        "operationId": "AutorizarNovaCredencial",
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -970,6 +1097,39 @@
           },
           "senha": {
             "type": "string"
+          }
+        }
+      },
+      "CredencialDto": {
+        "required": [
+          "id",
+          "tipo",
+          "apelido",
+          "criadaEm",
+          "ultimoUsoEm"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "tipo": {
+            "type": "string"
+          },
+          "apelido": {
+            "type": "string"
+          },
+          "criadaEm": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "ultimoUsoEm": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
           }
         }
       },

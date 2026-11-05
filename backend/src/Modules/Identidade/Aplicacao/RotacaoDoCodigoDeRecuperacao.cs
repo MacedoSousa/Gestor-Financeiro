@@ -10,6 +10,8 @@ namespace GestorFinanceiro.Modules.Identidade.Aplicacao;
 /// Troca o código de recuperação do casal dentro da transação de quem chama: o envelope RECUPERACAO ativo
 /// é marcado como removido e um novo, derivado da forma canônica do código novo, é gravado.
 /// Usado ao entrar com o código de recuperação e ao gerar um código novo estando logado.
+/// Ordem dos locks, sempre a mesma para não dar deadlock: primeiro o do cônjuge (<c>identidade.login:{usuarioId}</c>,
+/// de <see cref="TentativaDeLogin"/>), depois o do casal (<c>identidade.recuperacao:{casalId}</c>, tomado aqui).
 /// </summary>
 internal sealed class RotacaoDoCodigoDeRecuperacao(IdentidadeDbContext db, IEnvelopesDaDek envelopes)
 {

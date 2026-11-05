@@ -48,6 +48,8 @@ public static class IdentidadeModule
         services.AddScoped<PedidosDeDispositivo>();
         services.AddScoped<ConfirmacaoDeIdentidade>();
         services.AddScoped<DestravarConjuge>();
+        services.AddScoped<GestaoDeCredenciais>();
+        services.AddScoped<NovoCodigoDeRecuperacao>();
         services.AddScoped<ISessoes>(sp => sp.GetRequiredService<ServicoDeSessoes>());
         return services;
     }
@@ -72,6 +74,7 @@ public static class IdentidadeModule
         api.MapTotp();
         api.MapPasskey();
         api.MapDispositivo();
+        api.MapCredenciais();
 
         return api;
     }

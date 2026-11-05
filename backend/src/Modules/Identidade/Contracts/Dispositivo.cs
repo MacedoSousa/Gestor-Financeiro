@@ -56,3 +56,6 @@ public sealed record OpcoesDeConfirmacaoDto(
 {
     public override string ToString() => nameof(OpcoesDeConfirmacaoDto);
 }
+
+/// <summary>Credencial ativa e confirmada do usuário. Tipo: PASSKEY ou TOTP.</summary>
+public sealed record CredencialDto(Guid Id, string Tipo, string Apelido, DateTimeOffset CriadaEm, DateTimeOffset? UltimoUsoEm);
