@@ -17,5 +17,6 @@
   <Folder Name="/tests/">
     <Project Path="tests/GestorFinanceiro.UnitTests/GestorFinanceiro.UnitTests.csproj" />
     <Project Path="tests/GestorFinanceiro.ArchitectureTests/GestorFinanceiro.ArchitectureTests.csproj" />
+    <Project Path="tests/GestorFinanceiro.IntegrationTests/GestorFinanceiro.IntegrationTests.csproj" />
   </Folder>
 </Solution>
