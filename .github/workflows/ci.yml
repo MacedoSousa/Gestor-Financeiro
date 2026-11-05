@@ -42,9 +42,7 @@ jobs:
             -c "CREATE ROLE gf_migrator LOGIN PASSWORD 'ci'; CREATE ROLE gf_app LOGIN PASSWORD 'ci';" \
             -c "ALTER DATABASE gestor OWNER TO gf_migrator;"
           dotnet run --project backend/src/Host/GestorFinanceiro.Api -c Release --no-build -- --migrar
-          if psql -h localhost -U postgres -d gestor -c "DELETE FROM identidade.casais" 2>/dev/null; then
-            echo "DELETE físico deveria ter falhado"; exit 1
-          fi
+          ./db/testes/verificar-protecoes.sh "host=localhost dbname=gestor"
 
       - name: Contrato OpenAPI em dia
         run: |
