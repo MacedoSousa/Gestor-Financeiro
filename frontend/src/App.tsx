@@ -1,11 +1,13 @@
 import { Route, Routes } from "react-router";
 import { Layout } from "./layout/Layout";
 import { VisaoGeral } from "./paginas/VisaoGeral";
+import { Cadastro } from "./paginas/Cadastro";
 import { EmBreve } from "./paginas/EmBreve";
 
 export function App() {
   return (
     <Routes>
+      <Route path="cadastro" element={<Cadastro />} />
       <Route element={<Layout />}>
         <Route index element={<VisaoGeral />} />
         <Route path="lancamentos" element={<EmBreve titulo="Lançamentos" fase="Fase 1" />} />
