@@ -5,6 +5,7 @@ using GestorFinanceiro.Modules.Auditoria;
 using GestorFinanceiro.Modules.Boletos;
 using GestorFinanceiro.Modules.Contas;
 using GestorFinanceiro.Modules.Identidade;
+using GestorFinanceiro.Modules.Identidade.Contracts;
 using GestorFinanceiro.Modules.Integracoes;
 using GestorFinanceiro.Modules.Investimentos;
 using GestorFinanceiro.Modules.Lancamentos;
@@ -12,6 +13,8 @@ using GestorFinanceiro.Modules.Orcamento;
 using GestorFinanceiro.SharedKernel.Aplicacao;
 using GestorFinanceiro.SharedKernel.Persistencia;
 using GestorFinanceiro.SharedKernel.Seguranca;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.HttpOverrides;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -55,6 +58,11 @@ builder.Services.AddSingleton<ICodigoDeInstalacao>(sp => new CodigoDeInstalacaoE
     CofreDoServidor.CaminhoObrigatorio(sp.GetRequiredService<IConfiguration>(), "Seguranca:ArquivoCodigoInstalacao", sp.GetRequiredService<IHostEnvironment>().ContentRootPath),
     sp.GetRequiredService<TimeProvider>(),
     sp.GetRequiredService<ILogger<CodigoDeInstalacaoEmArquivo>>()));
+builder.Services
+    .AddAuthentication(NomesDoLogin.Esquema)
+    .AddScheme<AuthenticationSchemeOptions, AutenticacaoPorSessao>(NomesDoLogin.Esquema, null);
+builder.Services.AddAuthorization(o =>
+    o.DefaultPolicy = new AuthorizationPolicyBuilder(NomesDoLogin.Esquema).RequireAuthenticatedUser().Build());
 builder.Services.AddScoped<IUsuarioAtual, UsuarioAtualHttp>();
 builder.Services.AddScoped<SoftDeleteInterceptor>();
 builder.Services.AddScoped<ContextoAuditoriaInterceptor>();
@@ -104,13 +112,17 @@ var app = builder.Build();
 app.UseForwardedHeaders();
 app.UseExceptionHandler();
 app.UseStatusCodePages();
+app.UseMiddleware<ExigirCabecalhoAntiCsrf>();
+app.UseAuthentication();
+app.UseAuthorization();
 
 if (app.Environment.IsDevelopment())
     app.MapOpenApi("/openapi/{documentName}.json");
 
-var api = app.MapGroup("/api/v1");
+var api = app.MapGroup("/api/v1").RequireAuthorization();
 
 api.MapGet("/saude", () => TypedResults.Ok(new SaudeDto("ok", DateTimeOffset.UtcNow)))
+    .AllowAnonymous()
     .WithName("Saude")
     .WithTags("Sistema")
     .WithSummary("Verificação simples de que a API está de pé.");

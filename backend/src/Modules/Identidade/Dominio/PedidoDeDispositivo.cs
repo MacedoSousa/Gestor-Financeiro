@@ -5,8 +5,6 @@ namespace GestorFinanceiro.Modules.Identidade.Dominio;
 /// <summary>Pedido de um celular novo, aprovado pelo outro cônjuge conferindo o código de 6 dígitos.</summary>
 internal sealed class PedidoDeDispositivo : Entidade, ICasalScoped
 {
-    public static readonly TimeSpan Validade = TimeSpan.FromMinutes(10);
-
     public Guid CasalId { get; private set; }
     public Guid UsuarioId { get; private set; }
     public byte[] TokenHmac { get; private set; } = [];
@@ -24,7 +22,7 @@ internal sealed class PedidoDeDispositivo : Entidade, ICasalScoped
         return new PedidoDeDispositivo
         {
             CasalId = casalId, UsuarioId = usuarioId, TokenHmac = tokenHmac, Codigo = codigo,
-            Estado = EstadoDoPedido.Pendente, ExpiraEm = agora + Validade,
+            Estado = EstadoDoPedido.Pendente, ExpiraEm = agora + TemposDoLogin.Pedido,
         };
     }
 

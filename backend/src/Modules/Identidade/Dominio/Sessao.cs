@@ -5,11 +5,6 @@ namespace GestorFinanceiro.Modules.Identidade.Dominio;
 /// <summary>Sessão de login. Guarda só o HMAC do token: nem token, nem IP, nem user agent.</summary>
 internal sealed class Sessao : Entidade, ICasalScoped
 {
-    public static readonly TimeSpan Parada = TimeSpan.FromDays(7);
-    public static readonly TimeSpan Absoluta = TimeSpan.FromDays(30);
-    public static readonly TimeSpan ConfirmacaoRecente = TimeSpan.FromMinutes(5);
-    public static readonly TimeSpan RegravarUltimoUso = TimeSpan.FromHours(1);
-
     public Guid CasalId { get; private set; }
     public Guid UsuarioId { get; private set; }
     public byte[] TokenHmac { get; private set; } = [];
@@ -23,6 +18,20 @@ internal sealed class Sessao : Entidade, ICasalScoped
         new()
         {
             CasalId = casalId, UsuarioId = usuarioId, TokenHmac = tokenHmac,
-            ExpiraEm = agora + Absoluta, UltimoUsoEm = agora, ConfirmadaEm = agora,
+            ExpiraEm = agora + TemposDoLogin.SessaoAbsoluta, UltimoUsoEm = agora, ConfirmadaEm = agora,
         };
+
+    /// <summary>Vale enquanto não passou da expiração absoluta nem de 7 dias sem uso.</summary>
+    public bool Valida(DateTimeOffset agora) =>
+        agora < ExpiraEm && agora - UltimoUsoEm < TemposDoLogin.SessaoParada;
+
+    /// <summary>Só regrava o último uso quando passou de 1 h, para não inundar a trilha de auditoria.</summary>
+    public bool RegistrarUso(DateTimeOffset agora)
+    {
+        if (agora - UltimoUsoEm <= TemposDoLogin.RegravacaoDoUltimoUso) return false;
+        UltimoUsoEm = agora;
+        return true;
+    }
+
+    public void Confirmar(DateTimeOffset agora) => ConfirmadaEm = agora;
 }

@@ -25,6 +25,8 @@ public static class IdentidadeModule
 
         services.AddScoped<IConsultaDeUsuarios, ConsultaDeUsuarios>();
         services.AddScoped<CadastroDoCasal>();
+        services.AddScoped<ServicoDeSessoes>();
+        services.AddScoped<ISessoes>(sp => sp.GetRequiredService<ServicoDeSessoes>());
         return services;
     }
 
@@ -44,6 +46,7 @@ public static class IdentidadeModule
         .WithSummary("Membros do casal do usuário logado (sem CPF).");
 
         grupo.MapCadastro();
+        api.MapAutenticacao();
 
         return api;
     }

@@ -71,7 +71,7 @@ internal sealed class Usuario : Entidade, ICasalScoped
     public void RegistrarFalha(DateTimeOffset agora)
     {
         FalhasSeguidas++;
-        if (FalhasSeguidas < PoliticaDeBloqueio.FalhasParaBloquear) return;
+        if (FalhasSeguidas < TemposDoLogin.FalhasParaBloquear) return;
         BloqueadoAte = agora + PoliticaDeBloqueio.DuracaoDoBloqueio(Bloqueios);
         Bloqueios++;
         FalhasSeguidas = 0;

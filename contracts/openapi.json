@@ -122,6 +122,41 @@
           }
         }
       }
+    },
+    "/api/v1/auth/eu": {
+      "get": {
+        "tags": [
+          "Autenticacao"
+        ],
+        "summary": "Quem está logado e se a confirmação de identidade ainda é recente.",
+        "operationId": "ObterEu",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EuDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/sair": {
+      "post": {
+        "tags": [
+          "Autenticacao"
+        ],
+        "summary": "Encerra a sessão e apaga o cookie.",
+        "operationId": "Sair",
+        "responses": {
+          "204": {
+            "description": "No Content"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -210,6 +245,30 @@
         "type": "object",
         "properties": {
           "disponivel": {
+            "type": "boolean"
+          }
+        }
+      },
+      "EuDto": {
+        "required": [
+          "usuarioId",
+          "apelido",
+          "apelidoDoConjuge",
+          "confirmacaoRecente"
+        ],
+        "type": "object",
+        "properties": {
+          "usuarioId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "apelido": {
+            "type": "string"
+          },
+          "apelidoDoConjuge": {
+            "type": "string"
+          },
+          "confirmacaoRecente": {
             "type": "boolean"
           }
         }
@@ -343,6 +402,9 @@
     },
     {
       "name": "Identidade"
+    },
+    {
+      "name": "Autenticacao"
     }
   ]
 }
