@@ -1,6 +1,6 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter } from "react-router";
 import "@fontsource/geist-sans/400.css";
 import "@fontsource/geist-sans/500.css";
@@ -10,8 +10,16 @@ import "@fontsource/geist-mono/600.css";
 import "./styles/tokens.css";
 import "./styles/app.css";
 import { App } from "./App";
+import { ErroDeApi } from "./api/autenticacao";
 
-const consultas = new QueryClient({
+const consultas: QueryClient = new QueryClient({
+  // 401 em qualquer consulta logada: a sessão acabou. Invalida ["eu"] e o Layout leva a /entrar (uma vez).
+  queryCache: new QueryCache({
+    onError: (erro, consulta) => {
+      if (erro instanceof ErroDeApi && erro.status === 401 && consulta.queryKey[0] !== "eu")
+        void consultas.invalidateQueries({ queryKey: ["eu"] });
+    },
+  }),
   defaultOptions: { queries: { staleTime: 60_000, retry: 1, refetchOnWindowFocus: false } },
 });
 

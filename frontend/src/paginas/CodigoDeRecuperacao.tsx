@@ -1,9 +1,15 @@
 import { useEffect, useState } from "react";
 
-type Props = { codigo: string; aoConcluir: () => void };
+type Props = {
+  codigo: string;
+  aoConcluir: () => void;
+  titulo?: string;
+  /** Dentro do Layout (sem a moldura própria da página). */
+  embutido?: boolean;
+};
 
 /** O código vive só no estado da mutação: nada em localStorage/sessionStorage. */
-export function CodigoDeRecuperacao({ codigo, aoConcluir }: Props) {
+export function CodigoDeRecuperacao({ codigo, aoConcluir, titulo = "Cadastro criado", embutido = false }: Props) {
   const [guardado, setGuardado] = useState(false);
 
   useEffect(() => {
@@ -17,14 +23,16 @@ export function CodigoDeRecuperacao({ codigo, aoConcluir }: Props) {
   }, [guardado]);
 
   return (
-    <div className="pagina-centro">
-      <div className="marca">
-        <div className="marca-icone" aria-hidden="true">
-          GF
+    <div className={embutido ? "bloco-embutido" : "pagina-centro"}>
+      {!embutido && (
+        <div className="marca">
+          <div className="marca-icone" aria-hidden="true">
+            GF
+          </div>
+          <div style={{ fontWeight: 600, fontSize: 15 }}>Gestor Financeiro</div>
         </div>
-        <div style={{ fontWeight: 600, fontSize: 15 }}>Gestor Financeiro</div>
-      </div>
-      <h1 className="titulo">Cadastro criado</h1>
+      )}
+      <h1 className="titulo">{titulo}</h1>
       <section className="cartao destaque" aria-labelledby="titulo-codigo">
         <h2 id="titulo-codigo" className="cartao-rotulo" style={{ margin: 0 }}>
           Guarde este código em papel

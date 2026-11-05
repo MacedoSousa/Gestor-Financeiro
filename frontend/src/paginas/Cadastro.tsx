@@ -1,8 +1,10 @@
-import { useEffect, useId, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Navigate, useNavigate } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCadastrarCasal, useEstadoDoCadastro } from "../api/cadastro";
 import { CodigoDeRecuperacao } from "./CodigoDeRecuperacao";
+import { Campo } from "./Campo";
+import { mascararCpf } from "../lib/cpf";
 
 type Conjuge = { nomeCompleto: string; cpf: string; senha: string; confirmacao: string };
 const vazio: Conjuge = { nomeCompleto: "", cpf: "", senha: "", confirmacao: "" };
@@ -12,57 +14,6 @@ const mensagemSenha = "A senha precisa ter de 12 a 128 caracteres.";
 function senhaValida(senha: string) {
   const tamanho = senha.normalize("NFC").length;
   return tamanho >= 12 && tamanho <= 128;
-}
-
-/** Máscara 000.000.000-00 aplicada só enquanto digita. */
-function mascararCpf(valor: string) {
-  const d = valor.replace(/\D/g, "").slice(0, 11);
-  const partes = [d.slice(0, 3), d.slice(3, 6), d.slice(6, 9)].filter(Boolean).join(".");
-  return d.length > 9 ? `${partes}-${d.slice(9)}` : partes;
-}
-
-type CampoProps = {
-  rotulo: string;
-  valor: string;
-  aoMudar: (v: string) => void;
-  erro?: string;
-  nota?: string;
-  tipo?: string;
-  autoComplete?: string;
-  inputMode?: "numeric";
-};
-
-function Campo({ rotulo, valor, aoMudar, erro, nota, tipo = "text", autoComplete, inputMode }: CampoProps) {
-  const id = useId();
-  const descricao = [nota ? `${id}-nota` : null, erro ? `${id}-erro` : null].filter(Boolean).join(" ");
-  return (
-    <div className="campo">
-      <label className="campo-rotulo" htmlFor={id}>
-        {rotulo}
-      </label>
-      <input
-        id={id}
-        className="entrada"
-        type={tipo}
-        value={valor}
-        autoComplete={autoComplete}
-        inputMode={inputMode}
-        aria-invalid={erro ? true : undefined}
-        aria-describedby={descricao || undefined}
-        onChange={(e) => aoMudar(e.target.value)}
-      />
-      {nota && (
-        <span id={`${id}-nota`} className="cartao-nota">
-          {nota}
-        </span>
-      )}
-      {erro && (
-        <span id={`${id}-erro`} className="campo-erro">
-          {erro}
-        </span>
-      )}
-    </div>
-  );
 }
 
 export function Cadastro() {
