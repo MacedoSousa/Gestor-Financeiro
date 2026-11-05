@@ -35,14 +35,13 @@ internal static class CofreDoServidor
     }
 
     /// <summary>
-    /// Primeira instalação: cria a DEK, grava o envelope de serviço e devolve o código de recuperação
-    /// (que embrulha a mesma DEK) para ser impresso e guardado em papel.
+    /// Primeira instalação: cria a DEK e grava o envelope de serviço. O código de recuperação
+    /// é gerado no cadastro do casal e guardado em identidade.chaves.
     /// </summary>
     public static async Task InicializarAsync(IConfiguration config, string raiz, TextWriter saida)
     {
         var arquivoChave = CaminhoObrigatorio(config, "Seguranca:ArquivoChaveServico", raiz);
         var arquivoDek = CaminhoObrigatorio(config, "Seguranca:ArquivoDekServico", raiz);
-        var arquivoRecuperacao = CaminhoObrigatorio(config, "Seguranca:ArquivoDekRecuperacao", raiz);
 
         if (File.Exists(arquivoDek))
             throw new InvalidOperationException("Já existe uma DEK. Inicializar de novo tornaria os dados ilegíveis.");
@@ -53,22 +52,12 @@ internal static class CofreDoServidor
         {
             await File.WriteAllBytesAsync(arquivoDek, EnvelopeDeChaves.Embrulhar(dek, kek));
 
-            var codigo = EnvelopeDeChaves.GerarCodigoRecuperacao();
-            var salt = EnvelopeDeChaves.GerarSalt();
-            var kekRecuperacao = EnvelopeDeChaves.DerivarKek(codigo, salt, new ParametrosArgon2());
-            await File.WriteAllBytesAsync(arquivoRecuperacao, [.. salt, .. EnvelopeDeChaves.Embrulhar(dek, kekRecuperacao)]);
-            CryptographicOperations.ZeroMemory(kekRecuperacao);
-
             if (!OperatingSystem.IsWindows())
             {
                 File.SetUnixFileMode(arquivoDek, UnixFileMode.UserRead);
-                File.SetUnixFileMode(arquivoRecuperacao, UnixFileMode.UserRead);
             }
 
-            await saida.WriteLineAsync("Chaves criadas. Imprima o código abaixo e guarde em papel — ele não será mostrado de novo:");
-            await saida.WriteLineAsync();
-            await saida.WriteLineAsync($"    {codigo}");
-            await saida.WriteLineAsync();
+            await saida.WriteLineAsync("Chaves criadas. O código de recuperação é gerado no cadastro do casal.");
         }
         finally
         {

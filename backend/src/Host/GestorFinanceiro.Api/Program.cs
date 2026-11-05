@@ -25,10 +25,21 @@ if (args.Contains("--migrar"))
     return;
 }
 
-// Primeira instalação: cria a DEK e imprime o código de recuperação uma única vez.
+// Primeira instalação: cria a DEK de serviço.
 if (args.Contains("--inicializar-chaves"))
 {
     await CofreDoServidor.InicializarAsync(builder.Configuration, builder.Environment.ContentRootPath, Console.Out);
+    return;
+}
+
+// Gera o código de uso único que autoriza o cadastro do casal; imprime e sai.
+if (args.Contains("--codigo-instalacao"))
+{
+    var caminhoCodigo = CofreDoServidor.CaminhoObrigatorio(builder.Configuration, "Seguranca:ArquivoCodigoInstalacao", builder.Environment.ContentRootPath);
+    var codigoInstalacao = CodigoDeInstalacaoEmArquivo.Gerar(caminhoCodigo, TimeProvider.System);
+    Console.WriteLine("Código de instalação (uso único, vale 24 h):");
+    Console.WriteLine();
+    Console.WriteLine($"    {codigoInstalacao}");
     return;
 }
 
@@ -40,6 +51,9 @@ builder.Services.AddProblemDetails();
 builder.Services.AddOpenApi("v1");
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddSingleton<ICodigoDeInstalacao>(sp => new CodigoDeInstalacaoEmArquivo(
+    CofreDoServidor.CaminhoObrigatorio(sp.GetRequiredService<IConfiguration>(), "Seguranca:ArquivoCodigoInstalacao", sp.GetRequiredService<IHostEnvironment>().ContentRootPath),
+    sp.GetRequiredService<TimeProvider>()));
 builder.Services.AddScoped<IUsuarioAtual, UsuarioAtualHttp>();
 builder.Services.AddScoped<SoftDeleteInterceptor>();
 builder.Services.AddScoped<ContextoAuditoriaInterceptor>();

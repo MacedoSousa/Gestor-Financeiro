@@ -37,6 +37,19 @@
 		}
 	}
 
+	# Cadastro do casal (sem sessão): no máximo 5 tentativas a cada 10 minutos por IP.
+	@cadastro {
+		method POST
+		path /api/v1/casal
+	}
+	rate_limit @cadastro {
+		zone cadastro {
+			key {remote_host}
+			events 5
+			window 10m
+		}
+	}
+
 	# Resto da API: limite largo, só para conter abuso.
 	rate_limit /api/* {
 		zone api {

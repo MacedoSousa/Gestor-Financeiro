@@ -184,3 +184,84 @@ public class FiltrosNomeadosTests
         public DbSet<ItemDoCasal> Itens => Set<ItemDoCasal>();
     }
 }
+
+public class CodigoDeInstalacaoTests
+{
+    private static string ArquivoTemporario() => Path.Combine(Path.GetTempPath(), $"gf-instalacao-{Guid.NewGuid():N}");
+    private readonly RelogioFixo relogio = new() { Agora = new DateTimeOffset(2026, 11, 5, 12, 0, 0, TimeSpan.Zero) };
+
+    [Fact]
+    public void Codigo_vale_ate_24h_e_depois_expira()
+    {
+        var caminho = ArquivoTemporario();
+        var codigo = CodigoDeInstalacaoEmArquivo.Gerar(caminho, relogio);
+        var verificador = new CodigoDeInstalacaoEmArquivo(caminho, relogio);
+
+        relogio.Agora += TimeSpan.FromHours(24) - TimeSpan.FromSeconds(1);
+        Assert.True(verificador.Confere(codigo));
+        relogio.Agora += TimeSpan.FromSeconds(1);
+        Assert.False(verificador.Confere(codigo));
+    }
+
+    [Fact]
+    public void Codigo_consumido_nao_confere_mais()
+    {
+        var caminho = ArquivoTemporario();
+        var codigo = CodigoDeInstalacaoEmArquivo.Gerar(caminho, relogio);
+        var verificador = new CodigoDeInstalacaoEmArquivo(caminho, relogio);
+
+        verificador.Consumir();
+
+        Assert.False(verificador.Confere(codigo));
+        Assert.True(File.Exists(caminho));
+    }
+
+    [Fact]
+    public void Codigo_gerado_confere_com_e_sem_hifens_e_em_minusculas()
+    {
+        var caminho = ArquivoTemporario();
+        var codigo = CodigoDeInstalacaoEmArquivo.Gerar(caminho, relogio);
+        var verificador = new CodigoDeInstalacaoEmArquivo(caminho, relogio);
+
+        Assert.True(verificador.Confere(codigo));
+        Assert.True(verificador.Confere(codigo.Replace("-", "").ToLowerInvariant()));
+        Assert.True(verificador.Confere($"  {codigo}  "));
+    }
+
+    [Fact]
+    public void Codigo_diferente_ou_vazio_nao_confere()
+    {
+        var caminho = ArquivoTemporario();
+        CodigoDeInstalacaoEmArquivo.Gerar(caminho, relogio);
+        var verificador = new CodigoDeInstalacaoEmArquivo(caminho, relogio);
+
+        Assert.False(verificador.Confere(EnvelopeDeChaves.GerarCodigoRecuperacao()));
+        Assert.False(verificador.Confere(""));
+        Assert.False(verificador.Confere(null));
+    }
+
+    [Fact]
+    public void Sem_arquivo_nada_confere() =>
+        Assert.False(new CodigoDeInstalacaoEmArquivo(ArquivoTemporario(), new RelogioFixo()).Confere("AAAA-BBBB"));
+
+    [Fact]
+    public void Gerar_de_novo_invalida_o_codigo_anterior()
+    {
+        var caminho = ArquivoTemporario();
+        var antigo = CodigoDeInstalacaoEmArquivo.Gerar(caminho, relogio);
+        var novo = CodigoDeInstalacaoEmArquivo.Gerar(caminho, relogio);
+        var verificador = new CodigoDeInstalacaoEmArquivo(caminho, relogio);
+
+        Assert.False(verificador.Confere(antigo));
+        Assert.True(verificador.Confere(novo));
+    }
+
+    [Fact]
+    public void Arquivo_fica_somente_leitura_para_o_dono()
+    {
+        if (OperatingSystem.IsWindows()) return;
+        var caminho = ArquivoTemporario();
+        CodigoDeInstalacaoEmArquivo.Gerar(caminho, relogio);
+        Assert.Equal(UnixFileMode.UserRead, File.GetUnixFileMode(caminho));
+    }
+}
