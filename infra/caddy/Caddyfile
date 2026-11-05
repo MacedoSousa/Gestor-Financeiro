@@ -40,7 +40,7 @@
 	# Cadastro do casal (sem sessão): no máximo 5 tentativas a cada 10 minutos por IP.
 	@cadastro {
 		method POST
-		path /api/v1/casal
+		path /api/v1/casal /api/v1/casal/
 	}
 	rate_limit @cadastro {
 		zone cadastro {

@@ -30,12 +30,25 @@ criar gf_chave_servico  openssl rand 32
 
 cat <<EOF
 
-Próximos passos:
-  1. docker compose -f infra/docker-compose.yml up -d postgres
-  2. Rode as migrações e crie a chave de dados (o código de recuperação aparece UMA vez — imprima):
-       dotnet run --project backend/src/Host/GestorFinanceiro.Api -- --migrar
-       dotnet run --project backend/src/Host/GestorFinanceiro.Api -- --inicializar-chaves
-  3. Faça backup de infra/secrets/ num lugar fora deste PC (sem eles, os dados cifrados não abrem).
-  4. Para rodar a API em container (usuário 'app', uid 1654), dê a ela a posse dos arquivos que ela lê:
+Próximos passos (a API em container roda como o usuário 'app', uid 1654):
+  1. Dê à API a posse dos arquivos que ela lê e crie a pasta das chaves já com o dono certo
+     (se o Docker criar infra/data/chaves sozinho, ela fica com o root e a API não grava nem lê):
        sudo chown 1654 infra/secrets/{gf_chave_servico,pgpass_app,pgpass_migrador}
+       sudo install -d -o 1654 -m 700 infra/data/chaves
+  2. docker compose -f infra/docker-compose.yml up -d postgres
+  3. Rode as migrações e crie a chave de dados. --inicializar-chaves cria só a DEK e o envelope
+     de serviço (infra/data/chaves/dek.servico); não mostra código de recuperação:
+       docker compose -f infra/docker-compose.yml run --rm api --migrar
+       docker compose -f infra/docker-compose.yml run --rm api --inicializar-chaves
+  4. Gere o código de instalação COMO o usuário da API (o arquivo vai para infra/data/chaves):
+       docker compose -f infra/docker-compose.yml run --rm api --codigo-instalacao
+     Vale 24 h e é de uso único; gerar de novo invalida o anterior.
+  5. Suba tudo (docker compose -f infra/docker-compose.yml up -d), abra https://<seu domínio>/cadastro
+     e cadastre o casal com esse código. O código de recuperação aparece UMA vez, no fim do
+     cadastro — imprima e guarde em papel.
+  6. Faça backup de infra/secrets/ e de infra/data/chaves/dek.servico num lugar fora deste PC
+     (sem eles, os dados cifrados não abrem).
+
+Instalações anteriores: um dek.recuperacao antigo e o código em papel que veio com ele estão
+obsoletos (não são mais lidos). Guarde ou destrua de propósito; não confunda com o código novo.
 EOF

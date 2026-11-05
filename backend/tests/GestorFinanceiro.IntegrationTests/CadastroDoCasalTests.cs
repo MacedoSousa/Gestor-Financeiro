@@ -107,7 +107,7 @@ public class CadastroDoCasalTests(PostgresFixture pg)
 
         var deks = chaves.Select(c =>
         {
-            var segredo = c.Tipo == "RECUPERACAO" ? criado.CodigoRecuperacao : segredoPorUsuario[c.UsuarioId!.Value].Senha;
+            var segredo = c.Tipo == "RECUPERACAO" ? EnvelopeDeChaves.CanonizarCodigo(criado.CodigoRecuperacao) : segredoPorUsuario[c.UsuarioId!.Value].Senha;
             var kek = EnvelopeDeChaves.DerivarKek(segredo, c.Salt, new ParametrosArgon2());
             return EnvelopeDeChaves.Desembrulhar(c.DekCifrada, kek);
         }).ToList();

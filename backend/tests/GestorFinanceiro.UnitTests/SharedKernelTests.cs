@@ -100,6 +100,31 @@ public class EnvelopeDeChavesTests
         var codigo = EnvelopeDeChaves.GerarCodigoRecuperacao();
         Assert.Matches("^([A-Z2-9]{4}-){7}[A-Z2-9]{4}$", codigo);
     }
+
+    [Theory]
+    [InlineData("abcd-efgh-2345", "ABCDEFGH2345")]
+    [InlineData("  AbCd EFgh\t2345\n", "ABCDEFGH2345")]
+    [InlineData("ab_cd.ef/gh", "ABCDEFGH")]
+    [InlineData("", "")]
+    public void Canonizar_codigo_remove_separadores_e_poe_em_maiusculas(string digitado, string canonico) =>
+        Assert.Equal(canonico, EnvelopeDeChaves.CanonizarCodigo(digitado));
+
+    [Fact]
+    public void Envelope_do_codigo_canonico_abre_com_o_codigo_digitado_de_qualquer_jeito()
+    {
+        var codigo = EnvelopeDeChaves.GerarCodigoRecuperacao();
+        var dek = EnvelopeDeChaves.GerarDek();
+        var salt = EnvelopeDeChaves.GerarSalt();
+        var envelope = EnvelopeDeChaves.Embrulhar(
+            dek, EnvelopeDeChaves.DerivarKek(EnvelopeDeChaves.CanonizarCodigo(codigo), salt, Rapido));
+
+        var digitado = " " + string.Join(' ', codigo.ToLowerInvariant().Split('-')) + " ";
+        var recuperada = EnvelopeDeChaves.Desembrulhar(
+            envelope, EnvelopeDeChaves.DerivarKek(EnvelopeDeChaves.CanonizarCodigo(digitado), salt, Rapido));
+
+        Assert.DoesNotContain('-', digitado);
+        Assert.Equal(dek, recuperada);
+    }
 }
 
 public class EnvelopesDaDekTests
@@ -254,6 +279,53 @@ public class CodigoDeInstalacaoTests
 
         Assert.False(verificador.Confere(antigo));
         Assert.True(verificador.Confere(novo));
+    }
+
+    [Fact]
+    public void Arquivo_ausente_ou_com_tamanho_errado_gera_aviso_sem_valores()
+    {
+        var caminho = ArquivoTemporario();
+        var log = new LogEmMemoria();
+        var verificador = new CodigoDeInstalacaoEmArquivo(caminho, relogio, log);
+        var codigo = EnvelopeDeChaves.GerarCodigoRecuperacao();
+
+        Assert.False(verificador.Confere(codigo));
+        File.WriteAllBytes(caminho, [1, 2, 3]);
+        Assert.False(verificador.Confere(codigo));
+
+        Assert.Equal(2, log.Mensagens.Count);
+        Assert.All(log.Mensagens, m => Assert.Equal(Microsoft.Extensions.Logging.LogLevel.Warning, m.Nivel));
+        Assert.Contains("não existe", log.Mensagens[0].Texto);
+        Assert.Contains("3 bytes", log.Mensagens[1].Texto);
+        Assert.All(log.Mensagens, m =>
+        {
+            Assert.DoesNotContain(caminho, m.Texto);
+            Assert.DoesNotContain(EnvelopeDeChaves.CanonizarCodigo(codigo), EnvelopeDeChaves.CanonizarCodigo(m.Texto));
+        });
+    }
+
+    [Fact]
+    public void Codigo_errado_com_arquivo_valido_nao_gera_aviso()
+    {
+        var caminho = ArquivoTemporario();
+        CodigoDeInstalacaoEmArquivo.Gerar(caminho, relogio);
+        var log = new LogEmMemoria();
+
+        Assert.False(new CodigoDeInstalacaoEmArquivo(caminho, relogio, log).Confere(EnvelopeDeChaves.GerarCodigoRecuperacao()));
+        Assert.Empty(log.Mensagens);
+    }
+
+    private sealed class LogEmMemoria : Microsoft.Extensions.Logging.ILogger<CodigoDeInstalacaoEmArquivo>
+    {
+        public List<(Microsoft.Extensions.Logging.LogLevel Nivel, string Texto)> Mensagens { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(Microsoft.Extensions.Logging.LogLevel logLevel) => true;
+
+        public void Log<TState>(Microsoft.Extensions.Logging.LogLevel logLevel, Microsoft.Extensions.Logging.EventId eventId,
+            TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
+            Mensagens.Add((logLevel, formatter(state, exception)));
     }
 
     [Fact]

@@ -53,7 +53,8 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<ICodigoDeInstalacao>(sp => new CodigoDeInstalacaoEmArquivo(
     CofreDoServidor.CaminhoObrigatorio(sp.GetRequiredService<IConfiguration>(), "Seguranca:ArquivoCodigoInstalacao", sp.GetRequiredService<IHostEnvironment>().ContentRootPath),
-    sp.GetRequiredService<TimeProvider>()));
+    sp.GetRequiredService<TimeProvider>(),
+    sp.GetRequiredService<ILogger<CodigoDeInstalacaoEmArquivo>>()));
 builder.Services.AddScoped<IUsuarioAtual, UsuarioAtualHttp>();
 builder.Services.AddScoped<SoftDeleteInterceptor>();
 builder.Services.AddScoped<ContextoAuditoriaInterceptor>();

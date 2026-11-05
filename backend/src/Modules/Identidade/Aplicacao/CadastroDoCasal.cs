@@ -63,7 +63,9 @@ internal sealed partial class CadastroDoCasal(
         var codigoRecuperacao = EnvelopeDeChaves.GerarCodigoRecuperacao();
         var envelope1 = envelopes.Embrulhar(pedido.Conjuge1.Senha);
         var envelope2 = envelopes.Embrulhar(pedido.Conjuge2.Senha);
-        var envelopeRecuperacao = envelopes.Embrulhar(codigoRecuperacao);
+        // A KEK sai da forma canônica (sem hífens, maiúsculas): quem digitar o código de outro jeito
+        // abre o mesmo envelope. O usuário recebe o código no formato exibido, com hífens.
+        var envelopeRecuperacao = envelopes.Embrulhar(EnvelopeDeChaves.CanonizarCodigo(codigoRecuperacao));
 
         Guid casalId;
         try
