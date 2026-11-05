@@ -60,7 +60,8 @@ export function useEstadoDoPedido(ativo: boolean) {
     retry: false,
     gcTime: 0,
     staleTime: 0,
-    refetchInterval: 10_000,
+    // Só segue consultando enquanto PENDENTE: APROVADO é resgatado e EXPIRADO não muda mais.
+    refetchInterval: (consulta) => (consulta.state.data === undefined || consulta.state.data === "PENDENTE" ? 10_000 : false),
     queryFn: async () => (await chamar(() => api.GET("/api/v1/auth/dispositivo/pedido"))).estado,
   });
 }

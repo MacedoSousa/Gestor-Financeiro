@@ -20,7 +20,10 @@ const consultas: QueryClient = new QueryClient({
         void consultas.invalidateQueries({ queryKey: ["eu"] });
     },
   }),
-  defaultOptions: { queries: { staleTime: 60_000, retry: 1, refetchOnWindowFocus: false } },
+  defaultOptions: {
+    // Segredos (otpauth, códigos, senha do primeiro acesso) não ficam no cache de mutações depois de sair da tela.
+    mutations: { gcTime: 0 },
+    queries: { staleTime: 60_000, retry: 1, refetchOnWindowFocus: false } },
 });
 
 createRoot(document.getElementById("raiz")!).render(

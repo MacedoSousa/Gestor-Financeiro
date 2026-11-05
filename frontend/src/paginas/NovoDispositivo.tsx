@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { ErroDeApi } from "../api/autenticacao";
 import { pedirDispositivo, recuperarAcesso, resgatarPedido, useEstadoDoPedido } from "../api/dispositivos";
 import { Alerta, Campo, PaginaPublica } from "./Campo";
@@ -9,6 +9,7 @@ import { mascararCpf } from "../lib/cpf";
 
 export function NovoDispositivo() {
   const navegar = useNavigate();
+  const consultas = useQueryClient();
   const [modo, setModo] = useState<"aprovacao" | "recuperacao">("aprovacao");
   const [cpf, setCpf] = useState("");
   const [codigoRecuperacao, setCodigoRecuperacao] = useState("");
@@ -20,8 +21,12 @@ export function NovoDispositivo() {
   });
   const resgatar = useMutation<void, ErroDeApi>({ mutationFn: resgatarPedido, onSuccess: () => void navegar("/registrar") });
 
-  const esperando = pedir.isSuccess && !resgatar.isPending && !resgatar.isError && !resgatar.isSuccess;
-  const estado = useEstadoDoPedido(esperando);
+  // Só o pedido atual decide: um erro de resgate antigo não liga nem desliga a consulta.
+  const estado = useEstadoDoPedido(pedir.isSuccess);
+
+  // Segredos (código de recuperação) não ficam no cache ao sair da tela.
+  const { reset: limparRecuperacao } = recuperar;
+  useEffect(() => () => limparRecuperacao(), [limparRecuperacao]);
 
   // Resgata uma única vez: o pedido é de uso único.
   const resgatou = useRef(false);
@@ -33,6 +38,8 @@ export function NovoDispositivo() {
   }, [estado.data, resgatar]);
 
   function pedirDeNovo() {
+    // O estado APROVADO antigo não pode disparar outro resgate para o pedido novo.
+    consultas.removeQueries({ queryKey: ["pedido-estado"] });
     resgatou.current = false;
     resgatar.reset();
     pedir.reset();

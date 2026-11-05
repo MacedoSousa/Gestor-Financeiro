@@ -41,6 +41,10 @@ export function RegistrarAcesso() {
     },
   });
 
+  // O segredo TOTP não fica no cache de mutações ao sair da tela.
+  const { reset: limparTotp } = gerarTotp;
+  useEffect(() => () => limparTotp(), [limparTotp]);
+
   const uri = gerarTotp.data?.otpauthUri;
   useEffect(() => {
     if (!uri) return;

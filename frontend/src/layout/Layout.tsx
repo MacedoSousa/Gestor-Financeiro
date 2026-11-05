@@ -79,19 +79,37 @@ export function Layout() {
   const navegar = useNavigate();
   const consultas = useQueryClient();
   const [saindo, setSaindo] = useState(false);
+  const [erroAoSair, setErroAoSair] = useState(false);
 
   async function aoSair() {
     setSaindo(true);
+    setErroAoSair(false);
     try {
       await sair();
     } catch {
-      // Sem resposta: o cookie pode seguir válido; a tela de entrada volta a conferir.
+      // Não finge que saiu: a sessão pode seguir válida.
+      setErroAoSair(true);
+      setSaindo(false);
+      return;
     }
     consultas.clear();
     void navegar("/entrar", { replace: true });
   }
 
   if (cadastro.isPending) return null;
+  if (cadastro.isError)
+    return (
+      <div className="pagina-centro">
+        <p role="alert" className="alerta-form">
+          Não foi possível consultar o cadastro.
+        </p>
+        <div>
+          <button type="button" className="botao-secundario" onClick={() => void cadastro.refetch()}>
+            Tentar de novo
+          </button>
+        </div>
+      </div>
+    );
   if (cadastro.data?.disponivel) return <Navigate to="/cadastro" replace />;
   // Rotas públicas não passam por aqui, então não há laço: 401 leva a /entrar uma vez.
   if (eu.isPending) return null;
@@ -135,6 +153,11 @@ export function Layout() {
           ))}
         </nav>
         <div className="lateral-rodape">
+          {erroAoSair && (
+            <p role="alert" className="alerta-form">
+              Não foi possível sair. Tente de novo.
+            </p>
+          )}
           <span className="subtitulo">{eu.data.apelido}</span>
           <button type="button" className="botao-secundario" onClick={() => void aoSair()} disabled={saindo}>
             Sair
