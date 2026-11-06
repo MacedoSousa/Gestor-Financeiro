@@ -23,7 +23,7 @@
   - nenhum módulo lê o schema de outro;
   - API só por DTO em `/api/v1`, com erros em Problem Details;
   - o casal vem da sessão, nunca do corpo.
-- **Migrações novas:** `V0005__contas_investimento.sql`, `V0006__categorias_papel.sql` e `V0007__orcamento.sql`. Nunca editar V0001–V0004.
+- **Migrações novas:** `V0005__contas_investimento.sql`, `V0006__categorias_papel.sql`, `V0007__categorias_papel_so_despesa.sql` e `V0008__orcamento.sql`. Nunca editar V0001–V0004.
 - **Dinheiro:** `long` em centavos no domínio, `bigint` no banco, `valorCentavos` nos DTOs. Percentual é `decimal?` com 1 casa (`MidpointRounding.AwayFromZero`); nunca `double`.
 - **Limites:** `valorCentavos` de teto e de receita prevista de `0` a `100_000_000_000`. Mês `AAAA-MM` de `2020-01` até hoje + 24 meses, com hoje no fuso `America/Sao_Paulo`.
 - **Textos fixos** (copiar exatamente):
@@ -208,7 +208,7 @@ São os casos que a spec implica, mas que nenhum teste listado nela cobre. Cada 
 
 **Arquivos:**
 - Criar:
-  - `db/migrations/V0007__orcamento.sql`;
+  - `db/migrations/V0008__orcamento.sql`;
   - `backend/src/Modules/Orcamento/Dominio/Teto.cs`, `Dominio/ReceitaPrevista.cs`;
   - `Infra/OrcamentoDbContext.cs` (herda `ModuloDbContext`; tabelas `tetos` e `receitas_previstas` em `orcamento`);
   - `Aplicacao/ServicoDeOrcamento.cs`, `Api/EndpointsDeOrcamento.cs`.
@@ -254,7 +254,7 @@ São os casos que a spec implica, mas que nenhum teste listado nela cobre. Cada 
   - **Isolamento:** `Orcamento_nao_mostra_uso_de_outro_casal`.
   - **Arquitetura:** colocar um uso temporário de um tipo `internal` do Lancamentos no Orcamento (por exemplo, `typeof(Lancamentos.Infra.LancamentosDbContext)` via reflexão por nome), ver `Modulo_so_depende_de_Contracts_de_outro_modulo` falhar para o par (Orcamento, Lancamentos) e remover. Registrar a saída no commit.
 - [ ] **Passo 2: Rodar e ver falhar.**
-- [ ] **Passo 3: Implementar.** V0007 conforme a spec: schema, `GRANT USAGE`, duas tabelas com colunas padrão, CHECKs, índices parciais e `audit.proteger`.
+- [ ] **Passo 3: Implementar.** V0008 conforme a spec: schema, `GRANT USAGE`, duas tabelas com colunas padrão, CHECKs, índices parciais e `audit.proteger`.
 - [ ] **Passo 4: Suíte verde, contrato regerado e check do front.**
 - [ ] **Passo 5: Commit** — `Orcamento: tetos, receita prevista e cópia`
 

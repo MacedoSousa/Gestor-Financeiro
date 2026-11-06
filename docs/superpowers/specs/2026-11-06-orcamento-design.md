@@ -64,7 +64,10 @@
 - `UPDATE` pelo nome padrão;
 - `CREATE UNIQUE INDEX ux_categorias_papel ON lancamentos.categorias (casal_id, papel) WHERE papel IS NOT NULL AND NOT is_deleted`.
 
-**`V0007__orcamento.sql`** (Orcamento):
+**`V0007__categorias_papel_so_despesa.sql`** (Lancamentos):
+- `CHECK (papel IS NULL OR tipo = 'DESPESA')` em `lancamentos.categorias`: categoria com papel nunca vira de receita (o serviço também recusa a troca de tipo).
+
+**`V0008__orcamento.sql`** (Orcamento):
 - `CREATE SCHEMA orcamento` + `GRANT USAGE ... TO gf_app`.
 - `orcamento.tetos`:
   - `id`, `casal_id`, `mes date CHECK (extract(day FROM mes) = 1)`, `categoria_id uuid NOT NULL` (sem FK entre schemas);
