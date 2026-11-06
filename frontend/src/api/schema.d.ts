@@ -574,6 +574,76 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/orcamento": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Orçamento do mês (AAAA-MM de 2020-01 até hoje + 24 meses; padrão: o mês de hoje em Brasília): fatias, folga, teto e usado por categoria de despesa e o mês de onde copiar tetos. */
+        get: operations["ObterOrcamento"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/orcamento/tetos/{mes}/{categoriaId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Cria ou atualiza o teto da categoria de despesa no mês (0 a 100.000.000.000 centavos; zero é um teto). Categoria de receita dá 400; teto novo em categoria arquivada dá 400 (atualizar é permitido). */
+        put: operations["DefinirTeto"];
+        post?: never;
+        /** Remove o teto (soft delete). Sem teto no mês dá 404. */
+        delete: operations["RemoverTeto"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/orcamento/receita/{mes}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Cria ou atualiza a receita prevista do mês (0 a 100.000.000.000 centavos). */
+        put: operations["DefinirReceitaPrevista"];
+        post?: never;
+        /** Remove a receita prevista (soft delete). Sem receita no mês dá 404. */
+        delete: operations["RemoverReceitaPrevista"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/orcamento/{mes}/copia": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Copia para o mês os tetos do último mês anterior com teto, só nas categorias ativas sem linha no mês. origem é nula quando não há de onde copiar. */
+        post: operations["CopiarTetos"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -617,6 +687,7 @@ export interface components {
             nome: string;
             tipo: string;
             arquivada: boolean;
+            papel: null | string;
         };
         CodigoRecuperacaoDto: {
             codigoRecuperacao: string;
@@ -661,6 +732,11 @@ export interface components {
             /** Format: int64 */
             limiteCentavos: null | number | string;
             arquivada: boolean;
+        };
+        CopiaDeTetosDto: {
+            /** Format: int32 */
+            copiados: number | string;
+            origem: null | string;
         };
         CredencialDto: {
             /** Format: uuid */
@@ -710,6 +786,29 @@ export interface components {
             /** Format: int32 */
             total: number | string;
             lancamentos: components["schemas"]["LancamentoDto"][];
+        };
+        FatiaDeInvestirDto: {
+            /** Format: int64 */
+            tetoCentavos: null | number | string;
+            /** Format: int64 */
+            usadoCentavos: number | string;
+            /** Format: int64 */
+            aportesCentavos: number | string;
+            /** Format: double */
+            percentual: null | number | string;
+        };
+        FatiaDto: {
+            /** Format: int64 */
+            tetoCentavos: null | number | string;
+            /** Format: int64 */
+            usadoCentavos: number | string;
+            /** Format: double */
+            percentual: null | number | string;
+        };
+        FatiasDto: {
+            investir: components["schemas"]["FatiaDeInvestirDto"];
+            dividas: components["schemas"]["FatiaDto"];
+            tetoDeGastos: components["schemas"]["FatiaDto"];
         };
         FaturaDto: {
             /** Format: date */
@@ -853,6 +952,18 @@ export interface components {
             authenticatorSelection: components["schemas"]["SelecaoDeAutenticadorDto"];
             attestation: string;
         };
+        OrcamentoDoMesDto: {
+            mes: string;
+            /** Format: int64 */
+            receitaPrevistaCentavos: null | number | string;
+            /** Format: int64 */
+            receitaSugeridaCentavos: number | string;
+            fatias: components["schemas"]["FatiasDto"];
+            /** Format: int64 */
+            folgaCentavos: null | number | string;
+            categorias: components["schemas"]["TetoDaCategoriaDto"][];
+            mesParaCopiar: null | string;
+        };
         ParametroDeChaveDto: {
             type: string;
             /** Format: int32 */
@@ -918,6 +1029,19 @@ export interface components {
             requireResidentKey: boolean;
             userVerification: string;
         };
+        TetoDaCategoriaDto: {
+            /** Format: uuid */
+            categoriaId: string;
+            nome: string;
+            papel: null | string;
+            arquivada: boolean;
+            /** Format: int64 */
+            tetoCentavos: null | number | string;
+            /** Format: int64 */
+            usadoCentavos: number | string;
+            /** Format: int64 */
+            restanteCentavos: null | number | string;
+        };
         TitularDto: {
             /** Format: uuid */
             usuarioId: string;
@@ -938,6 +1062,10 @@ export interface components {
             id: string;
             name: string;
             displayName: string;
+        };
+        ValorDoMesDto: {
+            /** Format: int64 */
+            valorCentavos: null | number | string;
         };
     };
     responses: never;
@@ -2428,6 +2556,236 @@ export interface operations {
                 content: {
                     "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
+            };
+        };
+    };
+    ObterOrcamento: {
+        parameters: {
+            query?: {
+                mes?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrcamentoDoMesDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    DefinirTeto: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                mes: string;
+                categoriaId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ValorDoMesDto"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    RemoverTeto: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                mes: string;
+                categoriaId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    DefinirReceitaPrevista: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                mes: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ValorDoMesDto"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    RemoverReceitaPrevista: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                mes: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    CopiarTetos: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                mes: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CopiaDeTetosDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

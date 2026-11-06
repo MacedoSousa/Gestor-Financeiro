@@ -4,13 +4,15 @@ import { ErroDeApi } from "../../api/autenticacao";
 import type { Conta } from "../../api/contas";
 import { criarLancamento, criarTransferencia, hojeIso, type Categoria } from "../../api/lancamentos";
 import { centavosDeTexto } from "../../lib/dinheiro";
+import { AVISO_DE_APORTE, avisaAporteEmDobro, categoriasDoTipo } from "../../lib/lancamentos";
 import { Alerta, Campo, CampoSelecao } from "../Campo";
 
-type Tipo = "DESPESA" | "RECEITA" | "TRANSFERENCIA";
+type Tipo = "DESPESA" | "RECEITA" | "ESTORNO" | "TRANSFERENCIA";
 
 const TIPOS: ReadonlyArray<{ valor: Tipo; rotulo: string }> = [
   { valor: "DESPESA", rotulo: "Despesa" },
   { valor: "RECEITA", rotulo: "Receita" },
+  { valor: "ESTORNO", rotulo: "Estorno" },
   { valor: "TRANSFERENCIA", rotulo: "Transferência" },
 ];
 
@@ -44,13 +46,18 @@ export function LancamentoRapido({ contas, categorias }: Props) {
   const [aviso, setAviso] = useState<string>();
 
   const ativas = contas.filter((c) => !c.arquivada);
-  const categoriasDoTipo = categorias.filter((c) => !c.arquivada && c.tipo === tipo);
+  const opcoesDeCategoria = tipo === "TRANSFERENCIA" ? [] : categoriasDoTipo(tipo, categorias);
   const conta = efetivo(contaId, ativas);
   const destinos = ativas.filter((c) => c.id !== conta);
   const destino = efetivo(destinoId, destinos);
-  const categoria = efetivo(categoriaId, categoriasDoTipo);
+  const categoria = efetivo(categoriaId, opcoesDeCategoria);
   const ehCartao = ativas.find((c) => c.id === conta)?.tipo === "CARTAO";
   const podeParcelar = tipo === "DESPESA" && ehCartao;
+  const mostrarAviso = avisaAporteEmDobro(
+    tipo,
+    opcoesDeCategoria.find((c) => c.id === categoria),
+    ativas.find((c) => c.id === conta),
+  );
   const opcoesDeConta = ativas.map((c) => ({ valor: c.id, rotulo: c.apelido }));
 
   function falhar(mensagem: string) {
@@ -87,7 +94,7 @@ export function LancamentoRapido({ contas, categorias }: Props) {
         await criarLancamento({
           chaveIdempotente: chave,
           contaId: conta,
-          natureza: tipo,
+          natureza: tipo === "ESTORNO" ? "RECEITA" : tipo,
           valorCentavos: centavos,
           data,
           descricao: descricao.trim(),
@@ -141,9 +148,10 @@ export function LancamentoRapido({ contas, categorias }: Props) {
           rotulo="Categoria"
           valor={categoria}
           aoMudar={setCategoriaId}
-          opcoes={categoriasDoTipo.map((c) => ({ valor: c.id, rotulo: c.nome }))}
+          opcoes={opcoesDeCategoria.map((c) => ({ valor: c.id, rotulo: c.nome }))}
         />
       )}
+      {mostrarAviso && <p className="cartao-nota">{AVISO_DE_APORTE}</p>}
       <CampoSelecao rotulo={tipo === "TRANSFERENCIA" ? "Conta de origem" : "Conta"} valor={conta} aoMudar={setContaId} opcoes={opcoesDeConta} />
       {tipo === "TRANSFERENCIA" && (
         <CampoSelecao

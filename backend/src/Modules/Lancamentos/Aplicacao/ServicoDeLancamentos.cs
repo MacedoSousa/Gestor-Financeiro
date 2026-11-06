@@ -30,6 +30,7 @@ internal sealed class ServicoDeLancamentos(LancamentosDbContext db, IUsuarioAtua
 {
     internal const string TituloContaArquivada = "Conta arquivada: escolha outra.";
     internal const string TituloCategoriaArquivada = "Categoria arquivada: escolha outra.";
+    internal const string TituloEstornoComPapel = "Rendimentos e devoluções de investimento ou de dívida entram como receita comum, não como estorno.";
     internal const string TituloChaveUsada = "Chave de idempotência já usada.";
     internal const string TituloFaturaFechada = "Fatura fechada: só descrição e categoria podem mudar.";
     private const string IndiceDaChave = "ux_transacoes_origem_id_externo";
@@ -251,7 +252,10 @@ internal sealed class ServicoDeLancamentos(LancamentosDbContext db, IUsuarioAtua
             $"SELECT pg_advisory_xact_lock(hashtextextended('lancamentos.categoria:' || {categoriaId}::text, 0))", ct);
         var categoria = await db.Categorias.AsNoTracking().FirstOrDefaultAsync(c => c.Id == categoriaId, ct);
         if (categoria is null) return Invalido("categoriaId", "Categoria não encontrada.");
-        var tipoEsperado = natureza == NaturezaDaTransacao.Receita ? TipoDeCategoria.Receita : TipoDeCategoria.Despesa;
+        // Receita aceita categoria de receita ou, como estorno, de despesa sem papel.
+        var estorno = natureza == NaturezaDaTransacao.Receita && categoria.Tipo == TipoDeCategoria.Despesa;
+        if (estorno && categoria.Papel is not null) return Invalido("categoriaId", TituloEstornoComPapel);
+        var tipoEsperado = natureza == NaturezaDaTransacao.Receita && !estorno ? TipoDeCategoria.Receita : TipoDeCategoria.Despesa;
         if (categoria.Tipo != tipoEsperado) return Invalido("categoriaId", "A categoria não é do tipo do lançamento.");
         if (categoria.Arquivada && categoria.Id != categoriaAtual) return new ResultadoDeLancamento.Recusado(TituloCategoriaArquivada, 400);
         return null;

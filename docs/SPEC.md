@@ -47,3 +47,4 @@ Um casal (dois CPFs, uma conta conjunta Itaú) vê num só lugar contas, cartõe
 - [x] Login com sessão em cookie (BFF), passkey e TOTP, bloqueio após 5 falhas
 - [x] Lint no front (ESLint) dentro de `npm run check`
 - [x] Módulo Lancamentos: tabela `transacoes` com `UNIQUE (origem, id_externo) WHERE NOT is_deleted`
+- [x] Módulo Orcamento: teto por categoria e mês (usado, restante, cópia do mês anterior), receita prevista e divisão da renda (Investir, Teto de gastos, Dívidas, Folga); conta Investimento, estorno e papel das categorias

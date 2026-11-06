@@ -10,6 +10,7 @@ export type Saldo = components["schemas"]["SaldoDaContaDto"];
 export const TIPOS_DE_CONTA = [
   { valor: "CORRENTE", rotulo: "Conta corrente" },
   { valor: "POUPANCA", rotulo: "Poupança" },
+  { valor: "INVESTIMENTO", rotulo: "Investimento" },
   { valor: "CARTAO", rotulo: "Cartão de crédito" },
   { valor: "DINHEIRO", rotulo: "Dinheiro" },
 ] as const;

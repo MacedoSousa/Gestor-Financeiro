@@ -699,7 +699,7 @@ a {
 
 .segmentos {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 4px;
   padding: 4px;
   border-radius: 12px;
@@ -851,4 +851,182 @@ select.entrada {
     flex: 1 1 auto;
     padding: 20px 16px 40px;
   }
+}
+
+/* Orçamento */
+.divisao-topo {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.barra-divisao {
+  display: flex;
+  height: 40px;
+  gap: 3px;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.segmento-barra {
+  flex-basis: 0;
+  min-width: 2px;
+}
+
+.fatia-investir {
+  background: #2dd4bf;
+}
+
+.fatia-gastos {
+  background: #60a5fa;
+}
+
+.fatia-dividas {
+  background: #f59e0b;
+}
+
+.fatia-folga {
+  background: #3a4656;
+}
+
+.legenda-divisao {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+}
+
+.legenda-item {
+  display: flex;
+  gap: 10px;
+}
+
+.legenda-cor {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  margin-top: 5px;
+  flex: none;
+}
+
+.legenda-valor {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.receita-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.receita-form .campo {
+  flex: 0 1 240px;
+}
+
+.aviso-sem-tetos {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.cartao-cabecalho {
+  padding: 20px 20px 4px;
+}
+
+.tabela-tetos {
+  min-width: 720px;
+}
+
+.grupo-linha th {
+  padding: 16px 20px 8px;
+  color: var(--texto-2);
+  font-size: 13px;
+  font-weight: 600;
+  text-align: left;
+}
+
+.grupo-nota {
+  color: var(--texto-suave);
+  font-weight: 400;
+}
+
+.linha-nome {
+  font-weight: 500;
+}
+
+.celula-teto {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.entrada-teto {
+  width: 120px;
+  height: 36px;
+  border-radius: 8px;
+  padding: 0 10px;
+}
+
+.entrada-teto:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.status-linha {
+  display: block;
+  min-height: 16px;
+  margin-top: 4px;
+  font-size: 12px;
+}
+
+.coluna-uso {
+  width: 30%;
+}
+
+.uso {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.uso-trilho {
+  height: 8px;
+  border-radius: 999px;
+  background: #1a232e;
+}
+
+.uso-barra {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--azul);
+}
+
+.uso-barra.uso-perto {
+  background: var(--alerta);
+}
+
+.uso-barra.uso-acima {
+  background: var(--negativo);
+}
+
+.restante-acima {
+  color: var(--negativo);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
 }

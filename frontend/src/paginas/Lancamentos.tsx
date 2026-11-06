@@ -5,6 +5,7 @@ import { useContas } from "../api/contas";
 import { n } from "../api/formulario";
 import { hojeIso, useCategorias, useExtrato, type FiltroDoExtrato, type Lancamento } from "../api/lancamentos";
 import { formatarReais } from "../lib/dinheiro";
+import { nomeDoMes, somarMeses } from "../lib/mes";
 import { EditarLancamento } from "./lancamentos/EditarLancamento";
 import { LancamentoRapido } from "./lancamentos/LancamentoRapido";
 
@@ -15,19 +16,6 @@ const ORIGENS: Record<string, { rotulo: string; classe: string }> = {
   OPEN_FINANCE: { rotulo: "Open Finance", classe: "selo-open-finance" },
   WHATSAPP: { rotulo: "WhatsApp", classe: "selo-whatsapp" },
 };
-
-/** "2026-11" ± meses. */
-function somarMeses(mes: string, delta: number): string {
-  const [ano, m] = mes.split("-").map(Number);
-  const d = new Date(ano ?? 2000, (m ?? 1) - 1 + delta, 1);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-}
-
-function nomeDoMes(mes: string): string {
-  const [ano, m] = mes.split("-").map(Number);
-  const texto = new Date(ano ?? 2000, (m ?? 1) - 1, 1).toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
-  return texto.charAt(0).toUpperCase() + texto.slice(1);
-}
 
 const diaEMes = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
 

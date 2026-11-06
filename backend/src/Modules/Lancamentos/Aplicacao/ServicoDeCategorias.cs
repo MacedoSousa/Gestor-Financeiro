@@ -14,19 +14,22 @@ internal abstract record ResultadoDeCategoria
     public sealed record NaoEncontrada : ResultadoDeCategoria;
     public sealed record NomeRepetido : ResultadoDeCategoria;
     public sealed record EmUso : ResultadoDeCategoria;
+    public sealed record ComPapel : ResultadoDeCategoria;
 }
 
 /// <summary>Categorias do casal. O casal vem sempre da sessão; as padrão nascem na primeira consulta.</summary>
 internal sealed class ServicoDeCategorias(LancamentosDbContext db, IUsuarioAtual atual)
 {
     internal const string TituloNomeRepetido = "Já existe uma categoria com esse nome.";
+    internal const string TituloComPapel = "Categoria de investimento ou de dívidas não pode ser apagada: arquive ou renomeie.";
     internal const string TituloEmUso = "Categoria com lançamentos: arquive em vez de apagar.";
     private const string IndiceDeNome = "ux_categorias_nome";
 
-    private static readonly string[] DespesasPadrao =
+    private static readonly (string Nome, string? Papel)[] DespesasPadrao =
     [
-        "Mercado", "Restaurantes", "Transporte", "Casa e contas", "Saúde", "Lazer", "Educação",
-        "Investimento", "Dívidas e financiamentos", "Outros",
+        ("Mercado", null), ("Restaurantes", null), ("Transporte", null), ("Casa e contas", null), ("Saúde", null),
+        ("Lazer", null), ("Educação", null), ("Investimento", PapelDeCategoria.Investimento),
+        ("Dívidas e financiamentos", PapelDeCategoria.Dividas), ("Outros", null),
     ];
 
     private static readonly string[] ReceitasPadrao = ["Salário", "Outras receitas"];
@@ -58,6 +61,8 @@ internal sealed class ServicoDeCategorias(LancamentosDbContext db, IUsuarioAtual
         if (erros.Count > 0) return new ResultadoDeCategoria.Invalido(erros);
 
         var tipo = LerTipo(pedido.Tipo);
+        if (categoria.Papel is not null && tipo != TipoDeCategoria.Despesa)
+            return new ResultadoDeCategoria.Invalido(new Dictionary<string, string[]> { ["tipo"] = ["Categoria de investimento ou de dívidas continua sendo de despesa."] });
         if (tipo != categoria.Tipo && await TemLancamentosAsync(id, ct))
             return new ResultadoDeCategoria.Invalido(new Dictionary<string, string[]> { ["tipo"] = ["Categoria com lançamentos não muda de tipo."] });
 
@@ -75,6 +80,8 @@ internal sealed class ServicoDeCategorias(LancamentosDbContext db, IUsuarioAtual
         await db.Database.ExecuteSqlAsync($"SELECT pg_advisory_xact_lock(hashtextextended('lancamentos.categoria:' || {id}::text, 0))", ct);
         var categoria = await db.Categorias.FirstOrDefaultAsync(c => c.Id == id, ct);
         if (categoria is null) return new ResultadoDeCategoria.NaoEncontrada();
+        // O papel não se recupera depois de apagar: uma "Investimento" nova nasceria sem papel e contaria no Teto de gastos.
+        if (categoria.Papel is not null) return new ResultadoDeCategoria.ComPapel();
         if (await TemLancamentosAsync(id, ct)) return new ResultadoDeCategoria.EmUso();
 
         db.Categorias.Remove(categoria); // SoftDeleteInterceptor converte em is_deleted = true.
@@ -87,7 +94,7 @@ internal sealed class ServicoDeCategorias(LancamentosDbContext db, IUsuarioAtual
         db.Transacoes.AnyAsync(t => t.CategoriaId == categoriaId, ct);
 
     /// <summary>Cria as categorias padrão se o casal não tem nenhuma; o lock por casal evita duplicar em chamadas simultâneas.</summary>
-    private async Task GarantirPadraoAsync(Guid casalId, CancellationToken ct)
+    internal async Task GarantirPadraoAsync(Guid casalId, CancellationToken ct)
     {
         if (await db.Categorias.AnyAsync(ct)) return;
 
@@ -96,7 +103,7 @@ internal sealed class ServicoDeCategorias(LancamentosDbContext db, IUsuarioAtual
         // Depois do lock: outra chamada pode ter criado as padrão enquanto esperávamos.
         if (!await db.Categorias.AnyAsync(ct))
         {
-            foreach (var nome in DespesasPadrao) db.Categorias.Add(Categoria.Criar(casalId, nome, TipoDeCategoria.Despesa));
+            foreach (var (nome, papel) in DespesasPadrao) db.Categorias.Add(Categoria.Criar(casalId, nome, TipoDeCategoria.Despesa, papel));
             foreach (var nome in ReceitasPadrao) db.Categorias.Add(Categoria.Criar(casalId, nome, TipoDeCategoria.Receita));
             await db.SaveChangesAsync(ct);
         }
@@ -127,5 +134,5 @@ internal sealed class ServicoDeCategorias(LancamentosDbContext db, IUsuarioAtual
 
     private static TipoDeCategoria LerTipo(string tipo) => tipo == "RECEITA" ? TipoDeCategoria.Receita : TipoDeCategoria.Despesa;
 
-    private static CategoriaDto ParaDto(Categoria c) => new(c.Id, c.Nome, c.Tipo.ToString().ToUpperInvariant(), c.Arquivada);
+    private static CategoriaDto ParaDto(Categoria c) => new(c.Id, c.Nome, c.Tipo.ToString().ToUpperInvariant(), c.Arquivada, c.Papel);
 }

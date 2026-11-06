@@ -112,7 +112,7 @@ internal sealed class ServicoDeContas(
         var erros = new Dictionary<string, string[]>();
 
         if (!TentarTipo(p.Tipo, out var tipo))
-            erros["tipo"] = ["Tipo inválido: use CORRENTE, POUPANCA, CARTAO ou DINHEIRO."];
+            erros["tipo"] = ["Tipo inválido: use CORRENTE, POUPANCA, INVESTIMENTO, CARTAO ou DINHEIRO."];
         else if (tipoAtual is { } atualTipo && atualTipo != tipo)
             erros["tipo"] = ["O tipo da conta não pode mudar."];
 

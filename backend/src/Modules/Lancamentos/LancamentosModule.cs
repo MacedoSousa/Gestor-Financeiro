@@ -1,6 +1,7 @@
 using GestorFinanceiro.Modules.Contas.Contracts;
 using GestorFinanceiro.Modules.Lancamentos.Api;
 using GestorFinanceiro.Modules.Lancamentos.Aplicacao;
+using GestorFinanceiro.Modules.Lancamentos.Contracts;
 using GestorFinanceiro.Modules.Lancamentos.Infra;
 using GestorFinanceiro.SharedKernel.Persistencia;
 using Microsoft.AspNetCore.Routing;
@@ -24,6 +25,8 @@ public static class LancamentosModule
 
         services.AddScoped<IVerificadorDeUsoDaConta, VerificadorDeUsoDaConta>();
         services.AddScoped<ServicoDeCategorias>();
+        services.AddScoped<IConsultaDeCategorias, ConsultaDeCategorias>();
+        services.AddScoped<IConsultaDeUso, ConsultaDeUso>();
         services.AddScoped<ConsultaDeSaldos>();
         services.AddScoped<ConsultaDoExtrato>();
         services.AddScoped<ServicoDeLancamentos>();

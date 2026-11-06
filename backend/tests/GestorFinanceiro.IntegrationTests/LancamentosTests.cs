@@ -439,6 +439,55 @@ public class LancamentosTests(PostgresFixture pg)
         Assert.Equal(1L, await EscalarAsync<long>(c.Banco, "SELECT count(*) FROM lancamentos.transacoes"));
     }
 
+    private const string TextoEstornoComPapel = "Rendimentos e devoluções de investimento ou de dívida entram como receita comum, não como estorno.";
+
+    [Fact]
+    public async Task Estorno_receita_em_categoria_de_despesa_sem_papel_e_aceito()
+    {
+        await using var c = await IniciarAsync();
+        var conta = await CriarCorrenteAsync(c.Cliente);
+        var mercado = await CategoriaAsync(c.Cliente, "Mercado");
+
+        var estorno = await LancarAsync(c.Cliente, Novo(conta, mercado, 1_500, descricao: "Estorno", natureza: "RECEITA"));
+
+        Assert.True(estorno.GetProperty("valorCentavos").GetInt64() > 0);
+    }
+
+    [Theory]
+    [InlineData("Investimento")]
+    [InlineData("Dívidas e financiamentos")]
+    public async Task Receita_em_categoria_com_papel_responde_400(string nome)
+    {
+        await using var c = await IniciarAsync();
+        var conta = await CriarCorrenteAsync(c.Cliente);
+        var categoria = await CategoriaAsync(c.Cliente, nome);
+
+        var resposta = await c.Cliente.PostAsJsonAsync(Rota, Novo(conta, categoria, natureza: "RECEITA"));
+
+        Assert.Equal(HttpStatusCode.BadRequest, resposta.StatusCode);
+        Assert.Equal(TextoEstornoComPapel, (await JsonAsync(resposta)).GetProperty("errors").GetProperty("categoriaId")[0].GetString());
+        Assert.Equal(0L, await EscalarAsync<long>(c.Banco, "SELECT count(*) FROM lancamentos.transacoes"));
+    }
+
+    [Fact]
+    public async Task Editar_para_receita_em_categoria_com_papel_responde_400()
+    {
+        await using var c = await IniciarAsync();
+        var conta = await CriarCorrenteAsync(c.Cliente);
+        var investimento = await CategoriaAsync(c.Cliente, "Investimento");
+        var criado = await LancarAsync(c.Cliente, Novo(conta, investimento));
+        var id = criado.GetProperty("id").GetGuid();
+
+        var resposta = await c.Cliente.PutAsJsonAsync($"{Rota}/{id}", new
+        {
+            natureza = "RECEITA", valorCentavos = 2_500L, data = "2026-11-04", descricao = "Padaria", categoriaId = investimento,
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, resposta.StatusCode);
+        Assert.Equal(TextoEstornoComPapel, (await JsonAsync(resposta)).GetProperty("errors").GetProperty("categoriaId")[0].GetString());
+        Assert.Equal("DESPESA|-2500", await EscalarAsync<string>(c.Banco, $"SELECT natureza || '|' || valor_centavos FROM lancamentos.transacoes WHERE id = '{id}'"));
+    }
+
     [Fact]
     public async Task Categoria_de_receita_em_despesa_responde_400()
     {
@@ -448,7 +497,6 @@ public class LancamentosTests(PostgresFixture pg)
         var mercado = await CategoriaAsync(c.Cliente, "Mercado");
 
         Assert.Equal(HttpStatusCode.BadRequest, (await c.Cliente.PostAsJsonAsync(Rota, Novo(conta, salario))).StatusCode);
-        Assert.Equal(HttpStatusCode.BadRequest, (await c.Cliente.PostAsJsonAsync(Rota, Novo(conta, mercado, natureza: "RECEITA"))).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await c.Cliente.PostAsJsonAsync(Rota, Novo(conta, Guid.NewGuid()))).StatusCode);
 
         var criado = await LancarAsync(c.Cliente, Novo(conta, mercado));

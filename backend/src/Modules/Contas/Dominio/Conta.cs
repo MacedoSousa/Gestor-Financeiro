@@ -7,6 +7,7 @@ internal enum TipoDeConta
 {
     Corrente,
     Poupanca,
+    Investimento,
     Cartao,
     Dinheiro,
 }

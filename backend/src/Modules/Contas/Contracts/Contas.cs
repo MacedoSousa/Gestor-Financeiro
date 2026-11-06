@@ -1,7 +1,7 @@
 namespace GestorFinanceiro.Modules.Contas.Contracts;
 
 /// <summary>Corpo de POST e PUT /api/v1/contas.</summary>
-/// <param name="Tipo">CORRENTE, POUPANCA, CARTAO ou DINHEIRO. Não muda depois de criada.</param>
+/// <param name="Tipo">CORRENTE, POUPANCA, INVESTIMENTO, CARTAO ou DINHEIRO. Não muda depois de criada.</param>
 /// <param name="TitularUsuarioId">Cônjuge titular; nulo = conta conjunta.</param>
 /// <param name="Agencia">No PUT: nulo mantém o que está guardado, texto vazio apaga.</param>
 /// <param name="Numero">No PUT: nulo mantém o que está guardado, texto vazio apaga.</param>
