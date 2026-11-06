@@ -12,6 +12,7 @@
     <Using Include="Xunit" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\..\src\Financas\GestorFinanceiro.Financas.csproj" />
     <ProjectReference Include="..\..\src\SharedKernel\GestorFinanceiro.SharedKernel.csproj" />
     <ProjectReference Include="..\..\src\Modules\Identidade\GestorFinanceiro.Modules.Identidade.csproj" />
     <ProjectReference Include="..\..\src\Modules\Contas\GestorFinanceiro.Modules.Contas.csproj" />

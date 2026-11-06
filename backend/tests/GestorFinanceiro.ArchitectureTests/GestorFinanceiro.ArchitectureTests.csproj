@@ -14,5 +14,6 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Host\GestorFinanceiro.Api\GestorFinanceiro.Api.csproj" />
+    <ProjectReference Include="..\..\src\Financas\GestorFinanceiro.Financas.csproj" />
   </ItemGroup>
 </Project>
