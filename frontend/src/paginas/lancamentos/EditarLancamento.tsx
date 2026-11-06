@@ -4,6 +4,7 @@ import { ErroDeApi } from "../../api/autenticacao";
 import { n } from "../../api/formulario";
 import { apagarLancamento, editarLancamento, type Categoria, type Escopo, type Lancamento } from "../../api/lancamentos";
 import { centavosDeTexto, textoDeCentavos } from "../../lib/dinheiro";
+import { categoriasDoTipo, ehEstorno, type TipoDeEntrada } from "../../lib/lancamentos";
 import { Alerta, Campo, CampoSelecao } from "../Campo";
 
 type Props = { lancamento: Lancamento; categorias: Categoria[]; aoFechar: () => void };
@@ -15,7 +16,8 @@ export function EditarLancamento({ lancamento: l, categorias, aoFechar }: Props)
   const transferencia = l.natureza === "TRANSFERENCIA";
   const parcelado = l.parcela != null && l.parcelas != null;
 
-  const [natureza, setNatureza] = useState(l.natureza);
+  const [tipo, setTipo] = useState<string>(() => (ehEstorno(l, categorias) ? "ESTORNO" : l.natureza));
+  const natureza = tipo === "ESTORNO" ? "RECEITA" : tipo;
   const [valor, setValor] = useState(() => textoDeCentavos(n(l.valorCentavos)));
   const [descricao, setDescricao] = useState(l.descricao);
   const [contraparte, setContraparte] = useState(l.contraparte ?? "");
@@ -33,9 +35,9 @@ export function EditarLancamento({ lancamento: l, categorias, aoFechar }: Props)
   }, []);
 
   // A categoria atual continua na lista mesmo arquivada; as outras, só as ativas do tipo da natureza.
-  const opcoesDeCategoria = categorias
-    .filter((c) => c.tipo === natureza && (!c.arquivada || c.id === l.categoria?.id))
-    .map((c) => ({ valor: c.id, rotulo: c.arquivada ? `${c.nome} (arquivada)` : c.nome }));
+  const comAtual = categorias.map((c) => (c.id === l.categoria?.id ? { ...c, arquivada: false } : c));
+  const opcoesDeCategoria = categoriasDoTipo(tipo as TipoDeEntrada, comAtual)
+    .map((c) => ({ valor: c.id, rotulo: c.id === l.categoria?.id && categorias.find((o) => o.id === c.id)?.arquivada ? `${c.nome} (arquivada)` : c.nome }));
   const categoria = opcoesDeCategoria.some((o) => o.valor === categoriaId) ? categoriaId : (opcoesDeCategoria[0]?.valor ?? "");
 
   function falhar(e: unknown) {
@@ -89,11 +91,12 @@ export function EditarLancamento({ lancamento: l, categorias, aoFechar }: Props)
         {!transferencia && !parcelado && (
           <CampoSelecao
             rotulo="Tipo"
-            valor={natureza}
-            aoMudar={setNatureza}
+            valor={tipo}
+            aoMudar={setTipo}
             opcoes={[
               { valor: "DESPESA", rotulo: "Despesa" },
               { valor: "RECEITA", rotulo: "Receita" },
+              { valor: "ESTORNO", rotulo: "Estorno" },
             ]}
           />
         )}
