@@ -46,4 +46,4 @@ Um casal (dois CPFs, uma conta conjunta Itaú) vê num só lugar contas, cartõe
 - [x] Cadastro do casal: CPF + nome + vínculo de cônjuge + envelopes da DEK em `identidade.chaves`
 - [x] Login com sessão em cookie (BFF), passkey e TOTP, bloqueio após 5 falhas
 - [ ] Lint no front (ESLint) dentro de `npm run check`
-- [ ] Módulo Lancamentos: tabela `transacoes` com `UNIQUE (origem, id_externo) WHERE NOT is_deleted`
+- [x] Módulo Lancamentos: tabela `transacoes` com `UNIQUE (origem, id_externo) WHERE NOT is_deleted`
