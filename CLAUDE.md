@@ -7,7 +7,8 @@ Sistema financeiro pessoal de um casal, rodando num PC de casa. Dados reais de b
 - Build e testes do backend: `dotnet test backend/GestorFinanceiro.slnx`
 - Só arquitetura: `dotnet test backend/tests/GestorFinanceiro.ArchitectureTests`
 - Integração (precisa de Docker): `dotnet test backend/tests/GestorFinanceiro.IntegrationTests`
-- Front (tipos + build; lint entra na Fase 1): `npm --prefix frontend run check`
+- Front (tipos + lint + testes + build): `npm --prefix frontend run check`
+- Só os testes do front (Vitest): `npm --prefix frontend test`
 - Regerar cliente da API depois de mudar endpoint: `dotnet build backend/src/Host/GestorFinanceiro.Api && npm --prefix frontend run gen:api`
 - Nova migração: criar `db/migrations/V{próximo número com 4 dígitos}__descricao.sql`; nunca editar uma migração já commitada.
 
