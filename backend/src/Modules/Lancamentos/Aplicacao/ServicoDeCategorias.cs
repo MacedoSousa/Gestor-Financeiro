@@ -90,7 +90,7 @@ internal sealed class ServicoDeCategorias(LancamentosDbContext db, IUsuarioAtual
         db.Transacoes.AnyAsync(t => t.CategoriaId == categoriaId, ct);
 
     /// <summary>Cria as categorias padrão se o casal não tem nenhuma; o lock por casal evita duplicar em chamadas simultâneas.</summary>
-    private async Task GarantirPadraoAsync(Guid casalId, CancellationToken ct)
+    internal async Task GarantirPadraoAsync(Guid casalId, CancellationToken ct)
     {
         if (await db.Categorias.AnyAsync(ct)) return;
 
