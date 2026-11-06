@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { OrcamentoDoMes } from "../api/orcamento";
-import { lerTeto, segmentosDaBarra } from "./orcamento";
+import { lerTeto, razaoDeUso, segmentosDaBarra } from "./orcamento";
 
 function orcamento(sobre: Partial<OrcamentoDoMes> = {}): OrcamentoDoMes {
   return {
@@ -59,4 +59,17 @@ describe("lerTeto", () => {
   it("lê 1.600", () => expect(lerTeto("1.600")).toEqual({ tipo: "valor", centavos: 160_000 }));
   it("aceita o limite", () => expect(lerTeto("1.000.000.000,00")).toEqual({ tipo: "valor", centavos: 100_000_000_000 }));
   it.each(["1.000.000.000,01", "abc"])("recusa %j", (t) => expect(lerTeto(t)).toEqual({ tipo: "invalido", mensagem: limite }));
+});
+
+describe("razaoDeUso", () => {
+  it("é a proporção do teto e passa de 1 só quando estoura", () => {
+    expect(razaoDeUso(1000, 500)).toBe(0.5);
+    expect(razaoDeUso(1000, 1001)).toBeGreaterThan(1);
+  });
+
+  it("teto zero com gasto está acima do teto; sem gasto ou sem teto não", () => {
+    expect(razaoDeUso(0, 100)).toBeGreaterThan(1);
+    expect(razaoDeUso(0, 0)).toBe(0);
+    expect(razaoDeUso(null, 100)).toBe(0);
+  });
 });

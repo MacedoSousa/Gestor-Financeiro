@@ -55,6 +55,7 @@ internal static class EndpointsDeCategorias
             ResultadoDeCategoria.Invalido invalido => TypedResults.ValidationProblem(invalido.Erros.ToDictionary()),
             ResultadoDeCategoria.NaoEncontrada => TypedResults.NotFound(),
             ResultadoDeCategoria.NomeRepetido => TypedResults.Problem(title: ServicoDeCategorias.TituloNomeRepetido, statusCode: StatusCodes.Status409Conflict),
+            ResultadoDeCategoria.ComPapel => TypedResults.Problem(title: ServicoDeCategorias.TituloComPapel, statusCode: StatusCodes.Status409Conflict),
             ResultadoDeCategoria.EmUso => TypedResults.Problem(title: ServicoDeCategorias.TituloEmUso, statusCode: StatusCodes.Status409Conflict),
             _ => throw new UnreachableException(resultado.GetType().Name),
         };

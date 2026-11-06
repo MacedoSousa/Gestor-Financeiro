@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 namespace GestorFinanceiro.Modules.Orcamento.Contracts;
 
 /// <param name="Percentual">Teto sobre a receita prevista, com 1 casa; nulo sem receita, com receita 0 ou sem teto.</param>
@@ -16,6 +17,7 @@ public sealed record OrcamentoDoMesDto(
     long? FolgaCentavos, IReadOnlyList<TetoDaCategoriaDto> Categorias, string? MesParaCopiar);
 
 /// <summary>Corpo dos dois PUT (teto e receita prevista).</summary>
-public sealed record ValorDoMesDto(long ValorCentavos);
+/// <param name="ValorCentavos">Obrigatório: corpo sem o campo dá 400 (nunca vira zero).</param>
+public sealed record ValorDoMesDto([property: Required] long? ValorCentavos);
 
 public sealed record CopiaDeTetosDto(int Copiados, string? Origem);

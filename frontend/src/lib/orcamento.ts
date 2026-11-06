@@ -39,3 +39,10 @@ export function lerTeto(texto: string): TetoLido {
   if (centavos === null || centavos > LIMITE_CENTAVOS) return { tipo: "invalido", mensagem: MENSAGEM_LIMITE };
   return { tipo: "valor", centavos };
 }
+
+/** Quanto do teto já foi usado, em razão (1 = no teto). Teto zero com gasto conta como estourado (> 1); sem teto, 0. */
+export function razaoDeUso(teto: number | null, usado: number): number {
+  if (teto === null) return 0;
+  if (teto > 0) return usado / teto;
+  return usado > 0 ? 2 : 0;
+}

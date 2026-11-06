@@ -123,6 +123,7 @@ export function Orcamento() {
   const acoes = useAcoesDoOrcamento();
   const [copiando, setCopiando] = useState(false);
   const [erroCopia, setErroCopia] = useState<string>();
+  const [nadaACopiar, setNadaACopiar] = useState<string>();
 
   const dados = orcamento.data;
   const receita = dados?.receitaPrevistaCentavos == null ? null : n(dados.receitaPrevistaCentavos);
@@ -131,11 +132,19 @@ export function Orcamento() {
   const faltaLinha = categorias.some((c) => c.tetoCentavos == null && !c.arquivada);
   const podeCopiar = dados?.mesParaCopiar != null && faltaLinha;
 
+  function mudarMes(f: (m: string) => string) {
+    setMes(f);
+    setErroCopia(undefined);
+    setNadaACopiar(undefined);
+  }
+
   async function copiar() {
     setCopiando(true);
     setErroCopia(undefined);
+    setNadaACopiar(undefined);
     try {
-      await acoes.copiarTetos(mes);
+      const r = await acoes.copiarTetos(mes);
+      if (r.copiados === 0 && r.origem) setNadaACopiar(`Nada a copiar de ${soNomeDoMes(r.origem)}.`);
     } catch (x) {
       setErroCopia(mensagemDe(x));
     } finally {
@@ -152,14 +161,14 @@ export function Orcamento() {
       <header className="cabecalho-pagina">
         <div className="cabecalho-titulo">
           <div className="mes-navegacao">
-            <button type="button" className="botao-icone" aria-label="Mês anterior" disabled={mes <= PRIMEIRO_MES} onClick={() => setMes((m) => somarMeses(m, -1))}>
+            <button type="button" className="botao-icone" aria-label="Mês anterior" disabled={mes <= PRIMEIRO_MES} onClick={() => mudarMes((m) => somarMeses(m, -1))}>
               ‹
             </button>
             <span className="subtitulo" aria-live="polite">
               {nomeDoMes(mes)}
               {dados && (receita === null ? " · sem receita prevista" : ` · receita prevista ${formatarReais(receita)}`)}
             </span>
-            <button type="button" className="botao-icone" aria-label="Próximo mês" disabled={mes >= ultimoMes} onClick={() => setMes((m) => somarMeses(m, 1))}>
+            <button type="button" className="botao-icone" aria-label="Próximo mês" disabled={mes >= ultimoMes} onClick={() => mudarMes((m) => somarMeses(m, 1))}>
               ›
             </button>
           </div>
@@ -194,6 +203,12 @@ export function Orcamento() {
           {erroCopia && (
             <p role="alert" className="alerta-form">
               {erroCopia}
+            </p>
+          )}
+
+          {nadaACopiar && (
+            <p role="status" className="subtitulo">
+              {nadaACopiar}
             </p>
           )}
 

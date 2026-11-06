@@ -16,7 +16,8 @@ type Item = { fatia: Segmento["fatia"]; centavos: number | null; pct: number | n
 
 /** "Para onde vai cada real": barra empilhada e legenda com o valor de cada fatia escrito. */
 export function DivisaoDaRenda({ orcamento }: { orcamento: OrcamentoDoMes }) {
-  const receita = orcamento.receitaPrevistaCentavos == null ? 0 : n(orcamento.receitaPrevistaCentavos);
+  const semReceita = orcamento.receitaPrevistaCentavos == null;
+  const receita = semReceita ? 0 : n(orcamento.receitaPrevistaCentavos);
   const segmentos = segmentosDaBarra(orcamento);
   const folga = orcamento.folgaCentavos == null ? null : n(orcamento.folgaCentavos);
   const { investir, tetoDeGastos, dividas } = orcamento.fatias;
@@ -46,15 +47,17 @@ export function DivisaoDaRenda({ orcamento }: { orcamento: OrcamentoDoMes }) {
         {receita > 0 && <span className="num subtitulo">{formatarReais(receita)} = 100%</span>}
       </div>
 
-      {receita <= 0 ? (
+      {semReceita ? (
         <p className="subtitulo">Defina a receita prevista para ver a divisão.</p>
       ) : (
         <>
-          <div className="barra-divisao" role="img" aria-label={`Divisão da receita: ${segmentos.map((s) => `${NOMES[s.fatia]} ${percentual(s.percentual)}`).join(", ")}`}>
-            {segmentos.map((s) => (
-              <div key={s.fatia} className={`segmento-barra fatia-${s.fatia}`} style={{ flexGrow: s.centavos }} />
-            ))}
-          </div>
+          {segmentos.length > 0 && (
+            <div className="barra-divisao" role="img" aria-label={`Divisão da receita: ${segmentos.map((s) => `${NOMES[s.fatia]} ${percentual(s.percentual)}`).join(", ")}`}>
+              {segmentos.map((s) => (
+                <div key={s.fatia} className={`segmento-barra fatia-${s.fatia}`} style={{ flexGrow: s.centavos }} />
+              ))}
+            </div>
+          )}
           {folga !== null && folga < 0 && (
             <p role="alert" className="alerta-form">
               Os tetos passam da receita em {formatarReais(Math.abs(folga))}

@@ -54,7 +54,7 @@ public sealed record EditarLancamentoDto(
 
 public sealed record CategoriaDoLancamentoDto(Guid Id, string Nome, bool Arquivada);
 
-/// <param name="Tipo">CORRENTE, POUPANCA, CARTAO ou DINHEIRO.</param>
+/// <param name="Tipo">CORRENTE, POUPANCA, INVESTIMENTO, CARTAO ou DINHEIRO.</param>
 public sealed record ContaDoLancamentoDto(Guid Id, string Apelido, string Tipo);
 
 /// <summary>Um lançamento como o extrato mostra.</summary>

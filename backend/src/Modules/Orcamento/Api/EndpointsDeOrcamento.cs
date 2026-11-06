@@ -35,7 +35,7 @@ internal static class EndpointsDeOrcamento
 
         grupo.MapPut("/tetos/{mes}/{categoriaId:guid}", async Task<Results<NoContent, ValidationProblem, ProblemHttpResult, NotFound>> (
             string mes, Guid categoriaId, ValorDoMesDto pedido, ServicoDeOrcamento servico, CancellationToken ct) =>
-            Traduzir(await servico.DefinirTetoAsync(mes, categoriaId, pedido.ValorCentavos, ct)))
+            pedido.ValorCentavos is not { } valor ? SemValor() : Traduzir(await servico.DefinirTetoAsync(mes, categoriaId, valor, ct)))
         .WithName("DefinirTeto")
         .WithSummary("Cria ou atualiza o teto da categoria de despesa no mês (0 a 100.000.000.000 centavos; zero é um teto). " +
                      "Categoria de receita dá 400; teto novo em categoria arquivada dá 400 (atualizar é permitido).")
@@ -49,7 +49,7 @@ internal static class EndpointsDeOrcamento
 
         grupo.MapPut("/receita/{mes}", async Task<Results<NoContent, ValidationProblem, ProblemHttpResult, NotFound>> (
             string mes, ValorDoMesDto pedido, ServicoDeOrcamento servico, CancellationToken ct) =>
-            Traduzir(await servico.DefinirReceitaAsync(mes, pedido.ValorCentavos, ct)))
+            pedido.ValorCentavos is not { } valor ? SemValor() : Traduzir(await servico.DefinirReceitaAsync(mes, valor, ct)))
         .WithName("DefinirReceitaPrevista")
         .WithSummary("Cria ou atualiza a receita prevista do mês (0 a 100.000.000.000 centavos).");
 
@@ -74,6 +74,9 @@ internal static class EndpointsDeOrcamento
 
         return api;
     }
+
+    private static Results<NoContent, ValidationProblem, ProblemHttpResult, NotFound> SemValor() =>
+        TypedResults.ValidationProblem(new Dictionary<string, string[]> { ["valorCentavos"] = ["Informe o valor."] });
 
     private static Results<NoContent, ValidationProblem, ProblemHttpResult, NotFound> Traduzir(ResultadoDoOrcamento resultado) =>
         resultado switch

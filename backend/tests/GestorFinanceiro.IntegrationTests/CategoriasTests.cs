@@ -220,6 +220,21 @@ public class CategoriasTests(PostgresFixture pg)
     }
 
     [Fact]
+    public async Task Apagar_categoria_com_papel_responde_409()
+    {
+        var (api, banco, cliente, _) = await IniciarAsync();
+        await using var _ = api;
+        var id = (await ListarAsync(cliente)).Single(c => c.GetProperty("nome").GetString() == "Investimento").GetProperty("id").GetGuid();
+
+        var resposta = await cliente.DeleteAsync($"{Rota}/{id}");
+
+        Assert.Equal(HttpStatusCode.Conflict, resposta.StatusCode);
+        Assert.Equal("Categoria de investimento ou de dívidas não pode ser apagada: arquive ou renomeie.",
+            (await JsonAsync(resposta)).GetProperty("title").GetString());
+        Assert.False(await EscalarAsync<bool>(banco, $"SELECT is_deleted FROM lancamentos.categorias WHERE id = '{id}'"));
+    }
+
+    [Fact]
     public async Task Tipo_invalido_ou_nome_fora_do_tamanho_responde_400()
     {
         var (api, _, cliente, _) = await IniciarAsync();

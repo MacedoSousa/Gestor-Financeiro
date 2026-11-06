@@ -1065,7 +1065,7 @@ export interface components {
         };
         ValorDoMesDto: {
             /** Format: int64 */
-            valorCentavos: number | string;
+            valorCentavos: null | number | string;
         };
     };
     responses: never;

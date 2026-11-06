@@ -2,7 +2,7 @@ import { useRef, useState, type KeyboardEvent } from "react";
 import { n } from "../../api/formulario";
 import type { TetoDaCategoria } from "../../api/orcamento";
 import { formatarReais, textoDeCentavos } from "../../lib/dinheiro";
-import { lerTeto } from "../../lib/orcamento";
+import { lerTeto, razaoDeUso } from "../../lib/orcamento";
 
 type Acoes = {
   definirTeto: (mes: string, categoriaId: string, centavos: number) => Promise<unknown>;
@@ -23,7 +23,7 @@ function Restante({ c }: { c: TetoDaCategoria }) {
 function Uso({ c }: { c: TetoDaCategoria }) {
   const teto = c.tetoCentavos == null ? null : n(c.tetoCentavos);
   const usado = n(c.usadoCentavos);
-  const razao = teto === null ? 0 : teto > 0 ? usado / teto : usado > 0 ? 1 : 0;
+  const razao = razaoDeUso(teto, usado);
   const largura = Math.min(Math.max(razao, 0), 1) * 100;
   const classe = razao > 1 ? "uso-acima" : razao >= 0.9 ? "uso-perto" : "";
   return (

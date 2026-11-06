@@ -14,12 +14,14 @@ internal abstract record ResultadoDeCategoria
     public sealed record NaoEncontrada : ResultadoDeCategoria;
     public sealed record NomeRepetido : ResultadoDeCategoria;
     public sealed record EmUso : ResultadoDeCategoria;
+    public sealed record ComPapel : ResultadoDeCategoria;
 }
 
 /// <summary>Categorias do casal. O casal vem sempre da sessão; as padrão nascem na primeira consulta.</summary>
 internal sealed class ServicoDeCategorias(LancamentosDbContext db, IUsuarioAtual atual)
 {
     internal const string TituloNomeRepetido = "Já existe uma categoria com esse nome.";
+    internal const string TituloComPapel = "Categoria de investimento ou de dívidas não pode ser apagada: arquive ou renomeie.";
     internal const string TituloEmUso = "Categoria com lançamentos: arquive em vez de apagar.";
     private const string IndiceDeNome = "ux_categorias_nome";
 
@@ -78,6 +80,8 @@ internal sealed class ServicoDeCategorias(LancamentosDbContext db, IUsuarioAtual
         await db.Database.ExecuteSqlAsync($"SELECT pg_advisory_xact_lock(hashtextextended('lancamentos.categoria:' || {id}::text, 0))", ct);
         var categoria = await db.Categorias.FirstOrDefaultAsync(c => c.Id == id, ct);
         if (categoria is null) return new ResultadoDeCategoria.NaoEncontrada();
+        // O papel não se recupera depois de apagar: uma "Investimento" nova nasceria sem papel e contaria no Teto de gastos.
+        if (categoria.Papel is not null) return new ResultadoDeCategoria.ComPapel();
         if (await TemLancamentosAsync(id, ct)) return new ResultadoDeCategoria.EmUso();
 
         db.Categorias.Remove(categoria); // SoftDeleteInterceptor converte em is_deleted = true.

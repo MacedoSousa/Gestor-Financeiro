@@ -116,6 +116,23 @@ public class OrcamentoTests(PostgresFixture pg)
     private static Task<HttpResponseMessage> PutReceitaAsync(HttpClient cliente, string mes, long valor) =>
         cliente.PutAsJsonAsync($"{Rota}/receita/{mes}", new { valorCentavos = valor });
 
+    [Theory]
+    [InlineData("teto")]
+    [InlineData("receita")]
+    public async Task Corpo_sem_valor_responde_400_e_nao_grava(string rota)
+    {
+        await using var c = await IniciarAsync();
+        var mercado = await CategoriaAsync(c.Cliente, "Mercado");
+        var caminho = rota == "teto" ? $"{Rota}/tetos/2026-11/{mercado}" : $"{Rota}/receita/2026-11";
+
+        var resposta = await c.Cliente.PutAsJsonAsync(caminho, new { });
+
+        Assert.Equal(HttpStatusCode.BadRequest, resposta.StatusCode);
+        Assert.Equal("Informe o valor.", (await JsonAsync(resposta)).GetProperty("errors").GetProperty("valorCentavos")[0].GetString());
+        Assert.Equal(0L, await EscalarAsync<long>(c.Banco, "SELECT count(*) FROM orcamento.tetos"));
+        Assert.Equal(0L, await EscalarAsync<long>(c.Banco, "SELECT count(*) FROM orcamento.receitas_previstas"));
+    }
+
     private static async Task<JsonElement> ObterAsync(HttpClient cliente, string mes)
     {
         var resposta = await cliente.GetAsync($"{Rota}?mes={mes}");
@@ -342,7 +359,8 @@ public class OrcamentoTests(PostgresFixture pg)
         var corrente = await CriarContaSimplesAsync(c.Cliente, "CORRENTE", "Itaú");
         var poupanca = await CriarContaSimplesAsync(c.Cliente, "POUPANCA", "Reserva");
         var investimento = await CategoriaAsync(c.Cliente, "Investimento");
-        Assert.Equal(HttpStatusCode.NoContent, (await c.Cliente.DeleteAsync($"/api/v1/categorias/{investimento}")).StatusCode);
+        // A API já não apaga categoria com papel; o estado (categoria de papel removida) vem de um dado legado.
+        await ExecutarAsync(c.Banco, $"UPDATE lancamentos.categorias SET is_deleted = true, deleted_at = now() WHERE id = '{investimento}'");
         await TransferirAsync(c.Cliente, corrente, poupanca, 35_000, "2026-11-04");
 
         var orcamento = await ObterAsync(c.Cliente, "2026-11");
