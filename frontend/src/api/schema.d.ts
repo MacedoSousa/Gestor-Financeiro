@@ -661,6 +661,59 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/metas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Painel do mês corrente (Brasília): metas com guardado, aporte do mês e projeção, e todas as contas de poupança e investimento do casal (inclusive arquivadas) com a meta de cada uma. */
+        get: operations["ListarMetas"];
+        put?: never;
+        /** Cria a meta com suas contas (poupança ou investimento, não arquivadas, fora de outra meta). Rendimento em % ao mês (0 a 5, até 4 casas); data desejada AAAA-MM a partir do mês atual. Conta inexistente dá 404; conta em outra meta ou nome repetido (sem caixa) dá 409. */
+        post: operations["CriarMeta"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/metas/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Edita a meta; contaIds substitui o conjunto. Conta arquivada que já estava pode ficar; uma data desejada passada que não mudou é aceita. */
+        put: operations["EditarMeta"];
+        post?: never;
+        /** Apaga a meta e libera as contas (soft delete). O dinheiro não muda. */
+        delete: operations["ApagarMeta"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/metas/{id}/simulacao": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Projeção da meta com o aporte mensal informado (0 a 100.000.000.000 centavos) no lugar do planejado. Não grava nada. */
+        get: operations["SimularMeta"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -734,6 +787,28 @@ export interface components {
             nomeCompleto: string;
             cpf: string;
             senha: string;
+        };
+        ContaDaMetaDto: {
+            /** Format: uuid */
+            contaId: string;
+            apelido: string;
+            tipo: string;
+            /** Format: int64 */
+            saldoCentavos: number | string;
+            arquivada: boolean;
+        };
+        ContaDeInvestimentoDto: {
+            /** Format: uuid */
+            contaId: string;
+            apelido: string;
+            instituicao: null | string;
+            tipo: string;
+            arquivada: boolean;
+            /** Format: int64 */
+            saldoCentavos: number | string;
+            /** Format: uuid */
+            metaId: null | string;
+            metaNome: null | string;
         };
         ContaDoLancamentoDto: {
             /** Format: uuid */
@@ -887,6 +962,26 @@ export interface components {
             apelido: string;
             ehVoce: boolean;
         };
+        MetaDto: {
+            /** Format: uuid */
+            id: string;
+            nome: string;
+            /** Format: int64 */
+            valorAlvoCentavos: number | string;
+            dataDesejada: null | string;
+            /** Format: int64 */
+            aportePlanejadoCentavos: number | string;
+            /** Format: double */
+            rendimentoMensalPercentual: number | string;
+            contas: components["schemas"]["ContaDaMetaDto"][];
+            /** Format: int64 */
+            guardadoCentavos: number | string;
+            /** Format: int32 */
+            progressoPercentual: number | string;
+            /** Format: int64 */
+            aporteDoMesCentavos: number | string;
+            projecao: components["schemas"]["ProjecaoDto"];
+        };
         NovaCategoriaDto: {
             nome: string;
             tipo: string;
@@ -911,6 +1006,17 @@ export interface components {
             /** Format: int64 */
             limiteCentavos: null | number | string;
             arquivada?: null | boolean;
+        };
+        NovaMetaDto: {
+            nome: null | string;
+            /** Format: int64 */
+            valorAlvoCentavos: null | number | string;
+            dataDesejada: null | string;
+            /** Format: int64 */
+            aportePlanejadoCentavos: null | number | string;
+            /** Format: double */
+            rendimentoMensalPercentual: null | number | string;
+            contaIds: null | string[];
         };
         NovaPasskeyDto: {
             apelido: string;
@@ -993,6 +1099,11 @@ export interface components {
             categorias: components["schemas"]["TetoDaCategoriaDto"][];
             mesParaCopiar: null | string;
         };
+        PainelDeMetasDto: {
+            mes: string;
+            metas: components["schemas"]["MetaDto"][];
+            contas: components["schemas"]["ContaDeInvestimentoDto"][];
+        };
         ParametroDeChaveDto: {
             type: string;
             /** Format: int32 */
@@ -1019,6 +1130,19 @@ export interface components {
             status?: null | number | string;
             detail?: null | string;
             instance?: null | string;
+        };
+        ProjecaoDto: {
+            /** Format: int64 */
+            aporteMensalCentavos: number | string;
+            situacao: string;
+            /** Format: int32 */
+            mesesAteMeta: null | number | string;
+            chegaEm: null | string;
+            /** Format: int32 */
+            diferencaMeses: null | number | string;
+            dataDesejadaPassou: boolean;
+            /** Format: int64 */
+            aporteNecessarioCentavos: null | number | string;
         };
         RecuperacaoDto: {
             cpf: string;
@@ -2849,6 +2973,207 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CopiaDeTetosDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ListarMetas: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PainelDeMetasDto"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    CriarMeta: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NovaMetaDto"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetaDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    EditarMeta: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NovaMetaDto"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    ApagarMeta: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    SimularMeta: {
+        parameters: {
+            query?: {
+                aporte?: number | string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjecaoDto"];
                 };
             };
             /** @description Bad Request */

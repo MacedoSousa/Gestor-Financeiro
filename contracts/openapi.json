@@ -1972,6 +1972,233 @@
           }
         }
       }
+    },
+    "/api/v1/metas": {
+      "get": {
+        "tags": [
+          "Metas"
+        ],
+        "summary": "Painel do mês corrente (Brasília): metas com guardado, aporte do mês e projeção, e todas as contas de poupança e investimento do casal (inclusive arquivadas) com a meta de cada uma.",
+        "operationId": "ListarMetas",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PainelDeMetasDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Metas"
+        ],
+        "summary": "Cria a meta com suas contas (poupança ou investimento, não arquivadas, fora de outra meta). Rendimento em % ao mês (0 a 5, até 4 casas); data desejada AAAA-MM a partir do mês atual. Conta inexistente dá 404; conta em outra meta ou nome repetido (sem caixa) dá 409.",
+        "operationId": "CriarMeta",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NovaMetaDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetaDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/metas/{id}": {
+      "put": {
+        "tags": [
+          "Metas"
+        ],
+        "summary": "Edita a meta; contaIds substitui o conjunto. Conta arquivada que já estava pode ficar; uma data desejada passada que não mudou é aceita.",
+        "operationId": "EditarMeta",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NovaMetaDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Metas"
+        ],
+        "summary": "Apaga a meta e libera as contas (soft delete). O dinheiro não muda.",
+        "operationId": "ApagarMeta",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/metas/{id}/simulacao": {
+      "get": {
+        "tags": [
+          "Metas"
+        ],
+        "summary": "Projeção da meta com o aporte mensal informado (0 a 100.000.000.000 centavos) no lugar do planejado. Não grava nada.",
+        "operationId": "SimularMeta",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "aporte",
+            "in": "query",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjecaoDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -2262,6 +2489,94 @@
           },
           "senha": {
             "type": "string"
+          }
+        }
+      },
+      "ContaDaMetaDto": {
+        "required": [
+          "contaId",
+          "apelido",
+          "tipo",
+          "saldoCentavos",
+          "arquivada"
+        ],
+        "type": "object",
+        "properties": {
+          "contaId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "apelido": {
+            "type": "string"
+          },
+          "tipo": {
+            "type": "string"
+          },
+          "saldoCentavos": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "arquivada": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ContaDeInvestimentoDto": {
+        "required": [
+          "contaId",
+          "apelido",
+          "instituicao",
+          "tipo",
+          "arquivada",
+          "saldoCentavos",
+          "metaId",
+          "metaNome"
+        ],
+        "type": "object",
+        "properties": {
+          "contaId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "apelido": {
+            "type": "string"
+          },
+          "instituicao": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "tipo": {
+            "type": "string"
+          },
+          "arquivada": {
+            "type": "boolean"
+          },
+          "saldoCentavos": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "metaId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "metaNome": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -2883,6 +3198,94 @@
           }
         }
       },
+      "MetaDto": {
+        "required": [
+          "id",
+          "nome",
+          "valorAlvoCentavos",
+          "dataDesejada",
+          "aportePlanejadoCentavos",
+          "rendimentoMensalPercentual",
+          "contas",
+          "guardadoCentavos",
+          "progressoPercentual",
+          "aporteDoMesCentavos",
+          "projecao"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "nome": {
+            "type": "string"
+          },
+          "valorAlvoCentavos": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "dataDesejada": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "aportePlanejadoCentavos": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "rendimentoMensalPercentual": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "format": "double"
+          },
+          "contas": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ContaDaMetaDto"
+            }
+          },
+          "guardadoCentavos": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "progressoPercentual": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "aporteDoMesCentavos": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "projecao": {
+            "$ref": "#/components/schemas/ProjecaoDto"
+          }
+        }
+      },
       "NovaCategoriaDto": {
         "required": [
           "nome",
@@ -2995,6 +3398,68 @@
               "null",
               "boolean"
             ]
+          }
+        }
+      },
+      "NovaMetaDto": {
+        "required": [
+          "nome",
+          "valorAlvoCentavos",
+          "dataDesejada",
+          "aportePlanejadoCentavos",
+          "rendimentoMensalPercentual",
+          "contaIds"
+        ],
+        "type": "object",
+        "properties": {
+          "nome": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "valorAlvoCentavos": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "dataDesejada": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "aportePlanejadoCentavos": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "rendimentoMensalPercentual": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "format": "double"
+          },
+          "contaIds": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         }
       },
@@ -3306,6 +3771,31 @@
           }
         }
       },
+      "PainelDeMetasDto": {
+        "required": [
+          "mes",
+          "metas",
+          "contas"
+        ],
+        "type": "object",
+        "properties": {
+          "mes": {
+            "type": "string"
+          },
+          "metas": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MetaDto"
+            }
+          },
+          "contas": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ContaDeInvestimentoDto"
+            }
+          }
+        }
+      },
       "ParametroDeChaveDto": {
         "required": [
           "type",
@@ -3408,6 +3898,67 @@
               "null",
               "string"
             ]
+          }
+        }
+      },
+      "ProjecaoDto": {
+        "required": [
+          "aporteMensalCentavos",
+          "situacao",
+          "mesesAteMeta",
+          "chegaEm",
+          "diferencaMeses",
+          "dataDesejadaPassou",
+          "aporteNecessarioCentavos"
+        ],
+        "type": "object",
+        "properties": {
+          "aporteMensalCentavos": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "situacao": {
+            "type": "string"
+          },
+          "mesesAteMeta": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "chegaEm": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "diferencaMeses": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "dataDesejadaPassou": {
+            "type": "boolean"
+          },
+          "aporteNecessarioCentavos": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
           }
         }
       },
@@ -3732,6 +4283,9 @@
     },
     {
       "name": "Orcamento"
+    },
+    {
+      "name": "Metas"
     }
   ]
 }
