@@ -431,6 +431,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/contas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Contas e cartões do casal, inclusive arquivados. Agência e número só mascarados. */
+        get: operations["ListarContas"];
+        put?: never;
+        /** Cria conta ou cartão. Apelido repetido no casal dá 409; titular fora do casal ou cartão sem dias dá 400. */
+        post: operations["CriarConta"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/contas/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Atualiza (e arquiva) uma conta. Agência e número nulos mantêm o que está guardado; texto vazio apaga. */
+        put: operations["AtualizarConta"];
+        post?: never;
+        /** Apaga (soft delete) uma conta sem lançamentos. Com lançamentos dá 409: arquive em vez de apagar. */
+        delete: operations["ApagarConta"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -479,6 +515,27 @@ export interface components {
             cpf: string;
             senha: string;
         };
+        ContaDto: {
+            /** Format: uuid */
+            id: string;
+            tipo: string;
+            apelido: string;
+            instituicao: null | string;
+            titular: null | components["schemas"]["TitularDto"];
+            agenciaMascarada: null | string;
+            numeroMascarado: null | string;
+            /** Format: int64 */
+            saldoInicialCentavos: number | string;
+            /** Format: date */
+            saldoInicialEm: string;
+            /** Format: int32 */
+            diaFechamento: null | number | string;
+            /** Format: int32 */
+            diaVencimento: null | number | string;
+            /** Format: int64 */
+            limiteCentavos: null | number | string;
+            arquivada: boolean;
+        };
         CredencialDto: {
             /** Format: uuid */
             id: string;
@@ -526,6 +583,27 @@ export interface components {
             id: string;
             apelido: string;
             ehVoce: boolean;
+        };
+        NovaContaDto: {
+            tipo: string;
+            apelido: string;
+            instituicao: null | string;
+            /** Format: uuid */
+            titularUsuarioId: null | string;
+            agencia: null | string;
+            numero: null | string;
+            /** Format: int64 */
+            saldoInicialCentavos: number | string;
+            /** Format: date */
+            saldoInicialEm: string;
+            /** Format: int32 */
+            diaFechamento: null | number | string;
+            /** Format: int32 */
+            diaVencimento: null | number | string;
+            /** Format: int64 */
+            limiteCentavos: null | number | string;
+            /** @default false */
+            arquivada: boolean;
         };
         NovaPasskeyDto: {
             apelido: string;
@@ -619,6 +697,11 @@ export interface components {
             residentKey: string;
             requireResidentKey: boolean;
             userVerification: string;
+        };
+        TitularDto: {
+            /** Format: uuid */
+            usuarioId: string;
+            apelido: string;
         };
         TotpGeradoDto: {
             /** Format: uuid */
@@ -1477,6 +1560,167 @@ export interface operations {
             };
             /** @description Forbidden */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    ListarContas: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContaDto"][];
+                };
+            };
+        };
+    };
+    CriarConta: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NovaContaDto"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    AtualizarConta: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NovaContaDto"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    ApagarConta: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflict */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

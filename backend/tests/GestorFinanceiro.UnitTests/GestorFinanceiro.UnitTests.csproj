@@ -14,6 +14,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\SharedKernel\GestorFinanceiro.SharedKernel.csproj" />
     <ProjectReference Include="..\..\src\Modules\Identidade\GestorFinanceiro.Modules.Identidade.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Contas\GestorFinanceiro.Modules.Contas.csproj" />
     <ProjectReference Include="..\..\src\Modules\Lancamentos\GestorFinanceiro.Modules.Lancamentos.csproj" />
     <ProjectReference Include="..\..\src\Modules\Assistente\GestorFinanceiro.Modules.Assistente.csproj" />
   </ItemGroup>

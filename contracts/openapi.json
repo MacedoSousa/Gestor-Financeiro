@@ -906,6 +906,179 @@
           }
         }
       }
+    },
+    "/api/v1/contas": {
+      "get": {
+        "tags": [
+          "Contas"
+        ],
+        "summary": "Contas e cartões do casal, inclusive arquivados. Agência e número só mascarados.",
+        "operationId": "ListarContas",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ContaDto"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Contas"
+        ],
+        "summary": "Cria conta ou cartão. Apelido repetido no casal dá 409; titular fora do casal ou cartão sem dias dá 400.",
+        "operationId": "CriarConta",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NovaContaDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/contas/{id}": {
+      "put": {
+        "tags": [
+          "Contas"
+        ],
+        "summary": "Atualiza (e arquiva) uma conta. Agência e número nulos mantêm o que está guardado; texto vazio apaga.",
+        "operationId": "AtualizarConta",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NovaContaDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Contas"
+        ],
+        "summary": "Apaga (soft delete) uma conta sem lançamentos. Com lançamentos dá 409: arquive em vez de apagar.",
+        "operationId": "ApagarConta",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1090,6 +1263,106 @@
           }
         }
       },
+      "ContaDto": {
+        "required": [
+          "id",
+          "tipo",
+          "apelido",
+          "instituicao",
+          "titular",
+          "agenciaMascarada",
+          "numeroMascarado",
+          "saldoInicialCentavos",
+          "saldoInicialEm",
+          "diaFechamento",
+          "diaVencimento",
+          "limiteCentavos",
+          "arquivada"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "tipo": {
+            "type": "string"
+          },
+          "apelido": {
+            "type": "string"
+          },
+          "instituicao": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "titular": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/TitularDto"
+              }
+            ]
+          },
+          "agenciaMascarada": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "numeroMascarado": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "saldoInicialCentavos": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "saldoInicialEm": {
+            "type": "string",
+            "format": "date"
+          },
+          "diaFechamento": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "diaVencimento": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "limiteCentavos": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "arquivada": {
+            "type": "boolean"
+          }
+        }
+      },
       "CredencialDto": {
         "required": [
           "id",
@@ -1263,6 +1536,98 @@
           },
           "ehVoce": {
             "type": "boolean"
+          }
+        }
+      },
+      "NovaContaDto": {
+        "required": [
+          "tipo",
+          "apelido",
+          "instituicao",
+          "titularUsuarioId",
+          "agencia",
+          "numero",
+          "saldoInicialCentavos",
+          "saldoInicialEm",
+          "diaFechamento",
+          "diaVencimento",
+          "limiteCentavos"
+        ],
+        "type": "object",
+        "properties": {
+          "tipo": {
+            "type": "string"
+          },
+          "apelido": {
+            "type": "string"
+          },
+          "instituicao": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "titularUsuarioId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "agencia": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "numero": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "saldoInicialCentavos": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "saldoInicialEm": {
+            "type": "string",
+            "format": "date"
+          },
+          "diaFechamento": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "diaVencimento": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "limiteCentavos": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "arquivada": {
+            "type": "boolean",
+            "default": false
           }
         }
       },
@@ -1632,6 +1997,22 @@
           }
         }
       },
+      "TitularDto": {
+        "required": [
+          "usuarioId",
+          "apelido"
+        ],
+        "type": "object",
+        "properties": {
+          "usuarioId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "apelido": {
+            "type": "string"
+          }
+        }
+      },
       "TotpGeradoDto": {
         "required": [
           "credencialId",
@@ -1681,6 +2062,9 @@
     },
     {
       "name": "Dispositivos"
+    },
+    {
+      "name": "Contas"
     }
   ]
 }

@@ -18,7 +18,8 @@ namespace GestorFinanceiro.ArchitectureTests;
 /// </summary>
 public class RegrasDeArquitetura
 {
-    public static TheoryData<string> Modulos => new(
+    private static readonly string[] NomesDosModulos =
+    [
         typeof(IdentidadeModule).Assembly.GetName().Name!,
         typeof(ContasModule).Assembly.GetName().Name!,
         typeof(LancamentosModule).Assembly.GetName().Name!,
@@ -27,7 +28,10 @@ public class RegrasDeArquitetura
         typeof(InvestimentosModule).Assembly.GetName().Name!,
         typeof(IntegracoesModule).Assembly.GetName().Name!,
         typeof(AssistenteModule).Assembly.GetName().Name!,
-        typeof(AuditoriaModule).Assembly.GetName().Name!);
+        typeof(AuditoriaModule).Assembly.GetName().Name!,
+    ];
+
+    public static TheoryData<string> Modulos => new(NomesDosModulos);
 
     [Theory]
     [MemberData(nameof(Modulos))]
@@ -55,6 +59,40 @@ public class RegrasDeArquitetura
             .GetResult();
 
         Assert.True(resultado.IsSuccessful, $"O domínio de {nomeAssembly} depende de infraestrutura.");
+    }
+
+    public static TheoryData<string, string> ParesDeModulos
+    {
+        get
+        {
+            var dados = new TheoryData<string, string>();
+            foreach (var a in NomesDosModulos)
+                foreach (var b in NomesDosModulos.Where(b => b != a))
+                    dados.Add(a, b);
+            return dados;
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(ParesDeModulos))]
+    public void Modulo_so_depende_de_Contracts_de_outro_modulo(string moduloA, string moduloB)
+    {
+        // Tudo de B que não é Contracts: os namespaces internos e a classe <B>Module.
+        var proibidos = Assembly.Load(moduloB).GetTypes()
+            .Where(t => t.FullName is not null && !t.FullName.StartsWith(moduloB + ".Contracts", StringComparison.Ordinal))
+            .Select(t => t.Namespace == moduloB ? t.FullName! : t.Namespace)
+            .Where(n => n is not null && n != moduloB)
+            .Select(n => n!)
+            .Distinct()
+            .ToArray();
+        if (proibidos.Length == 0) return;
+
+        var resultado = Types.InAssembly(Assembly.Load(moduloA))
+            .ShouldNot().HaveDependencyOnAny(proibidos)
+            .GetResult();
+
+        var ofensores = string.Join(", ", resultado.FailingTypes?.Select(t => t.FullName) ?? []);
+        Assert.True(resultado.IsSuccessful, $"{moduloA} depende de algo de {moduloB} fora de Contracts: {ofensores}");
     }
 
     [Fact]
