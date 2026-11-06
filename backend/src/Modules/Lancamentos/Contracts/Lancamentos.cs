@@ -103,3 +103,14 @@ public sealed record NovaTransferenciaDto(
 /// <param name="Saida">Perna negativa, na conta de origem.</param>
 /// <param name="Entrada">Perna positiva, na conta de destino.</param>
 public sealed record TransferenciaDto(Guid GrupoId, LancamentoDto Saida, LancamentoDto Entrada);
+
+/// <summary>Corpo de POST /api/v1/contas/{id}/conciliacao. Os dois são obrigatórios, de −100.000.000.000 a 100.000.000.000.</summary>
+/// <param name="SaldoInformadoCentavos">Saldo de hoje no banco, como o casal leu.</param>
+/// <param name="SaldoExibidoCentavos">Saldo de hoje que a tela mostrava; se o do servidor for outro, a resposta é 409.</param>
+public sealed record ConciliacaoPedidoDto(long? SaldoInformadoCentavos, long? SaldoExibidoCentavos);
+
+/// <summary>Resultado da conciliação.</summary>
+/// <param name="Resultado">LANCADO (a diferença virou receita em Rendimentos), CONFERE ou MENOR (nada lançado).</param>
+/// <param name="DiferencaCentavos">Informado menos o saldo de hoje.</param>
+/// <param name="Lancamento">A receita lançada; nula em CONFERE e MENOR.</param>
+public sealed record ConciliacaoDto(string Resultado, long DiferencaCentavos, LancamentoDto? Lancamento);

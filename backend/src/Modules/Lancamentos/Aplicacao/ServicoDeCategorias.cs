@@ -21,7 +21,7 @@ internal abstract record ResultadoDeCategoria
 internal sealed class ServicoDeCategorias(LancamentosDbContext db, IUsuarioAtual atual)
 {
     internal const string TituloNomeRepetido = "Já existe uma categoria com esse nome.";
-    internal const string TituloComPapel = "Categoria de investimento ou de dívidas não pode ser apagada: arquive ou renomeie.";
+    internal const string TituloComPapel = "Categoria com papel não pode ser apagada: arquive ou renomeie.";
     internal const string TituloEmUso = "Categoria com lançamentos: arquive em vez de apagar.";
     private const string IndiceDeNome = "ux_categorias_nome";
 
@@ -32,7 +32,8 @@ internal sealed class ServicoDeCategorias(LancamentosDbContext db, IUsuarioAtual
         ("Dívidas e financiamentos", PapelDeCategoria.Dividas), ("Outros", null),
     ];
 
-    private static readonly string[] ReceitasPadrao = ["Salário", "Outras receitas"];
+    private static readonly (string Nome, string? Papel)[] ReceitasPadrao =
+        [("Salário", null), ("Outras receitas", null), ("Rendimentos", PapelDeCategoria.Rendimentos)];
 
     public async Task<IReadOnlyList<CategoriaDto>?> ListarAsync(CancellationToken ct)
     {
@@ -61,8 +62,8 @@ internal sealed class ServicoDeCategorias(LancamentosDbContext db, IUsuarioAtual
         if (erros.Count > 0) return new ResultadoDeCategoria.Invalido(erros);
 
         var tipo = LerTipo(pedido.Tipo);
-        if (categoria.Papel is not null && tipo != TipoDeCategoria.Despesa)
-            return new ResultadoDeCategoria.Invalido(new Dictionary<string, string[]> { ["tipo"] = ["Categoria de investimento ou de dívidas continua sendo de despesa."] });
+        if (categoria.Papel is not null && tipo != categoria.Tipo)
+            return new ResultadoDeCategoria.Invalido(new Dictionary<string, string[]> { ["tipo"] = ["Categoria com papel não muda de tipo."] });
         if (tipo != categoria.Tipo && await TemLancamentosAsync(id, ct))
             return new ResultadoDeCategoria.Invalido(new Dictionary<string, string[]> { ["tipo"] = ["Categoria com lançamentos não muda de tipo."] });
 
@@ -104,7 +105,7 @@ internal sealed class ServicoDeCategorias(LancamentosDbContext db, IUsuarioAtual
         if (!await db.Categorias.AnyAsync(ct))
         {
             foreach (var (nome, papel) in DespesasPadrao) db.Categorias.Add(Categoria.Criar(casalId, nome, TipoDeCategoria.Despesa, papel));
-            foreach (var nome in ReceitasPadrao) db.Categorias.Add(Categoria.Criar(casalId, nome, TipoDeCategoria.Receita));
+            foreach (var (nome, papel) in ReceitasPadrao) db.Categorias.Add(Categoria.Criar(casalId, nome, TipoDeCategoria.Receita, papel));
             await db.SaveChangesAsync(ct);
         }
         await tx.CommitAsync(ct);

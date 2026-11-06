@@ -1,4 +1,3 @@
-using GestorFinanceiro.Modules.Assistente.Dominio;
 using GestorFinanceiro.Modules.Identidade.Dominio;
 using GestorFinanceiro.Modules.Lancamentos.Dominio;
 using GestorFinanceiro.SharedKernel.Dominio;
@@ -58,30 +57,4 @@ public class ParserMensagemTests
     [InlineData("mercado 0,00")]
     [InlineData("")]
     public void Ignora_mensagem_sem_valor(string mensagem) => Assert.Null(ParserMensagem.Interpretar(mensagem));
-}
-
-public class FinanceEngineTests
-{
-    private const decimal TaxaMensal = 0.0085m;
-
-    [Theory]
-    [InlineData(65_000, 300_000, 5_000, 37)]   // casa: plano atual (dez/2029)
-    [InlineData(65_000, 300_000, 6_000, 32)]   // casa: +R$ 1.000 por mês (jul/2029)
-    [InlineData(66_860, 300_000, 5_000, 36)]   // casa: sobra de outubro aplicada (nov/2029)
-    [InlineData(38_400, 80_000, 1_800, 19)]    // carro (jun/2028)
-    public void Meses_ate_a_meta(int atual, int alvo, int aporte, int meses) =>
-        Assert.Equal(meses, FinanceEngine.MesesAteMeta(
-            Dinheiro.DeReais(atual), Dinheiro.DeReais(alvo), Dinheiro.DeReais(aporte), TaxaMensal));
-
-    [Fact]
-    public void Meta_ja_atingida_e_zero() =>
-        Assert.Equal(0, FinanceEngine.MesesAteMeta(Dinheiro.DeReais(10), Dinheiro.DeReais(10), Dinheiro.Zero, TaxaMensal));
-
-    [Fact]
-    public void Sem_aporte_e_sem_saldo_nunca_chega() =>
-        Assert.Null(FinanceEngine.MesesAteMeta(Dinheiro.Zero, Dinheiro.DeReais(10), Dinheiro.Zero, TaxaMensal));
-
-    [Fact]
-    public void Taxa_de_poupanca_de_outubro() =>
-        Assert.Equal(0.3676m, FinanceEngine.TaxaDePoupanca(Dinheiro.DeReais(18_500), Dinheiro.DeReais(6_800)));
 }

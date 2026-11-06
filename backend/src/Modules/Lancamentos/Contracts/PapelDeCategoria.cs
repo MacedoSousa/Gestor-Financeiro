@@ -5,4 +5,7 @@ public static class PapelDeCategoria
 {
     public const string Investimento = "INVESTIMENTO";
     public const string Dividas = "DIVIDAS";
+
+    /// <summary>Categoria de receita dos rendimentos; o papel só existe em receita.</summary>
+    public const string Rendimentos = "RENDIMENTOS";
 }

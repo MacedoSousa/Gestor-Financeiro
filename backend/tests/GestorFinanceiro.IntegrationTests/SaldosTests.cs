@@ -1,9 +1,14 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using GestorFinanceiro.Api.Infra;
 using GestorFinanceiro.IntegrationTests.Infra;
 using GestorFinanceiro.Modules.Identidade.Contracts;
+using GestorFinanceiro.Modules.Lancamentos.Contracts;
+using GestorFinanceiro.SharedKernel.Aplicacao;
 using GestorFinanceiro.UnitTests;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
 
 namespace GestorFinanceiro.IntegrationTests;
@@ -34,10 +39,27 @@ public class SaldosTests(PostgresFixture pg)
     private static async Task<JsonElement> JsonAsync(HttpResponseMessage r) =>
         JsonDocument.Parse(await r.Content.ReadAsStringAsync()).RootElement.Clone();
 
+    /// <summary>Dentro de uma requisição vale a sessão; fora dela (o escopo do teste), o casal fixo.</summary>
+    private sealed class CasalFixo { public Guid? Id { get; set; } }
+
+    private sealed class UsuarioDoTeste(IHttpContextAccessor acessor, CasalFixo fixo) : IUsuarioAtual
+    {
+        private IUsuarioAtual Atual => acessor.HttpContext is null ? new UsuarioSistema(fixo.Id) : new UsuarioAtualHttp(acessor);
+        public Guid? UsuarioId => Atual.UsuarioId;
+        public Guid? CasalId => Atual.CasalId;
+        public string? Ip => Atual.Ip;
+    }
+
+    private readonly CasalFixo _fixo = new();
+
     private async Task<(ApiDeTeste Api, BancoDeTeste Banco, HttpClient Cliente, Guid Casal)> IniciarAsync(RelogioFixo? relogio = null)
     {
         var banco = await pg.NovoBancoAsync();
-        var api = new ApiDeTeste(banco, relogio: relogio);
+        var api = new ApiDeTeste(banco, relogio: relogio, servicos: s =>
+        {
+            s.AddSingleton(_fixo);
+            s.AddScoped<IUsuarioAtual, UsuarioDoTeste>();
+        });
         var pedido = new CadastroDoCasalDto(
             api.CodigoInstalacao, "Família Teste",
             new ConjugeNovoDto("Ana Teste", CpfSintetico.Gerar(1), "senha-da-ana-123"),
@@ -45,6 +67,7 @@ public class SaldosTests(PostgresFixture pg)
         Assert.Equal(HttpStatusCode.Created, (await api.CreateClient().PostAsJsonAsync("/api/v1/casal", pedido)).StatusCode);
         var ana = await EscalarAsync<Guid>(banco, SqlAna);
         var casal = await EscalarAsync<Guid>(banco, SqlCasal);
+        _fixo.Id = casal;
         return (api, banco, await api.ClienteLogadoAsync(ana), casal);
     }
 
@@ -186,5 +209,28 @@ public class SaldosTests(PostgresFixture pg)
         await using var _ = api;
 
         Assert.Equal(HttpStatusCode.Unauthorized, (await api.CreateClient().GetAsync("/api/v1/saldos")).StatusCode);
+    }
+
+    [Fact]
+    public async Task SaldosAsync_igual_ao_GET_saldos()
+    {
+        var (api, banco, cliente, casal) = await IniciarAsync();
+        await using var _ = api;
+        var corrente = await CriarCorrenteAsync(cliente, "Itaú", 100_000);
+        var poupanca = await CriarContaAsync(cliente, new { tipo = "POUPANCA", apelido = "Reserva", saldoInicialCentavos = 5_000L, saldoInicialEm = "2026-11-01" });
+        await InserirAsync(banco, casal, corrente, "2026-11-02", -2_500, "DESPESA");
+        await InserirAsync(banco, casal, poupanca, "2026-11-03", 10_000, "RECEITA");
+        await InserirAsync(banco, casal, corrente, "2026-11-20", -50_000, "DESPESA");
+
+        foreach (var data in new[] { "2026-11-10", "2026-11-30" })
+        {
+            var http = (await JsonAsync(await cliente.GetAsync($"/api/v1/saldos?em={data}")))
+                .EnumerateArray().ToDictionary(s => s.GetProperty("contaId").GetGuid(), s => s.GetProperty("saldoCentavos").GetInt64());
+            await using var escopo = api.Services.CreateAsyncScope();
+            var contrato = await escopo.ServiceProvider.GetRequiredService<IConsultaDeSaldos>().SaldosAsync(DateOnly.Parse(data, System.Globalization.CultureInfo.InvariantCulture));
+
+            Assert.Equal(2, contrato.Count);
+            Assert.Equal(http, contrato.ToDictionary(s => s.ContaId, s => s.SaldoCentavos));
+        }
     }
 }

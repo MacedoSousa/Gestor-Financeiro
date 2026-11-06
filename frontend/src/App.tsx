@@ -10,6 +10,7 @@ import { RegistrarAcesso } from "./paginas/RegistrarAcesso";
 import { Dispositivos } from "./paginas/Dispositivos";
 import { Lancamentos } from "./paginas/Lancamentos";
 import { Contas } from "./paginas/Contas";
+import { Metas } from "./paginas/Metas";
 import { Orcamento } from "./paginas/Orcamento";
 
 export function App() {
@@ -25,7 +26,7 @@ export function App() {
         <Route path="lancamentos" element={<Lancamentos />} />
         <Route path="orcamento" element={<Orcamento />} />
         <Route path="boletos" element={<EmBreve titulo="Boletos e faturas" fase="Fase 1" />} />
-        <Route path="metas" element={<EmBreve titulo="Metas e investimentos" fase="Fase 1" />} />
+        <Route path="metas" element={<Metas />} />
         <Route path="assistente" element={<EmBreve titulo="Assistente" fase="Fase 4" />} />
         <Route path="contas" element={<Contas />} />
         <Route path="dispositivos" element={<Dispositivos />} />

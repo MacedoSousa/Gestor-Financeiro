@@ -96,6 +96,17 @@ public class RegrasDeArquitetura
     }
 
     [Fact]
+    public void Financas_nao_depende_de_nenhum_assembly_do_projeto()
+    {
+        var referenciados = typeof(GestorFinanceiro.Financas.FinanceEngine).Assembly.GetReferencedAssemblies()
+            .Select(a => a.Name!)
+            .Where(n => n.StartsWith("GestorFinanceiro.", StringComparison.Ordinal))
+            .ToList();
+
+        Assert.True(referenciados.Count == 0, $"Financas referencia: {string.Join(", ", referenciados)}. Deve ser livre de dependências do projeto.");
+    }
+
+    [Fact]
     public void Codigo_nao_tem_delete_fisico()
     {
         var proibido = new Regex(@"DELETE\s+FROM|ExecuteDelete|TRUNCATE\s+TABLE", RegexOptions.IgnoreCase);

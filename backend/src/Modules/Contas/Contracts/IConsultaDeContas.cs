@@ -18,9 +18,10 @@ public interface IConsultaDeContas
 
 /// <param name="Tipo">CORRENTE, POUPANCA, INVESTIMENTO, CARTAO ou DINHEIRO.</param>
 /// <param name="TitularUsuarioId">Nulo = conta conjunta.</param>
+/// <param name="Instituicao">Nome do banco ou corretora, em claro; nulo quando não informado.</param>
 public sealed record ContaResumo(
     Guid Id, string Apelido, string Tipo, Guid? TitularUsuarioId, long SaldoInicialCentavos, DateOnly SaldoInicialEm,
-    int? DiaFechamento, int? DiaVencimento, bool Arquivada = false);
+    int? DiaFechamento, int? DiaVencimento, bool Arquivada = false, string? Instituicao = null);
 
 /// <summary>
 /// Quem sabe se a conta tem lançamentos (o módulo Lancamentos implementa). Contas só apaga conta sem uso;

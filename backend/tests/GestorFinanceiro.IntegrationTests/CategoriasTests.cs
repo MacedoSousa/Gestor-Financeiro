@@ -75,6 +75,7 @@ public class CategoriasTests(PostgresFixture pg)
         string? Papel(string nome) => lista.Single(c => c.GetProperty("nome").GetString() == nome).GetProperty("papel").GetString();
         Assert.Equal("INVESTIMENTO", Papel("Investimento"));
         Assert.Equal("DIVIDAS", Papel("Dívidas e financiamentos"));
+        Assert.Equal("RENDIMENTOS", Papel("Rendimentos"));
         Assert.Equal(10, lista.Count(c => c.GetProperty("papel").ValueKind == JsonValueKind.Null));
     }
 
@@ -104,9 +105,50 @@ public class CategoriasTests(PostgresFixture pg)
         var resposta = await cliente.PutAsJsonAsync($"{Rota}/{id}", new { nome = "Investimento", tipo = "RECEITA" });
 
         Assert.Equal(HttpStatusCode.BadRequest, resposta.StatusCode);
-        Assert.Equal("Categoria de investimento ou de dívidas continua sendo de despesa.",
+        Assert.Equal("Categoria com papel não muda de tipo.",
             (await JsonAsync(resposta)).GetProperty("errors").GetProperty("tipo")[0].GetString());
         Assert.Equal("DESPESA", await EscalarAsync<string>(banco, $"SELECT tipo FROM lancamentos.categorias WHERE id = '{id}'"));
+    }
+
+    [Fact]
+    public async Task Rendimentos_nasce_com_papel_nos_casais_novos()
+    {
+        var (api, banco, cliente, _) = await IniciarAsync();
+        await using var _ = api;
+
+        var rendimentos = (await ListarAsync(cliente)).Single(c => c.GetProperty("nome").GetString() == "Rendimentos");
+
+        Assert.Equal("RECEITA", rendimentos.GetProperty("tipo").GetString());
+        Assert.Equal("RENDIMENTOS", rendimentos.GetProperty("papel").GetString());
+        Assert.Equal(1L, await EscalarAsync<long>(banco, "SELECT count(*) FROM lancamentos.categorias WHERE papel = 'RENDIMENTOS'"));
+    }
+
+    [Fact]
+    public async Task Categoria_com_papel_rendimentos_nao_vira_despesa()
+    {
+        var (api, banco, cliente, _) = await IniciarAsync();
+        await using var _ = api;
+        var id = (await ListarAsync(cliente)).Single(c => c.GetProperty("nome").GetString() == "Rendimentos").GetProperty("id").GetGuid();
+
+        var resposta = await cliente.PutAsJsonAsync($"{Rota}/{id}", new { nome = "Rendimentos", tipo = "DESPESA" });
+
+        Assert.Equal(HttpStatusCode.BadRequest, resposta.StatusCode);
+        Assert.Equal("Categoria com papel não muda de tipo.",
+            (await JsonAsync(resposta)).GetProperty("errors").GetProperty("tipo")[0].GetString());
+        Assert.Equal("RECEITA", await EscalarAsync<string>(banco, $"SELECT tipo FROM lancamentos.categorias WHERE id = '{id}'"));
+    }
+
+    [Fact]
+    public async Task Apagar_rendimentos_responde_409()
+    {
+        var (api, banco, cliente, _) = await IniciarAsync();
+        await using var _ = api;
+        var id = (await ListarAsync(cliente)).Single(c => c.GetProperty("nome").GetString() == "Rendimentos").GetProperty("id").GetGuid();
+
+        var resposta = await cliente.DeleteAsync($"{Rota}/{id}");
+
+        Assert.Equal(HttpStatusCode.Conflict, resposta.StatusCode);
+        Assert.False(await EscalarAsync<bool>(banco, $"SELECT is_deleted FROM lancamentos.categorias WHERE id = '{id}'"));
     }
 
     [Fact]
@@ -117,16 +159,16 @@ public class CategoriasTests(PostgresFixture pg)
 
         var lista = await ListarAsync(cliente);
 
-        Assert.Equal(12, lista.Length);
+        Assert.Equal(13, lista.Length);
         Assert.Equal(10, lista.Count(c => c.GetProperty("tipo").GetString() == "DESPESA"));
-        Assert.Equal(2, lista.Count(c => c.GetProperty("tipo").GetString() == "RECEITA"));
+        Assert.Equal(3, lista.Count(c => c.GetProperty("tipo").GetString() == "RECEITA"));
         var nomes = lista.Select(c => c.GetProperty("nome").GetString()).ToHashSet();
         Assert.Contains("Mercado", nomes);
         Assert.Contains("Dívidas e financiamentos", nomes);
         Assert.Contains("Salário", nomes);
         Assert.All(lista, c => Assert.False(c.GetProperty("arquivada").GetBoolean()));
-        Assert.Equal(12, (await ListarAsync(cliente)).Length);
-        Assert.Equal(12L, await EscalarAsync<long>(banco, "SELECT count(*) FROM lancamentos.categorias"));
+        Assert.Equal(13, (await ListarAsync(cliente)).Length);
+        Assert.Equal(13L, await EscalarAsync<long>(banco, "SELECT count(*) FROM lancamentos.categorias"));
     }
 
     [Fact]
@@ -138,7 +180,7 @@ public class CategoriasTests(PostgresFixture pg)
         var respostas = await Task.WhenAll(Enumerable.Range(0, 8).Select(_ => cliente.GetAsync(Rota)));
 
         Assert.All(respostas, r => Assert.Equal(HttpStatusCode.OK, r.StatusCode));
-        Assert.Equal(12L, await EscalarAsync<long>(banco, "SELECT count(*) FROM lancamentos.categorias"));
+        Assert.Equal(13L, await EscalarAsync<long>(banco, "SELECT count(*) FROM lancamentos.categorias"));
     }
 
     [Fact]
@@ -229,7 +271,7 @@ public class CategoriasTests(PostgresFixture pg)
         var resposta = await cliente.DeleteAsync($"{Rota}/{id}");
 
         Assert.Equal(HttpStatusCode.Conflict, resposta.StatusCode);
-        Assert.Equal("Categoria de investimento ou de dívidas não pode ser apagada: arquive ou renomeie.",
+        Assert.Equal("Categoria com papel não pode ser apagada: arquive ou renomeie.",
             (await JsonAsync(resposta)).GetProperty("title").GetString());
         Assert.False(await EscalarAsync<bool>(banco, $"SELECT is_deleted FROM lancamentos.categorias WHERE id = '{id}'"));
     }
