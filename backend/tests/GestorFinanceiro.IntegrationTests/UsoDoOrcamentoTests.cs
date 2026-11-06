@@ -149,7 +149,9 @@ public class UsoDoOrcamentoTests(PostgresFixture pg)
         var lazer = await CategoriaAsync(c.Cliente, "Lazer");
         await LancarAsync(c.Cliente, corrente, mercado, "DESPESA", 10_000, "2026-11-03");
         await LancarAsync(c.Cliente, corrente, mercado, "RECEITA", 2_500, "2026-11-04");
-        await LancarAsync(c.Cliente, cartao, lazer, "DESPESA", 30_000, "2026-11-05", parcelas: 3);
+        // 06/11 é depois do fechamento (dia 5): a parcela 1 vence em 12/12. Por data ela é de novembro; por fatura seria de dezembro.
+        await LancarAsync(c.Cliente, cartao, lazer, "DESPESA", 30_000, "2026-11-06", parcelas: 3);
+        await LancarAsync(c.Cliente, corrente, await CategoriaAsync(c.Cliente, "Salário"), "RECEITA", 900_000, "2026-11-05");
 
         var novembro = await c.UsoAsync(Novembro);
         var dezembro = await c.UsoAsync(Dezembro);
@@ -158,6 +160,8 @@ public class UsoDoOrcamentoTests(PostgresFixture pg)
         Assert.Equal(10_000, Usado(novembro, lazer));
         Assert.Equal(10_000, Usado(dezembro, lazer));
         Assert.Equal(0, Usado(dezembro, mercado));
+        // Categoria de receita (Salário) nunca aparece no uso.
+        Assert.Equal(new[] { mercado, lazer }.Order(), novembro.Select(u => u.CategoriaId).Order());
     }
 
     [Fact]
@@ -182,8 +186,12 @@ public class UsoDoOrcamentoTests(PostgresFixture pg)
         var corrente = await CriarContaSimplesAsync(c.Cliente, "CORRENTE", "Itaú");
         var poupanca = await CriarContaSimplesAsync(c.Cliente, "POUPANCA", "Reserva");
         await TransferirAsync(c.Cliente, corrente, poupanca, 50_000);
+        await TransferirAsync(c.Cliente, corrente, poupanca, 7_000, "2026-10-20");
+        await TransferirAsync(c.Cliente, corrente, poupanca, 9_000, "2026-12-01");
 
         Assert.Equal(50_000, await c.AportesAsync(Novembro));
+        Assert.Equal(7_000, await c.AportesAsync(new DateOnly(2026, 10, 1)));
+        Assert.Equal(9_000, await c.AportesAsync(Dezembro));
     }
 
     [Fact]
@@ -227,8 +235,12 @@ public class UsoDoOrcamentoTests(PostgresFixture pg)
         var corrente = await CriarContaSimplesAsync(c.Cliente, "CORRENTE", "Itaú");
         await LancarAsync(c.Cliente, corrente, await CategoriaAsync(c.Cliente, "Salário"), "RECEITA", 900_000, "2026-11-05");
         await LancarAsync(c.Cliente, corrente, await CategoriaAsync(c.Cliente, "Mercado"), "RECEITA", 2_500, "2026-11-04");
+        await LancarAsync(c.Cliente, corrente, await CategoriaAsync(c.Cliente, "Salário"), "RECEITA", 800_000, "2026-10-31");
+        await LancarAsync(c.Cliente, corrente, await CategoriaAsync(c.Cliente, "Salário"), "RECEITA", 700_000, "2026-12-01");
 
         Assert.Equal(900_000, await c.ReceitasAsync(Novembro));
+        Assert.Equal(800_000, await c.ReceitasAsync(new DateOnly(2026, 10, 1)));
+        Assert.Equal(700_000, await c.ReceitasAsync(Dezembro));
     }
 
     [Fact]
