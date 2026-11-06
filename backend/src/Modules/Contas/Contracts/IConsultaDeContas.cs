@@ -16,7 +16,7 @@ public interface IConsultaDeContas
     DateOnly? FechamentoDaFatura(ContaResumo conta, DateOnly vencimento);
 }
 
-/// <param name="Tipo">CORRENTE, POUPANCA, CARTAO ou DINHEIRO.</param>
+/// <param name="Tipo">CORRENTE, POUPANCA, INVESTIMENTO, CARTAO ou DINHEIRO.</param>
 /// <param name="TitularUsuarioId">Nulo = conta conjunta.</param>
 public sealed record ContaResumo(
     Guid Id, string Apelido, string Tipo, Guid? TitularUsuarioId, long SaldoInicialCentavos, DateOnly SaldoInicialEm,

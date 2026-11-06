@@ -106,6 +106,27 @@ public class ContasTests(PostgresFixture pg)
     }
 
     [Fact]
+    public async Task Conta_do_tipo_investimento_e_aceita()
+    {
+        var (api, banco, cliente, _, _) = await IniciarAsync();
+        await using var _ = api;
+
+        var corpo = new
+        {
+            tipo = "INVESTIMENTO", apelido = "Reserva", instituicao = "Itaú",
+            saldoInicialCentavos = 0L, saldoInicialEm = "2026-11-01",
+        };
+        var id = await CriarAsync(cliente, corpo);
+
+        var conta = (await JsonAsync(await cliente.GetAsync(Rota))).EnumerateArray().Single();
+        Assert.Equal("INVESTIMENTO", conta.GetProperty("tipo").GetString());
+
+        var erro = await Assert.ThrowsAsync<PostgresException>(() => ExecutarAsync(banco,
+            $"UPDATE contas.contas SET tipo = 'OUTRO' WHERE id = '{id}'"));
+        Assert.Equal(PostgresErrorCodes.CheckViolation, erro.SqlState);
+    }
+
+    [Fact]
     public async Task Numero_e_agencia_so_saem_mascarados_e_ficam_cifrados_no_banco()
     {
         var (api, banco, cliente, _, _) = await IniciarAsync();
