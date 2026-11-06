@@ -24,8 +24,9 @@ public static class LancamentosModule
 
         services.AddScoped<IVerificadorDeUsoDaConta, VerificadorDeUsoDaConta>();
         services.AddScoped<ServicoDeCategorias>();
+        services.AddScoped<ConsultaDeSaldos>();
         return services;
     }
 
-    public static IEndpointRouteBuilder MapLancamentos(this IEndpointRouteBuilder api) => api.MapEndpointsDeCategorias();
+    public static IEndpointRouteBuilder MapLancamentos(this IEndpointRouteBuilder api) => api.MapEndpointsDeCategorias().MapEndpointsDeSaldos();
 }

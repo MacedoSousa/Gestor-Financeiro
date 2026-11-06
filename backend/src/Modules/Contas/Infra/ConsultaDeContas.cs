@@ -23,6 +23,14 @@ internal sealed class ConsultaDeContas(ContasDbContext db) : IConsultaDeContas
             : null;
     }
 
+    public DateOnly? FechamentoDaFatura(ContaResumo conta, DateOnly vencimento)
+    {
+        ArgumentNullException.ThrowIfNull(conta);
+        return conta is { Tipo: "CARTAO", DiaFechamento: { } fechamento, DiaVencimento: { } diaVencimento }
+            ? CalendarioDaFatura.FechamentoDaFatura(vencimento, fechamento, diaVencimento)
+            : null;
+    }
+
     internal static ContaResumo ParaResumo(Conta c) =>
         new(c.Id, c.Apelido, c.Tipo.ToString().ToUpperInvariant(), c.TitularUsuarioId, c.SaldoInicialCentavos, c.SaldoInicialEm,
             c.DiaFechamento, c.DiaVencimento, c.Arquivada);

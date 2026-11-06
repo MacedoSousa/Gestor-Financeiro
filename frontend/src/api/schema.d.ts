@@ -38,6 +38,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/saldos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Saldo de cada conta do casal na data (padrão: hoje em Brasília) e, nos cartões, a fatura aberta e a última fechada. */
+        get: operations["ObterSaldos"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/casal": {
         parameters: {
             query?: never;
@@ -610,6 +627,14 @@ export interface components {
             apelidoDoConjuge: string;
             confirmacaoRecente: boolean;
         };
+        FaturaDto: {
+            /** Format: date */
+            vencimento: string;
+            /** Format: date */
+            fechamento: string;
+            /** Format: int64 */
+            totalCentavos: number | string;
+        };
         HttpValidationProblemDetails: {
             type?: null | string;
             title?: null | string;
@@ -735,6 +760,14 @@ export interface components {
             id: string;
             name: string;
         };
+        SaldoDaContaDto: {
+            /** Format: uuid */
+            contaId: string;
+            /** Format: int64 */
+            saldoCentavos: number | string;
+            faturaAberta: null | components["schemas"]["FaturaDto"];
+            faturaFechada: null | components["schemas"]["FaturaDto"];
+        };
         SaudeDto: {
             status: string;
             /** Format: date-time */
@@ -814,6 +847,28 @@ export interface operations {
                 };
                 content: {
                     "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    ObterSaldos: {
+        parameters: {
+            query?: {
+                em?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SaldoDaContaDto"][];
                 };
             };
         };

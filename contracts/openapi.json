@@ -57,6 +57,40 @@
         }
       }
     },
+    "/api/v1/saldos": {
+      "get": {
+        "tags": [
+          "Lancamentos"
+        ],
+        "summary": "Saldo de cada conta do casal na data (padrão: hoje em Brasília) e, nos cartões, a fatura aberta e a última fechada.",
+        "operationId": "ObterSaldos",
+        "parameters": [
+          {
+            "name": "em",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SaldoDaContaDto"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/casal": {
       "get": {
         "tags": [
@@ -1672,6 +1706,32 @@
           }
         }
       },
+      "FaturaDto": {
+        "required": [
+          "vencimento",
+          "fechamento",
+          "totalCentavos"
+        ],
+        "type": "object",
+        "properties": {
+          "vencimento": {
+            "type": "string",
+            "format": "date"
+          },
+          "fechamento": {
+            "type": "string",
+            "format": "date"
+          },
+          "totalCentavos": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          }
+        }
+      },
       "HttpValidationProblemDetails": {
         "type": "object",
         "properties": {
@@ -2185,6 +2245,49 @@
           }
         }
       },
+      "SaldoDaContaDto": {
+        "required": [
+          "contaId",
+          "saldoCentavos",
+          "faturaAberta",
+          "faturaFechada"
+        ],
+        "type": "object",
+        "properties": {
+          "contaId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "saldoCentavos": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "faturaAberta": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/FaturaDto"
+              }
+            ]
+          },
+          "faturaFechada": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/FaturaDto"
+              }
+            ]
+          }
+        }
+      },
       "SaudeDto": {
         "required": [
           "status",
@@ -2281,6 +2384,9 @@
       "name": "Identidade"
     },
     {
+      "name": "Lancamentos"
+    },
+    {
       "name": "Autenticacao"
     },
     {
@@ -2288,9 +2394,6 @@
     },
     {
       "name": "Contas"
-    },
-    {
-      "name": "Lancamentos"
     }
   ]
 }

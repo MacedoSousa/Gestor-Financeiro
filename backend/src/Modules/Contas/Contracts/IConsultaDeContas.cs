@@ -11,6 +11,9 @@ public interface IConsultaDeContas
 
     /// <summary>Vencimento da fatura em que a compra cai; nulo se a conta não for cartão.</summary>
     DateOnly? VencimentoDaFatura(ContaResumo conta, DateOnly dataCompra);
+
+    /// <summary>Data de fechamento da fatura que vence em <paramref name="vencimento"/>; nulo se a conta não for cartão.</summary>
+    DateOnly? FechamentoDaFatura(ContaResumo conta, DateOnly vencimento);
 }
 
 /// <param name="Tipo">CORRENTE, POUPANCA, CARTAO ou DINHEIRO.</param>
