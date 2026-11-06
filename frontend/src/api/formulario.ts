@@ -12,7 +12,7 @@ const TITULOS: ReadonlySet<string> = new Set([
   "Conta arquivada: escolha outra.",
   "Categoria arquivada: escolha outra.",
   "Categoria com lançamentos: arquive em vez de apagar.",
-  "Categoria de investimento ou de dívidas não pode ser apagada: arquive ou renomeie.",
+  "Categoria com papel não pode ser apagada: arquive ou renomeie.",
   "Chave de idempotência já usada.",
   "Fatura fechada: só descrição e categoria podem mudar.",
 ]);

@@ -7,7 +7,7 @@ using Microsoft.EntityFrameworkCore;
 namespace GestorFinanceiro.Modules.Lancamentos.Aplicacao;
 
 /// <summary>Saldos e totais de fatura. Tudo é SUM no banco; nada é decifrado.</summary>
-internal sealed class ConsultaDeSaldos(LancamentosDbContext db, IConsultaDeContas contas, TimeProvider relogio)
+internal sealed class ConsultaDeSaldos(LancamentosDbContext db, IConsultaDeContas contas, ConsultaDeSaldosPorConta saldosPorConta, TimeProvider relogio)
 {
     public async Task<IReadOnlyList<SaldoDaContaDto>> ObterAsync(DateOnly? em, CancellationToken ct)
     {
@@ -36,14 +36,10 @@ internal sealed class ConsultaDeSaldos(LancamentosDbContext db, IConsultaDeConta
                 .ToListAsync(ct))
               .ToDictionary(x => (x.ContaId, x.Vencimento), x => -x.Soma);
 
+        var saldos = await saldosPorConta.SaldosAsync(lista, data, ct);
         var resultado = new List<SaldoDaContaDto>(lista.Count);
         foreach (var conta in lista)
         {
-            var inicio = conta.SaldoInicialEm;
-            var movimento = await db.Transacoes.AsNoTracking()
-                .Where(t => t.ContaId == conta.Id && t.Data >= inicio && t.Data <= data)
-                .SumAsync(t => (long?)t.ValorCentavos, ct) ?? 0;
-
             FaturaDto? aberta = null, fechada = null;
             if (periodos.TryGetValue(conta.Id, out var p))
             {
@@ -51,7 +47,7 @@ internal sealed class ConsultaDeSaldos(LancamentosDbContext db, IConsultaDeConta
                 fechada = p.Fechada with { TotalCentavos = totais.GetValueOrDefault((conta.Id, p.Fechada.Vencimento)) };
             }
 
-            resultado.Add(new SaldoDaContaDto(conta.Id, conta.SaldoInicialCentavos + movimento, aberta, fechada));
+            resultado.Add(new SaldoDaContaDto(conta.Id, saldos[conta.Id], aberta, fechada));
         }
 
         return resultado;
