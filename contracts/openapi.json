@@ -1079,6 +1079,182 @@
           }
         }
       }
+    },
+    "/api/v1/categorias": {
+      "get": {
+        "tags": [
+          "Lancamentos"
+        ],
+        "summary": "Categorias do casal, inclusive as arquivadas. Na primeira consulta cria as padrão.",
+        "operationId": "ListarCategorias",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CategoriaDto"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Lancamentos"
+        ],
+        "summary": "Cria uma categoria. Nome repetido no casal (sem diferenciar maiúsculas) dá 409.",
+        "operationId": "CriarCategoria",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NovaCategoriaDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/categorias/{id}": {
+      "put": {
+        "tags": [
+          "Lancamentos"
+        ],
+        "summary": "Renomeia ou arquiva uma categoria. Arquivar não mexe nos lançamentos que já a usam.",
+        "operationId": "AtualizarCategoria",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NovaCategoriaDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Lancamentos"
+        ],
+        "summary": "Apaga (soft delete) uma categoria sem lançamentos. Com lançamentos dá 409: arquive em vez de apagar.",
+        "operationId": "ApagarCategoria",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1189,6 +1365,30 @@
             "items": {
               "$ref": "#/components/schemas/MembroDto"
             }
+          }
+        }
+      },
+      "CategoriaDto": {
+        "required": [
+          "id",
+          "nome",
+          "tipo",
+          "arquivada"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "nome": {
+            "type": "string"
+          },
+          "tipo": {
+            "type": "string"
+          },
+          "arquivada": {
+            "type": "boolean"
           }
         }
       },
@@ -1536,6 +1736,27 @@
           },
           "ehVoce": {
             "type": "boolean"
+          }
+        }
+      },
+      "NovaCategoriaDto": {
+        "required": [
+          "nome",
+          "tipo"
+        ],
+        "type": "object",
+        "properties": {
+          "nome": {
+            "type": "string"
+          },
+          "tipo": {
+            "type": "string"
+          },
+          "arquivada": {
+            "type": [
+              "null",
+              "boolean"
+            ]
           }
         }
       },
@@ -2067,6 +2288,9 @@
     },
     {
       "name": "Contas"
+    },
+    {
+      "name": "Lancamentos"
     }
   ]
 }
