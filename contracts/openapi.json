@@ -1289,6 +1289,291 @@
           }
         }
       }
+    },
+    "/api/v1/lancamentos": {
+      "get": {
+        "tags": [
+          "Lancamentos"
+        ],
+        "summary": "Extrato do mês (AAAA-MM; padrão: o mês de hoje em Brasília), por data decrescente. titular: conjunta, eu ou conjuge. q busca na descrição e na contraparte, sem acento e sem caixa.",
+        "operationId": "ListarLancamentos",
+        "parameters": [
+          {
+            "name": "mes",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "contaId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "titular",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "origem",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExtratoDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Lancamentos"
+        ],
+        "summary": "Cria despesa ou receita (parcelada só em cartão). Repetir a mesma chave devolve 200 com o lançamento já criado. Conta ou categoria arquivada dá 400.",
+        "operationId": "CriarLancamento",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NovoLancamentoDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LancamentoDto"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LancamentoDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/lancamentos/{id}": {
+      "get": {
+        "tags": [
+          "Lancamentos"
+        ],
+        "summary": "Um lançamento do casal.",
+        "operationId": "ObterLancamento",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LancamentoDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Lancamentos"
+        ],
+        "summary": "Edita um lançamento. escopo: este (padrão) ou proximos (esta parcela e as seguintes cuja fatura não fechou).",
+        "operationId": "EditarLancamento",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "escopo",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EditarLancamentoDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Lancamentos"
+        ],
+        "summary": "Apaga (soft delete). escopo: este (padrão) ou proximos (esta parcela e as seguintes cuja fatura não fechou).",
+        "operationId": "ApagarLancamento",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "escopo",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1402,6 +1687,26 @@
           }
         }
       },
+      "CategoriaDoLancamentoDto": {
+        "required": [
+          "id",
+          "nome",
+          "arquivada"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "nome": {
+            "type": "string"
+          },
+          "arquivada": {
+            "type": "boolean"
+          }
+        }
+      },
       "CategoriaDto": {
         "required": [
           "id",
@@ -1493,6 +1798,26 @@
             "type": "string"
           },
           "senha": {
+            "type": "string"
+          }
+        }
+      },
+      "ContaDoLancamentoDto": {
+        "required": [
+          "id",
+          "apelido",
+          "tipo"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "apelido": {
+            "type": "string"
+          },
+          "tipo": {
             "type": "string"
           }
         }
@@ -1645,6 +1970,47 @@
           }
         }
       },
+      "EditarLancamentoDto": {
+        "required": [
+          "natureza",
+          "valorCentavos",
+          "data",
+          "descricao",
+          "contraparte",
+          "categoriaId"
+        ],
+        "type": "object",
+        "properties": {
+          "natureza": {
+            "type": "string"
+          },
+          "valorCentavos": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "data": {
+            "type": "string",
+            "format": "date"
+          },
+          "descricao": {
+            "type": "string"
+          },
+          "contraparte": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "categoriaId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
       "EntrarComTotpDto": {
         "required": [
           "cpf",
@@ -1703,6 +2069,29 @@
           },
           "confirmacaoRecente": {
             "type": "boolean"
+          }
+        }
+      },
+      "ExtratoDto": {
+        "required": [
+          "total",
+          "lancamentos"
+        ],
+        "type": "object",
+        "properties": {
+          "total": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "lancamentos": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LancamentoDto"
+            }
           }
         }
       },
@@ -1776,6 +2165,106 @@
                 "type": "string"
               }
             }
+          }
+        }
+      },
+      "LancamentoDto": {
+        "required": [
+          "id",
+          "data",
+          "descricao",
+          "contraparte",
+          "categoria",
+          "conta",
+          "quem",
+          "origem",
+          "natureza",
+          "valorCentavos",
+          "parcela",
+          "parcelas",
+          "grupoId",
+          "faturaVencimento"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "data": {
+            "type": "string",
+            "format": "date"
+          },
+          "descricao": {
+            "type": "string"
+          },
+          "contraparte": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "categoria": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CategoriaDoLancamentoDto"
+              }
+            ]
+          },
+          "conta": {
+            "$ref": "#/components/schemas/ContaDoLancamentoDto"
+          },
+          "quem": {
+            "type": "string"
+          },
+          "origem": {
+            "type": "string"
+          },
+          "natureza": {
+            "type": "string"
+          },
+          "valorCentavos": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "parcela": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "parcelas": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "grupoId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "faturaVencimento": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date"
           }
         }
       },
@@ -1926,6 +2415,66 @@
           },
           "resposta": {
             "$ref": "#/components/schemas/RespostaDeRegistroDePasskeyDto"
+          }
+        }
+      },
+      "NovoLancamentoDto": {
+        "required": [
+          "chaveIdempotente",
+          "contaId",
+          "natureza",
+          "valorCentavos",
+          "data",
+          "descricao",
+          "contraparte",
+          "categoriaId"
+        ],
+        "type": "object",
+        "properties": {
+          "chaveIdempotente": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "contaId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "natureza": {
+            "type": "string"
+          },
+          "valorCentavos": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "data": {
+            "type": "string",
+            "format": "date"
+          },
+          "descricao": {
+            "type": "string"
+          },
+          "contraparte": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "categoriaId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "parcelas": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32",
+            "default": 1
           }
         }
       },

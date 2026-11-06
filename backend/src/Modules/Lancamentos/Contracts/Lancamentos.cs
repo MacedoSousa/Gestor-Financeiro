@@ -14,3 +14,69 @@ public sealed record FaturaDto(DateOnly Vencimento, DateOnly Fechamento, long To
 
 /// <summary>Saldo de uma conta; as faturas só vêm em cartão.</summary>
 public sealed record SaldoDaContaDto(Guid ContaId, long SaldoCentavos, FaturaDto? FaturaAberta, FaturaDto? FaturaFechada);
+
+/// <summary>Corpo de POST /api/v1/lancamentos. O casal vem da sessão.</summary>
+/// <param name="ChaveIdempotente">UUID gerado pelo front a cada formulário aberto; repetir o POST devolve o lançamento já criado.</param>
+/// <param name="Natureza">DESPESA ou RECEITA (transferência tem rota própria).</param>
+/// <param name="ValorCentavos">Positivo; o sinal vem da natureza. Parcelado: o total da compra.</param>
+/// <param name="Parcelas">1 a 24; mais de 1 só em cartão e em despesa.</param>
+public sealed record NovoLancamentoDto(
+    Guid ChaveIdempotente,
+    Guid ContaId,
+    string Natureza,
+    long ValorCentavos,
+    DateOnly Data,
+    string Descricao,
+    string? Contraparte,
+    Guid CategoriaId,
+    int Parcelas = 1)
+{
+    // Descrição e contraparte não vão para log nem para ToString.
+    public override string ToString() => $"NovoLancamentoDto {{ ContaId = {ContaId}, Natureza = {Natureza}, Parcelas = {Parcelas} }}";
+}
+
+/// <summary>Corpo de PUT /api/v1/lancamentos/{id}: os campos do lançamento menos a conta e as parcelas.</summary>
+/// <param name="ValorCentavos">Positivo; em parcelado, o valor de cada parcela alterada.</param>
+public sealed record EditarLancamentoDto(
+    string Natureza,
+    long ValorCentavos,
+    DateOnly Data,
+    string Descricao,
+    string? Contraparte,
+    Guid CategoriaId)
+{
+    public override string ToString() => $"EditarLancamentoDto {{ Natureza = {Natureza} }}";
+}
+
+public sealed record CategoriaDoLancamentoDto(Guid Id, string Nome, bool Arquivada);
+
+/// <param name="Tipo">CORRENTE, POUPANCA, CARTAO ou DINHEIRO.</param>
+public sealed record ContaDoLancamentoDto(Guid Id, string Apelido, string Tipo);
+
+/// <summary>Um lançamento como o extrato mostra.</summary>
+/// <param name="Categoria">Nula em transferência (ou se a categoria não existe mais).</param>
+/// <param name="Quem">Apelido do titular da conta, ou "Conjunta".</param>
+/// <param name="Origem">MANUAL, OPEN_FINANCE ou WHATSAPP.</param>
+/// <param name="Natureza">DESPESA, RECEITA ou TRANSFERENCIA.</param>
+/// <param name="ValorCentavos">Com sinal: negativo é saída.</param>
+public sealed record LancamentoDto(
+    Guid Id,
+    DateOnly Data,
+    string Descricao,
+    string? Contraparte,
+    CategoriaDoLancamentoDto? Categoria,
+    ContaDoLancamentoDto Conta,
+    string Quem,
+    string Origem,
+    string Natureza,
+    long ValorCentavos,
+    int? Parcela,
+    int? Parcelas,
+    Guid? GrupoId,
+    DateOnly? FaturaVencimento)
+{
+    public override string ToString() => $"LancamentoDto {{ Id = {Id} }}";
+}
+
+/// <summary>Resposta de GET /api/v1/lancamentos: os lançamentos do mês, por data decrescente.</summary>
+public sealed record ExtratoDto(int Total, IReadOnlyList<LancamentoDto> Lancamentos);

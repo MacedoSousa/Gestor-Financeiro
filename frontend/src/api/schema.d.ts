@@ -520,6 +520,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/lancamentos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Extrato do mês (AAAA-MM; padrão: o mês de hoje em Brasília), por data decrescente. titular: conjunta, eu ou conjuge. q busca na descrição e na contraparte, sem acento e sem caixa. */
+        get: operations["ListarLancamentos"];
+        put?: never;
+        /** Cria despesa ou receita (parcelada só em cartão). Repetir a mesma chave devolve 200 com o lançamento já criado. Conta ou categoria arquivada dá 400. */
+        post: operations["CriarLancamento"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lancamentos/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Um lançamento do casal. */
+        get: operations["ObterLancamento"];
+        /** Edita um lançamento. escopo: este (padrão) ou proximos (esta parcela e as seguintes cuja fatura não fechou). */
+        put: operations["EditarLancamento"];
+        post?: never;
+        /** Apaga (soft delete). escopo: este (padrão) ou proximos (esta parcela e as seguintes cuja fatura não fechou). */
+        delete: operations["ApagarLancamento"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -551,6 +588,12 @@ export interface components {
             id: string;
             membros: components["schemas"]["MembroDto"][];
         };
+        CategoriaDoLancamentoDto: {
+            /** Format: uuid */
+            id: string;
+            nome: string;
+            arquivada: boolean;
+        };
         CategoriaDto: {
             /** Format: uuid */
             id: string;
@@ -574,6 +617,12 @@ export interface components {
             nomeCompleto: string;
             cpf: string;
             senha: string;
+        };
+        ContaDoLancamentoDto: {
+            /** Format: uuid */
+            id: string;
+            apelido: string;
+            tipo: string;
         };
         ContaDto: {
             /** Format: uuid */
@@ -610,6 +659,17 @@ export interface components {
             id: string;
             type: string;
         };
+        EditarLancamentoDto: {
+            natureza: string;
+            /** Format: int64 */
+            valorCentavos: number | string;
+            /** Format: date */
+            data: string;
+            descricao: string;
+            contraparte: null | string;
+            /** Format: uuid */
+            categoriaId: string;
+        };
         EntrarComTotpDto: {
             cpf: string;
             codigo: string;
@@ -626,6 +686,11 @@ export interface components {
             apelido: string;
             apelidoDoConjuge: string;
             confirmacaoRecente: boolean;
+        };
+        ExtratoDto: {
+            /** Format: int32 */
+            total: number | string;
+            lancamentos: components["schemas"]["LancamentoDto"][];
         };
         FaturaDto: {
             /** Format: date */
@@ -645,6 +710,29 @@ export interface components {
             errors?: {
                 [key: string]: string[];
             };
+        };
+        LancamentoDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: date */
+            data: string;
+            descricao: string;
+            contraparte: null | string;
+            categoria: null | components["schemas"]["CategoriaDoLancamentoDto"];
+            conta: components["schemas"]["ContaDoLancamentoDto"];
+            quem: string;
+            origem: string;
+            natureza: string;
+            /** Format: int64 */
+            valorCentavos: number | string;
+            /** Format: int32 */
+            parcela: null | number | string;
+            /** Format: int32 */
+            parcelas: null | number | string;
+            /** Format: uuid */
+            grupoId: null | string;
+            /** Format: date */
+            faturaVencimento: null | string;
         };
         MembroDto: {
             /** Format: uuid */
@@ -680,6 +768,26 @@ export interface components {
         NovaPasskeyDto: {
             apelido: string;
             resposta: components["schemas"]["RespostaDeRegistroDePasskeyDto"];
+        };
+        NovoLancamentoDto: {
+            /** Format: uuid */
+            chaveIdempotente: string;
+            /** Format: uuid */
+            contaId: string;
+            natureza: string;
+            /** Format: int64 */
+            valorCentavos: number | string;
+            /** Format: date */
+            data: string;
+            descricao: string;
+            contraparte: null | string;
+            /** Format: uuid */
+            categoriaId: string;
+            /**
+             * Format: int32
+             * @default 1
+             */
+            parcelas: number | string;
         };
         NovoPedidoDeDispositivoDto: {
             cpf: string;
@@ -1958,6 +2066,233 @@ export interface operations {
     ApagarCategoria: {
         parameters: {
             query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    ListarLancamentos: {
+        parameters: {
+            query?: {
+                mes?: string;
+                contaId?: string;
+                titular?: string;
+                origem?: string;
+                q?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExtratoDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    CriarLancamento: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NovoLancamentoDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LancamentoDto"];
+                };
+            };
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LancamentoDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    ObterLancamento: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LancamentoDto"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    EditarLancamento: {
+        parameters: {
+            query?: {
+                escopo?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EditarLancamentoDto"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    ApagarLancamento: {
+        parameters: {
+            query?: {
+                escopo?: string;
+            };
             header?: never;
             path: {
                 id: string;

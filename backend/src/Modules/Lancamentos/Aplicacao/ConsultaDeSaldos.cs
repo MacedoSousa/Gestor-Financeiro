@@ -11,7 +11,7 @@ internal sealed class ConsultaDeSaldos(LancamentosDbContext db, IConsultaDeConta
 {
     public async Task<IReadOnlyList<SaldoDaContaDto>> ObterAsync(DateOnly? em, CancellationToken ct)
     {
-        var data = em ?? Hoje();
+        var data = em ?? Brasilia.Hoje(relogio);
         var lista = await contas.ListarAsync(ct);
 
         // Fatura aberta = a que contém a data; fechada = a imediatamente anterior (a do mês anterior ao fechamento da aberta).
@@ -55,11 +55,5 @@ internal sealed class ConsultaDeSaldos(LancamentosDbContext db, IConsultaDeConta
         }
 
         return resultado;
-    }
-
-    private DateOnly Hoje()
-    {
-        var fuso = TimeZoneInfo.FindSystemTimeZoneById("America/Sao_Paulo");
-        return DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(relogio.GetUtcNow(), fuso).DateTime);
     }
 }

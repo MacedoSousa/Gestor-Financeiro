@@ -65,14 +65,21 @@ internal sealed class ServicoDeCategorias(LancamentosDbContext db, IUsuarioAtual
         return await SalvarAsync(id, ct);
     }
 
+    /// <summary>
+    /// Só apaga categoria sem lançamentos. O lock da categoria (o mesmo que a criação de lançamento toma) fecha a corrida
+    /// "conferi que não tem lançamento" × "alguém lançou nela": nunca sobra lançamento apontando para categoria apagada.
+    /// </summary>
     public async Task<ResultadoDeCategoria> ApagarAsync(Guid id, CancellationToken ct)
     {
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
+        await db.Database.ExecuteSqlAsync($"SELECT pg_advisory_xact_lock(hashtextextended('lancamentos.categoria:' || {id}::text, 0))", ct);
         var categoria = await db.Categorias.FirstOrDefaultAsync(c => c.Id == id, ct);
         if (categoria is null) return new ResultadoDeCategoria.NaoEncontrada();
         if (await TemLancamentosAsync(id, ct)) return new ResultadoDeCategoria.EmUso();
 
         db.Categorias.Remove(categoria); // SoftDeleteInterceptor converte em is_deleted = true.
         await db.SaveChangesAsync(ct);
+        await tx.CommitAsync(ct);
         return new ResultadoDeCategoria.Ok(id);
     }
 

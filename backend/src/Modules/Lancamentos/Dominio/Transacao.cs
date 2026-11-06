@@ -77,6 +77,28 @@ internal sealed class Transacao : Entidade, ICasalScoped
             origem, idExterno, autorUsuarioId, faturaVencimento, grupoId, null, null, cofre);
     }
 
+    /// <summary>
+    /// Edita despesa ou receita (transferência muda pelos dois lados, em outro fluxo). Recebe o valor positivo;
+    /// o sinal vem da natureza. Conta, origem, chave e parcela não mudam.
+    /// </summary>
+    public void Editar(NaturezaDaTransacao natureza, Dinheiro valor, DateOnly data, string descricao, string? contraparte,
+        Guid categoriaId, DateOnly? faturaVencimento, ICofre cofre)
+    {
+        if (Natureza == NaturezaDaTransacao.Transferencia || natureza == NaturezaDaTransacao.Transferencia)
+            throw new InvalidOperationException("Transferência não se edita por aqui.");
+        ExigirPositivo(valor);
+        ArgumentException.ThrowIfNullOrWhiteSpace(descricao);
+        Natureza = natureza;
+        ValorCentavos = natureza == NaturezaDaTransacao.Despesa ? -valor.Centavos : valor.Centavos;
+        Data = data;
+        CategoriaId = categoriaId;
+        FaturaVencimento = faturaVencimento;
+        DescricaoCifrada = cofre.Cifrar(descricao.Trim(), Cofre.Aad(Tabela, ColunaDescricao, Id));
+        ContraparteCifrada = string.IsNullOrWhiteSpace(contraparte)
+            ? null
+            : cofre.Cifrar(contraparte.Trim(), Cofre.Aad(Tabela, ColunaContraparte, Id));
+    }
+
     public string LerDescricao(ICofre cofre) => cofre.Decifrar(DescricaoCifrada, Cofre.Aad(Tabela, ColunaDescricao, Id));
 
     public string? LerContraparte(ICofre cofre) =>
