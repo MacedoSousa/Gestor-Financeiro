@@ -888,7 +888,7 @@ select.entrada {
 }
 
 .fatia-folga {
-  background: #3a4656;
+  background: #5b6878; /* 3,17:1 sobre o cartão #111720 (mínimo 3:1 para elemento gráfico) */
 }
 
 .legenda-divisao {
