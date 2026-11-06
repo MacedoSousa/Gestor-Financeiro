@@ -34,10 +34,10 @@ public class SaldosTests(PostgresFixture pg)
     private static async Task<JsonElement> JsonAsync(HttpResponseMessage r) =>
         JsonDocument.Parse(await r.Content.ReadAsStringAsync()).RootElement.Clone();
 
-    private async Task<(ApiDeTeste Api, BancoDeTeste Banco, HttpClient Cliente, Guid Casal)> IniciarAsync()
+    private async Task<(ApiDeTeste Api, BancoDeTeste Banco, HttpClient Cliente, Guid Casal)> IniciarAsync(RelogioFixo? relogio = null)
     {
         var banco = await pg.NovoBancoAsync();
-        var api = new ApiDeTeste(banco);
+        var api = new ApiDeTeste(banco, relogio: relogio);
         var pedido = new CadastroDoCasalDto(
             api.CodigoInstalacao, "Família Teste",
             new ConjugeNovoDto("Ana Teste", CpfSintetico.Gerar(1), "senha-da-ana-123"),
@@ -102,7 +102,8 @@ public class SaldosTests(PostgresFixture pg)
     [Fact]
     public async Task Sem_parametro_usa_hoje_no_fuso_de_sao_paulo()
     {
-        var (api, banco, cliente, casal) = await IniciarAsync();
+        // 06/11 02:30 em UTC ainda é 05/11 23:30 em São Paulo: o lançamento do dia 6 não entra.
+        var (api, banco, cliente, casal) = await IniciarAsync(new RelogioFixo { Agora = new DateTimeOffset(2026, 11, 6, 2, 30, 0, TimeSpan.Zero) });
         await using var _ = api;
         var conta = await CriarCorrenteAsync(cliente, "Itaú", 0);
         await InserirAsync(banco, casal, conta, "2026-11-05", 1_000, "RECEITA");
