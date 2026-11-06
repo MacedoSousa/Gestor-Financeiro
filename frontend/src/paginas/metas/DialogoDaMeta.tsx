@@ -82,13 +82,13 @@ export function DialogoDaMeta({ meta, contas, aoFechar }: Props) {
   }
 
   return (
-    <dialog ref={ref} className="dialogo" aria-labelledby="titulo-meta" onCancel={aoFechar}>
+    <dialog ref={ref} className="dialogo" aria-labelledby="titulo-meta" onCancel={(e) => (enviando ? e.preventDefault() : aoFechar())}>
       <h2 id="titulo-meta" className="dialogo-titulo">
         {meta ? "Editar meta" : "Nova meta"}
       </h2>
       <Alerta mensagem={erro} tentativa={tentativa} />
       <form className="bloco-form" onSubmit={salvar} noValidate>
-        <Campo rotulo="Nome" valor={nome} aoMudar={setNome} maxLength={80} autoComplete="off" />
+        <Campo rotulo="Nome" valor={nome} aoMudar={setNome} maxLength={60} autoComplete="off" />
         <Campo rotulo="Valor alvo" valor={alvo} aoMudar={setAlvo} inputMode="decimal" classeEntrada="num" autoComplete="off" />
         <Campo rotulo="Data desejada (opcional)" tipo="month" valor={data} aoMudar={setData} />
         <Campo rotulo="Aporte mensal planejado" valor={aporte} aoMudar={setAporte} inputMode="decimal" classeEntrada="num" autoComplete="off" />
@@ -99,7 +99,7 @@ export function DialogoDaMeta({ meta, contas, aoFechar }: Props) {
           inputMode="decimal"
           classeEntrada="num"
           autoComplete="off"
-          nota="De 0 a 5, com até 4 casas. Exemplo: 0,85."
+          nota="De 0 a 5, com até 4 casas. Exemplo: 0,85. IR e IOF entram na Fase 4."
         />
         <fieldset className="escolha">
           <legend className="campo-rotulo">Contas da meta</legend>
@@ -126,12 +126,12 @@ export function DialogoDaMeta({ meta, contas, aoFechar }: Props) {
             <button type="submit" className="botao-primario" disabled={enviando}>
               {enviando ? "Salvando…" : "Salvar"}
             </button>
-            <button type="button" className="botao-secundario" onClick={aoFechar}>
+            <button type="button" className="botao-secundario" disabled={enviando} onClick={aoFechar}>
               Cancelar
             </button>
             {meta && (
               <button type="button" className="botao-perigo" disabled={enviando} onClick={() => setConfirmandoApagar(true)}>
-                Apagar
+                Apagar meta
               </button>
             )}
           </div>
