@@ -22,6 +22,7 @@ internal sealed class CategoriaConfig : IEntityTypeConfiguration<Categoria>
         b.ToTable("categorias");
         b.HasKey(x => x.Id);
         b.Property(x => x.Nome).HasMaxLength(40);
+        b.Property(x => x.Papel).HasMaxLength(20);
         b.Property(x => x.Tipo).HasConversion(
             v => v.ToString().ToUpperInvariant(),
             v => Enum.Parse<TipoDeCategoria>(v, true));

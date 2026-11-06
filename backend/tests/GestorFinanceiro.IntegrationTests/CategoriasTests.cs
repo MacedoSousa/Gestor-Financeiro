@@ -65,6 +65,36 @@ public class CategoriasTests(PostgresFixture pg)
             $"VALUES ('{Guid.NewGuid()}', '{casal}', '{conta}', {(categoria is null ? "NULL" : $"'{categoria}'")}, '2026-11-01', -1000, 'DESPESA', '\\x01', 'MANUAL', '{Guid.NewGuid()}')");
 
     [Fact]
+    public async Task Categorias_padrao_nascem_com_papel()
+    {
+        var (api, _, cliente, _) = await IniciarAsync();
+        await using var _ = api;
+
+        var lista = await ListarAsync(cliente);
+
+        string? Papel(string nome) => lista.Single(c => c.GetProperty("nome").GetString() == nome).GetProperty("papel").GetString();
+        Assert.Equal("INVESTIMENTO", Papel("Investimento"));
+        Assert.Equal("DIVIDAS", Papel("Dívidas e financiamentos"));
+        Assert.Equal(10, lista.Count(c => c.GetProperty("papel").ValueKind == JsonValueKind.Null));
+    }
+
+    [Fact]
+    public async Task Renomear_mantem_papel()
+    {
+        var (api, _, cliente, _) = await IniciarAsync();
+        await using var _ = api;
+        var lista = await ListarAsync(cliente);
+        var id = lista.Single(c => c.GetProperty("nome").GetString() == "Investimento").GetProperty("id").GetGuid();
+
+        var resposta = await cliente.PutAsJsonAsync($"{Rota}/{id}", new { nome = "Investimentos", tipo = "DESPESA", papel = "DIVIDAS" });
+
+        Assert.Equal(HttpStatusCode.NoContent, resposta.StatusCode);
+        var depois = (await ListarAsync(cliente)).Single(c => c.GetProperty("id").GetGuid() == id);
+        Assert.Equal("Investimentos", depois.GetProperty("nome").GetString());
+        Assert.Equal("INVESTIMENTO", depois.GetProperty("papel").GetString());
+    }
+
+    [Fact]
     public async Task Primeira_consulta_cria_as_categorias_padrao()
     {
         var (api, banco, cliente, _) = await IniciarAsync();

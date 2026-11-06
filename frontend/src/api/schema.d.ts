@@ -617,6 +617,7 @@ export interface components {
             nome: string;
             tipo: string;
             arquivada: boolean;
+            papel: null | string;
         };
         CodigoRecuperacaoDto: {
             codigoRecuperacao: string;

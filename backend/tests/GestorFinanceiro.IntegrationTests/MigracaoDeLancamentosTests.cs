@@ -33,6 +33,64 @@ public class MigracaoDeLancamentosTests(PostgresFixture pg)
         $"INSERT INTO lancamentos.transacoes (id, casal_id, conta_id, categoria_id, data, valor_centavos, natureza, descricao_cifrada, origem, id_externo, parcela, parcelas) " +
         $"VALUES ('{id}', '{casal}', '{Guid.NewGuid()}', {(categoria is null ? "NULL" : $"'{categoria}'")}, '2026-11-01', {valor}, '{natureza}', '\\x01', '{origem}', '{externo}', {parcelas})";
 
+    private static string SqlDoUpdateDaV0006()
+    {
+        for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
+        {
+            var arquivo = Path.Combine(dir.FullName, "db", "migrations", "V0006__categorias_papel.sql");
+            if (File.Exists(arquivo))
+                return string.Join("\n", File.ReadAllText(arquivo).Split(';')
+                    .Select(c => c.Trim()).Where(c => c.StartsWith("UPDATE lancamentos.categorias", StringComparison.Ordinal)).Select(c => c + ";"));
+        }
+        throw new FileNotFoundException("V0006__categorias_papel.sql não encontrada");
+    }
+
+    // O MigradorSql aplica a pasta inteira (sem "até a versão"): o banco-modelo já tem a V0006, então as
+    // categorias entram sem papel e o texto do UPDATE da V0006 roda de novo (ele precisa ser idempotente).
+    [Fact]
+    public async Task Migracao_preenche_papel_pelo_nome()
+    {
+        var banco = await pg.NovoBancoAsync();
+        var (db, casal) = await PrepararAsync(banco);
+        await using var _ = db;
+        foreach (var (nome, tipo) in new[] { ("Investimento", "DESPESA"), ("Dívidas e financiamentos", "DESPESA"), ("Mercado", "DESPESA"), ("Salário", "RECEITA") })
+            await ExecutarAsync(db, $"INSERT INTO lancamentos.categorias (id, casal_id, nome, tipo) VALUES ('{Guid.NewGuid()}', '{casal}', '{nome}', '{tipo}')");
+
+        var update = SqlDoUpdateDaV0006();
+        Assert.NotEmpty(update);
+        await ExecutarAsync(db, update);
+        await ExecutarAsync(db, update);
+
+        async Task<string> PapelAsync(string nome)
+        {
+            await using var cmd = new NpgsqlCommand($"SELECT coalesce(papel, 'NULO') FROM lancamentos.categorias WHERE casal_id = '{casal}' AND nome = '{nome}'", db);
+            return (string)(await cmd.ExecuteScalarAsync())!;
+        }
+        Assert.Equal("INVESTIMENTO", await PapelAsync("Investimento"));
+        Assert.Equal("DIVIDAS", await PapelAsync("Dívidas e financiamentos"));
+        Assert.Equal("NULO", await PapelAsync("Mercado"));
+        Assert.Equal("NULO", await PapelAsync("Salário"));
+    }
+
+    [Fact]
+    public async Task Papel_unico_por_casal()
+    {
+        var banco = await pg.NovoBancoAsync();
+        var (db, casal) = await PrepararAsync(banco);
+        await using var _ = db;
+        var a = Guid.NewGuid();
+        string Inserir(Guid id, string nome) =>
+            $"INSERT INTO lancamentos.categorias (id, casal_id, nome, tipo, papel) VALUES ('{id}', '{casal}', '{nome}', 'DESPESA', 'INVESTIMENTO')";
+        await ExecutarAsync(db, Inserir(a, "Investimento"));
+
+        var ex = await Assert.ThrowsAsync<PostgresException>(() => ExecutarAsync(db, Inserir(Guid.NewGuid(), "Aportes")));
+        Assert.Equal("23505", ex.SqlState);
+        Assert.Equal("ux_categorias_papel", ex.ConstraintName);
+
+        await ExecutarAsync(db, $"UPDATE lancamentos.categorias SET is_deleted = true, deleted_at = now() WHERE id = '{a}'");
+        await ExecutarAsync(db, Inserir(Guid.NewGuid(), "Aportes"));
+    }
+
     [Fact]
     public async Task Origem_e_id_externo_so_sao_unicos_entre_ativos()
     {

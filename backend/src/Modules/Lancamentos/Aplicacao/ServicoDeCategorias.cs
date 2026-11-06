@@ -23,10 +23,11 @@ internal sealed class ServicoDeCategorias(LancamentosDbContext db, IUsuarioAtual
     internal const string TituloEmUso = "Categoria com lançamentos: arquive em vez de apagar.";
     private const string IndiceDeNome = "ux_categorias_nome";
 
-    private static readonly string[] DespesasPadrao =
+    private static readonly (string Nome, string? Papel)[] DespesasPadrao =
     [
-        "Mercado", "Restaurantes", "Transporte", "Casa e contas", "Saúde", "Lazer", "Educação",
-        "Investimento", "Dívidas e financiamentos", "Outros",
+        ("Mercado", null), ("Restaurantes", null), ("Transporte", null), ("Casa e contas", null), ("Saúde", null),
+        ("Lazer", null), ("Educação", null), ("Investimento", PapelDeCategoria.Investimento),
+        ("Dívidas e financiamentos", PapelDeCategoria.Dividas), ("Outros", null),
     ];
 
     private static readonly string[] ReceitasPadrao = ["Salário", "Outras receitas"];
@@ -96,7 +97,7 @@ internal sealed class ServicoDeCategorias(LancamentosDbContext db, IUsuarioAtual
         // Depois do lock: outra chamada pode ter criado as padrão enquanto esperávamos.
         if (!await db.Categorias.AnyAsync(ct))
         {
-            foreach (var nome in DespesasPadrao) db.Categorias.Add(Categoria.Criar(casalId, nome, TipoDeCategoria.Despesa));
+            foreach (var (nome, papel) in DespesasPadrao) db.Categorias.Add(Categoria.Criar(casalId, nome, TipoDeCategoria.Despesa, papel));
             foreach (var nome in ReceitasPadrao) db.Categorias.Add(Categoria.Criar(casalId, nome, TipoDeCategoria.Receita));
             await db.SaveChangesAsync(ct);
         }
@@ -127,5 +128,5 @@ internal sealed class ServicoDeCategorias(LancamentosDbContext db, IUsuarioAtual
 
     private static TipoDeCategoria LerTipo(string tipo) => tipo == "RECEITA" ? TipoDeCategoria.Receita : TipoDeCategoria.Despesa;
 
-    private static CategoriaDto ParaDto(Categoria c) => new(c.Id, c.Nome, c.Tipo.ToString().ToUpperInvariant(), c.Arquivada);
+    private static CategoriaDto ParaDto(Categoria c) => new(c.Id, c.Nome, c.Tipo.ToString().ToUpperInvariant(), c.Arquivada, c.Papel);
 }

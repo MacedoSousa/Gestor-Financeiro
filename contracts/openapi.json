@@ -1776,7 +1776,8 @@
           "id",
           "nome",
           "tipo",
-          "arquivada"
+          "arquivada",
+          "papel"
         ],
         "type": "object",
         "properties": {
@@ -1792,6 +1793,12 @@
           },
           "arquivada": {
             "type": "boolean"
+          },
+          "papel": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },

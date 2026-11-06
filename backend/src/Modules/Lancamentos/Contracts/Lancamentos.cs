@@ -2,7 +2,8 @@ namespace GestorFinanceiro.Modules.Lancamentos.Contracts;
 
 /// <param name="Tipo">DESPESA ou RECEITA.</param>
 /// <param name="Arquivada">Arquivada continua na lista (o extrato mostra "(arquivada)"), mas não é oferecida para novos lançamentos.</param>
-public sealed record CategoriaDto(Guid Id, string Nome, string Tipo, bool Arquivada);
+/// <param name="Papel">INVESTIMENTO, DIVIDAS ou nulo; só leitura (as categorias padrão nascem com papel).</param>
+public sealed record CategoriaDto(Guid Id, string Nome, string Tipo, bool Arquivada, string? Papel);
 
 /// <summary>Corpo de POST e PUT /api/v1/categorias.</summary>
 /// <param name="Tipo">DESPESA ou RECEITA.</param>
