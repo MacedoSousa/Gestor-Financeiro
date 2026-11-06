@@ -55,6 +55,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/contas/{id}/conciliacao": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Concilia o saldo de hoje de uma poupança ou investimento com o do banco. Diferença positiva vira receita em Rendimentos (LANCADO); igual dá CONFERE e menor dá MENOR, sem lançar. Saldo exibido diferente do de hoje dá 409. */
+        post: operations["ConciliarConta"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/casal": {
         parameters: {
             query?: never;
@@ -692,6 +709,18 @@ export interface components {
         CodigoRecuperacaoDto: {
             codigoRecuperacao: string;
         };
+        ConciliacaoDto: {
+            resultado: string;
+            /** Format: int64 */
+            diferencaCentavos: number | string;
+            lancamento: null | components["schemas"]["LancamentoDto"];
+        };
+        ConciliacaoPedidoDto: {
+            /** Format: int64 */
+            saldoInformadoCentavos: null | number | string;
+            /** Format: int64 */
+            saldoExibidoCentavos: null | number | string;
+        };
         ConfirmacaoDeIdentidadeDto: {
             codigoTotp: null | string;
             passkey: null | components["schemas"]["RespostaDeLoginComPasskeyDto"];
@@ -1143,6 +1172,57 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SaldoDaContaDto"][];
+                };
+            };
+        };
+    };
+    ConciliarConta: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConciliacaoPedidoDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConciliacaoDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
         };

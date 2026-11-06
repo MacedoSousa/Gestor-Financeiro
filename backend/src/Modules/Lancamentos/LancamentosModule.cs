@@ -33,6 +33,7 @@ public static class LancamentosModule
         services.AddScoped<ConsultaDoExtrato>();
         services.AddScoped<ServicoDeLancamentos>();
         services.AddScoped<ServicoDeTransferencias>();
+        services.AddScoped<ServicoDeConciliacao>();
         return services;
     }
 
@@ -40,5 +41,6 @@ public static class LancamentosModule
         .MapEndpointsDeCategorias()
         .MapEndpointsDeSaldos()
         .MapEndpointsDeLancamentos()
-        .MapEndpointsDeTransferencias();
+        .MapEndpointsDeTransferencias()
+        .MapEndpointsDeConciliacao();
 }

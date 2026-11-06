@@ -91,6 +91,71 @@
         }
       }
     },
+    "/api/v1/contas/{id}/conciliacao": {
+      "post": {
+        "tags": [
+          "Lancamentos"
+        ],
+        "summary": "Concilia o saldo de hoje de uma poupança ou investimento com o do banco. Diferença positiva vira receita em Rendimentos (LANCADO); igual dá CONFERE e menor dá MENOR, sem lançar. Saldo exibido diferente do de hoje dá 409.",
+        "operationId": "ConciliarConta",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConciliacaoPedidoDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConciliacaoDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/casal": {
       "get": {
         "tags": [
@@ -2079,6 +2144,64 @@
         "properties": {
           "codigoRecuperacao": {
             "type": "string"
+          }
+        }
+      },
+      "ConciliacaoDto": {
+        "required": [
+          "resultado",
+          "diferencaCentavos",
+          "lancamento"
+        ],
+        "type": "object",
+        "properties": {
+          "resultado": {
+            "type": "string"
+          },
+          "diferencaCentavos": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "lancamento": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LancamentoDto"
+              }
+            ]
+          }
+        }
+      },
+      "ConciliacaoPedidoDto": {
+        "required": [
+          "saldoInformadoCentavos",
+          "saldoExibidoCentavos"
+        ],
+        "type": "object",
+        "properties": {
+          "saldoInformadoCentavos": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "saldoExibidoCentavos": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
           }
         }
       },
