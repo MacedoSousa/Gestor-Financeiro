@@ -2118,7 +2118,8 @@
           "usuarioId",
           "apelido",
           "apelidoDoConjuge",
-          "confirmacaoRecente"
+          "confirmacaoRecente",
+          "usuarioIdDoConjuge"
         ],
         "type": "object",
         "properties": {
@@ -2134,6 +2135,13 @@
           },
           "confirmacaoRecente": {
             "type": "boolean"
+          },
+          "usuarioIdDoConjuge": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
           }
         }
       },

@@ -703,6 +703,8 @@ export interface components {
             apelido: string;
             apelidoDoConjuge: string;
             confirmacaoRecente: boolean;
+            /** Format: uuid */
+            usuarioIdDoConjuge: null | string;
         };
         ExtratoDto: {
             /** Format: int32 */
