@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useAcoesDeMetas, useSimulacao, type Meta, type Projecao } from "../../api/metas";
 import { n } from "../../api/formulario";
 import { formatarReais } from "../../lib/dinheiro";
-import { mesCurto, passoDoSimulador } from "../../lib/metas";
+import { mesCurto, passoDoSimulador, projecaoExibida } from "../../lib/metas";
 import { Alerta } from "../Campo";
 
 type Props = {
@@ -22,7 +22,8 @@ function textoChegaEm(p: Projecao): string {
 function textoDaMeta(p: Projecao): string {
   if (p.situacao === "ALCANCADA") return "Meta alcançada";
   if (p.situacao === "NAO_CHEGA") return "Com esse aporte, a meta não chega em 100 anos.";
-  return `Faltam ${plural(n(p.mesesAteMeta), "mês", "meses")}`;
+  const meses = n(p.mesesAteMeta);
+  return meses === 1 ? "Falta 1 mês" : `Faltam ${meses} meses`;
 }
 
 function textoDaData(dataDesejada: string, p: Projecao): string {
@@ -38,19 +39,26 @@ export function CartaoDaMeta({ meta, aoEditar, aoAtualizarSaldo }: Props) {
   const acoes = useAcoesDeMetas();
   const planejado = n(meta.aportePlanejadoCentavos);
   const [aporte, setAporte] = useState(planejado);
+  // Se o planejado muda por fora (edição, salvar), o simulador volta a ele: ajuste no render, sem efeito.
+  const [planejadoVisto, setPlanejadoVisto] = useState(planejado);
+  if (planejadoVisto !== planejado) {
+    setPlanejadoVisto(planejado);
+    setAporte(planejado);
+  }
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string>();
   const [tentativa, setTentativa] = useState(0);
 
   const simulando = aporte !== planejado;
   const simulacao = useSimulacao(meta.id, aporte, simulando);
-  // Os números vêm sempre do servidor: o do painel no planejado, o da simulação fora dele.
-  const projecao: Projecao = simulando && simulacao.data ? simulacao.data : meta.projecao;
-  const atualizando = simulando && (simulacao.isFetching || simulacao.isPlaceholderData || !simulacao.data);
+  // Os números vêm sempre do servidor, e só se mostram os do aporte que está na tela.
+  const exibida = projecaoExibida(simulando, aporte, meta.projecao, simulacao);
+  const projecao = exibida.tipo === "projecao" ? exibida.projecao : null;
+  const atualizando = exibida.tipo === "pendente" || (exibida.tipo === "projecao" && exibida.atualizando);
 
   const guardado = n(meta.guardadoCentavos);
   const progresso = Math.min(100, Math.max(0, n(meta.progressoPercentual)));
-  const aporteNecessario = projecao.aporteNecessarioCentavos == null ? null : n(projecao.aporteNecessarioCentavos);
+  const aporteNecessario = projecao?.aporteNecessarioCentavos == null ? null : n(projecao.aporteNecessarioCentavos);
   const contas = meta.contas;
 
   async function salvarComoPlanejado() {
@@ -86,7 +94,7 @@ export function CartaoDaMeta({ meta, aoEditar, aoAtualizarSaldo }: Props) {
         <div className="meta-chega">
           <div className="cartao-rotulo">Chega em</div>
           <div className="num meta-chega-valor" aria-live="polite">
-            {textoChegaEm(projecao)}
+            {projecao ? textoChegaEm(projecao) : "—"}
           </div>
         </div>
       </div>
@@ -111,8 +119,8 @@ export function CartaoDaMeta({ meta, aoEditar, aoAtualizarSaldo }: Props) {
 
       {meta.dataDesejada && (
         <div className="meta-data">
-          <div>{textoDaData(meta.dataDesejada, projecao)}</div>
-          {aporteNecessario !== null && aporteNecessario > 0 && !projecao.dataDesejadaPassou && (
+          <div>{projecao ? textoDaData(meta.dataDesejada, projecao) : `Desejada: ${mesCurto(meta.dataDesejada)}`}</div>
+          {projecao && aporteNecessario !== null && aporteNecessario > 0 && !projecao.dataDesejadaPassou && (
             <div>
               Para chegar em {mesCurto(meta.dataDesejada)}: <span className="num">{formatarReais(aporteNecessario)}</span> por mês
             </div>
@@ -148,7 +156,7 @@ export function CartaoDaMeta({ meta, aoEditar, aoAtualizarSaldo }: Props) {
           </div>
         </div>
         <div className="simulador-meses">
-          <span aria-live="polite">{textoDaMeta(projecao)}</span>
+          <span aria-live="polite">{projecao ? textoDaMeta(projecao) : exibida.tipo === "erro" ? "Não foi possível simular." : "—"}</span>
           {atualizando && <span className="atualizando"> atualizando…</span>}
         </div>
         {simulando && (
@@ -166,7 +174,7 @@ export function CartaoDaMeta({ meta, aoEditar, aoAtualizarSaldo }: Props) {
             </div>
           </div>
         )}
-        <Alerta mensagem={erro} tentativa={tentativa} />
+        <Alerta mensagem={erro ?? (exibida.tipo === "erro" ? simulacao.error?.message : undefined)} tentativa={tentativa} />
       </div>
 
       <div className="meta-contas">

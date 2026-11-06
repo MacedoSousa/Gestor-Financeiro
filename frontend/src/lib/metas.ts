@@ -18,3 +18,32 @@ export function lerPercentual(texto: string): { ok: true; valor: number } | { ok
   if (valor > 5) return { ok: false, mensagem: MENSAGEM_PERCENTUAL };
   return { ok: true, valor };
 }
+
+type ProjecaoDaMeta = {
+  aporteMensalCentavos: number | string;
+  [campo: string]: unknown;
+};
+
+export type ProjecaoExibida<P extends ProjecaoDaMeta> =
+  | { tipo: "projecao"; projecao: P; atualizando: boolean }
+  | { tipo: "pendente" }
+  | { tipo: "erro" };
+
+/**
+ * Qual projeção o cartão mostra. No planejado, a do painel. Simulando, só a resposta do servidor que seja
+ * do aporte exibido; resposta de outro aporte (placeholder dos cliques anteriores), ou ainda sem resposta, é "pendente";
+ * falha da simulação é "erro". Nunca se mostra número de um aporte ao lado de outro.
+ */
+export function projecaoExibida<P extends ProjecaoDaMeta>(
+  simulando: boolean,
+  aporte: number,
+  planejada: P,
+  simulacao: { data?: P; isError: boolean; isFetching: boolean },
+): ProjecaoExibida<P> {
+  if (!simulando) return { tipo: "projecao", projecao: planejada, atualizando: false };
+  if (simulacao.isError) return { tipo: "erro" };
+  if (simulacao.data && Number(simulacao.data.aporteMensalCentavos) === aporte) {
+    return { tipo: "projecao", projecao: simulacao.data, atualizando: simulacao.isFetching };
+  }
+  return { tipo: "pendente" };
+}
