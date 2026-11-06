@@ -95,6 +95,21 @@ public class CategoriasTests(PostgresFixture pg)
     }
 
     [Fact]
+    public async Task Categoria_com_papel_nao_vira_receita()
+    {
+        var (api, banco, cliente, _) = await IniciarAsync();
+        await using var _ = api;
+        var id = (await ListarAsync(cliente)).Single(c => c.GetProperty("nome").GetString() == "Investimento").GetProperty("id").GetGuid();
+
+        var resposta = await cliente.PutAsJsonAsync($"{Rota}/{id}", new { nome = "Investimento", tipo = "RECEITA" });
+
+        Assert.Equal(HttpStatusCode.BadRequest, resposta.StatusCode);
+        Assert.Equal("Categoria de investimento ou de dívidas continua sendo de despesa.",
+            (await JsonAsync(resposta)).GetProperty("errors").GetProperty("tipo")[0].GetString());
+        Assert.Equal("DESPESA", await EscalarAsync<string>(banco, $"SELECT tipo FROM lancamentos.categorias WHERE id = '{id}'"));
+    }
+
+    [Fact]
     public async Task Primeira_consulta_cria_as_categorias_padrao()
     {
         var (api, banco, cliente, _) = await IniciarAsync();

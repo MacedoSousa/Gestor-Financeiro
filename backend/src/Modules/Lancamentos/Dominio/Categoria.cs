@@ -26,6 +26,8 @@ internal sealed class Categoria : Entidade, ICasalScoped
 
     public void Definir(string nome, TipoDeCategoria tipo, bool arquivada)
     {
+        if (Papel is not null && tipo != TipoDeCategoria.Despesa)
+            throw new InvalidOperationException("Categoria com papel continua sendo de despesa.");
         Nome = nome;
         Tipo = tipo;
         Arquivada = arquivada;

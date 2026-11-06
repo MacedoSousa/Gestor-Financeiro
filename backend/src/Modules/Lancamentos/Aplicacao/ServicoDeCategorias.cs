@@ -59,6 +59,8 @@ internal sealed class ServicoDeCategorias(LancamentosDbContext db, IUsuarioAtual
         if (erros.Count > 0) return new ResultadoDeCategoria.Invalido(erros);
 
         var tipo = LerTipo(pedido.Tipo);
+        if (categoria.Papel is not null && tipo != TipoDeCategoria.Despesa)
+            return new ResultadoDeCategoria.Invalido(new Dictionary<string, string[]> { ["tipo"] = ["Categoria de investimento ou de dívidas continua sendo de despesa."] });
         if (tipo != categoria.Tipo && await TemLancamentosAsync(id, ct))
             return new ResultadoDeCategoria.Invalido(new Dictionary<string, string[]> { ["tipo"] = ["Categoria com lançamentos não muda de tipo."] });
 

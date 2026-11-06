@@ -73,6 +73,20 @@ public class MigracaoDeLancamentosTests(PostgresFixture pg)
     }
 
     [Fact]
+    public async Task Papel_so_em_categoria_de_despesa_da_23514()
+    {
+        var banco = await pg.NovoBancoAsync();
+        var (db, casal) = await PrepararAsync(banco);
+        await using var _ = db;
+        var id = Guid.NewGuid();
+        await ExecutarAsync(db, $"INSERT INTO lancamentos.categorias (id, casal_id, nome, tipo, papel) VALUES ('{id}', '{casal}', 'Investimento', 'DESPESA', 'INVESTIMENTO')");
+
+        var ex = await Assert.ThrowsAsync<PostgresException>(() => ExecutarAsync(db, $"UPDATE lancamentos.categorias SET tipo = 'RECEITA' WHERE id = '{id}'"));
+        Assert.Equal("23514", ex.SqlState);
+        Assert.Equal("ck_categorias_papel_so_despesa", ex.ConstraintName);
+    }
+
+    [Fact]
     public async Task Papel_unico_por_casal()
     {
         var banco = await pg.NovoBancoAsync();
