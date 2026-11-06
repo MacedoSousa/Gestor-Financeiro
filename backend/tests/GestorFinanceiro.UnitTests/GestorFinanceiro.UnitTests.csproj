@@ -17,6 +17,7 @@
     <ProjectReference Include="..\..\src\Modules\Identidade\GestorFinanceiro.Modules.Identidade.csproj" />
     <ProjectReference Include="..\..\src\Modules\Contas\GestorFinanceiro.Modules.Contas.csproj" />
     <ProjectReference Include="..\..\src\Modules\Lancamentos\GestorFinanceiro.Modules.Lancamentos.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Investimentos\GestorFinanceiro.Modules.Investimentos.csproj" />
     <ProjectReference Include="..\..\src\Modules\Orcamento\GestorFinanceiro.Modules.Orcamento.csproj" />
     <ProjectReference Include="..\..\src\Modules\Assistente\GestorFinanceiro.Modules.Assistente.csproj" />
   </ItemGroup>

@@ -5,6 +5,8 @@
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+    <ProjectReference Include="..\Contas\GestorFinanceiro.Modules.Contas.csproj" />
+    <ProjectReference Include="..\Lancamentos\GestorFinanceiro.Modules.Lancamentos.csproj" />
     <ProjectReference Include="..\..\Financas\GestorFinanceiro.Financas.csproj" />
     <ProjectReference Include="..\..\SharedKernel\GestorFinanceiro.SharedKernel.csproj" />
     <ProjectReference Include="..\Identidade\GestorFinanceiro.Modules.Identidade.csproj" />
