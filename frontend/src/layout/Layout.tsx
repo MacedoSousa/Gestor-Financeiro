@@ -61,6 +61,16 @@ const itens = [
 
 const itensSistema = [
   {
+    para: "/contas",
+    rotulo: "Contas e cartões",
+    icone: icone(
+      <>
+        <rect x="2" y="5" width="20" height="14" rx="2" />
+        <path d="M2 10h20M6 15h4" />
+      </>,
+    ),
+  },
+  {
     para: "/dispositivos",
     rotulo: "Dispositivos",
     icone: icone(

@@ -32,7 +32,7 @@ internal static class EndpointsDeSessao
             var recente = ExigirConfirmacaoRecente.ConfirmacaoEstaRecente(
                 usuario.FindFirstValue(NomesDoLogin.ClaimConfirmadaEm), relogio.GetUtcNow());
             resposta.Headers.CacheControl = "no-store";
-            return TypedResults.Ok(new EuDto(usuarioId, eu.Apelido, conjuge?.Apelido ?? string.Empty, recente));
+            return TypedResults.Ok(new EuDto(usuarioId, eu.Apelido, conjuge?.Apelido ?? string.Empty, recente, conjuge?.UsuarioId));
         })
         .WithName("ObterEu")
         .WithSummary("Quem está logado e se a confirmação de identidade ainda é recente.");

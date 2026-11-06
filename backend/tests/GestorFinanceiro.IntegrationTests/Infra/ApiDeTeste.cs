@@ -22,6 +22,7 @@ internal sealed class ApiDeTeste : WebApplicationFactory<Program>
     private readonly string _pasta = Path.Combine(Path.GetTempPath(), "gf-teste-" + Guid.NewGuid().ToString("N"));
     private readonly BancoDeTeste _banco;
     private readonly RelogioFixo? _relogio;
+    private readonly Action<IServiceCollection>? _servicos;
 
     /// <summary>Origem que o <see cref="AutenticadorDeTeste"/> grava no clientDataJSON; a API de teste a aceita.</summary>
     public const string OrigemWebAuthn = "https://localhost";
@@ -29,10 +30,11 @@ internal sealed class ApiDeTeste : WebApplicationFactory<Program>
     public string CodigoInstalacao { get; }
     public string CaminhoCodigoInstalacao { get; }
 
-    public ApiDeTeste(BancoDeTeste banco, TimeSpan idadeDoCodigo = default, RelogioFixo? relogio = null)
+    public ApiDeTeste(BancoDeTeste banco, TimeSpan idadeDoCodigo = default, RelogioFixo? relogio = null, Action<IServiceCollection>? servicos = null)
     {
         _banco = banco;
         _relogio = relogio;
+        _servicos = servicos;
         // HTTPS na base: os cookies Secure e __Host- passam pelo CookieContainer.
         ClientOptions.BaseAddress = new Uri("https://localhost");
         Directory.CreateDirectory(_pasta);
@@ -50,6 +52,8 @@ internal sealed class ApiDeTeste : WebApplicationFactory<Program>
         builder.UseSetting("Seguranca:WebAuthn:Origens:0", OrigemWebAuthn);
         if (_relogio is not null)
             builder.ConfigureTestServices(s => s.Replace(ServiceDescriptor.Singleton<TimeProvider>(_relogio)));
+        if (_servicos is not null)
+            builder.ConfigureTestServices(_servicos);
     }
 
     protected override void ConfigureClient(HttpClient client) =>

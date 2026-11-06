@@ -57,6 +57,40 @@
         }
       }
     },
+    "/api/v1/saldos": {
+      "get": {
+        "tags": [
+          "Lancamentos"
+        ],
+        "summary": "Saldo de cada conta do casal na data (padrão: hoje em Brasília) e, nos cartões, a fatura aberta e a última fechada.",
+        "operationId": "ObterSaldos",
+        "parameters": [
+          {
+            "name": "em",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SaldoDaContaDto"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/casal": {
       "get": {
         "tags": [
@@ -906,6 +940,704 @@
           }
         }
       }
+    },
+    "/api/v1/contas": {
+      "get": {
+        "tags": [
+          "Contas"
+        ],
+        "summary": "Contas e cartões do casal, inclusive arquivados. Agência e número só mascarados.",
+        "operationId": "ListarContas",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ContaDto"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Contas"
+        ],
+        "summary": "Cria conta ou cartão. Apelido repetido no casal dá 409; titular fora do casal ou cartão sem dias dá 400.",
+        "operationId": "CriarConta",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NovaContaDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/contas/{id}": {
+      "put": {
+        "tags": [
+          "Contas"
+        ],
+        "summary": "Atualiza (e arquiva) uma conta. Agência e número nulos mantêm o que está guardado; texto vazio apaga.",
+        "operationId": "AtualizarConta",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NovaContaDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Contas"
+        ],
+        "summary": "Apaga (soft delete) uma conta sem lançamentos. Com lançamentos dá 409: arquive em vez de apagar.",
+        "operationId": "ApagarConta",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/categorias": {
+      "get": {
+        "tags": [
+          "Lancamentos"
+        ],
+        "summary": "Categorias do casal, inclusive as arquivadas. Na primeira consulta cria as padrão.",
+        "operationId": "ListarCategorias",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CategoriaDto"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Lancamentos"
+        ],
+        "summary": "Cria uma categoria. Nome repetido no casal (sem diferenciar maiúsculas) dá 409.",
+        "operationId": "CriarCategoria",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NovaCategoriaDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/categorias/{id}": {
+      "put": {
+        "tags": [
+          "Lancamentos"
+        ],
+        "summary": "Renomeia ou arquiva uma categoria. Arquivar não mexe nos lançamentos que já a usam.",
+        "operationId": "AtualizarCategoria",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NovaCategoriaDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Lancamentos"
+        ],
+        "summary": "Apaga (soft delete) uma categoria sem lançamentos. Com lançamentos dá 409: arquive em vez de apagar.",
+        "operationId": "ApagarCategoria",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/lancamentos": {
+      "get": {
+        "tags": [
+          "Lancamentos"
+        ],
+        "summary": "Extrato do mês (AAAA-MM; padrão: o mês de hoje em Brasília), por data decrescente. titular: conjunta, eu ou conjuge. q busca na descrição e na contraparte, sem acento e sem caixa.",
+        "operationId": "ListarLancamentos",
+        "parameters": [
+          {
+            "name": "mes",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "contaId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "titular",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "origem",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExtratoDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Lancamentos"
+        ],
+        "summary": "Cria despesa ou receita (parcelada só em cartão). Repetir a mesma chave devolve 200 com o lançamento já criado. Conta ou categoria arquivada dá 400.",
+        "operationId": "CriarLancamento",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NovoLancamentoDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LancamentoDto"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LancamentoDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/lancamentos/{id}": {
+      "get": {
+        "tags": [
+          "Lancamentos"
+        ],
+        "summary": "Um lançamento do casal.",
+        "operationId": "ObterLancamento",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LancamentoDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Lancamentos"
+        ],
+        "summary": "Edita um lançamento. escopo: este (padrão) ou proximos (esta parcela e as seguintes). Em fatura fechada só descrição, contraparte e categoria mudam; mudar valor ou data ali, ou levar algo para fatura fechada, dá 409.",
+        "operationId": "EditarLancamento",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "escopo",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EditarLancamentoDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Lancamentos"
+        ],
+        "summary": "Apaga (soft delete). escopo: este (padrão) ou proximos (esta parcela e as seguintes, pulando faturas fechadas). Apagar lançamento de fatura fechada dá 409.",
+        "operationId": "ApagarLancamento",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "escopo",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/transferencias": {
+      "post": {
+        "tags": [
+          "Lancamentos"
+        ],
+        "summary": "Transfere entre duas contas do casal (pagar a fatura = destino no cartão). Grava as duas pernas juntas; repetir a mesma chave devolve 200 com a transferência já criada. Origem igual ao destino ou conta arquivada dá 400. Editar ou apagar uma perna, pelas rotas de lançamentos, age nas duas.",
+        "operationId": "CriarTransferencia",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NovaTransferenciaDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransferenciaDto"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransferenciaDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1019,6 +1751,50 @@
           }
         }
       },
+      "CategoriaDoLancamentoDto": {
+        "required": [
+          "id",
+          "nome",
+          "arquivada"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "nome": {
+            "type": "string"
+          },
+          "arquivada": {
+            "type": "boolean"
+          }
+        }
+      },
+      "CategoriaDto": {
+        "required": [
+          "id",
+          "nome",
+          "tipo",
+          "arquivada"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "nome": {
+            "type": "string"
+          },
+          "tipo": {
+            "type": "string"
+          },
+          "arquivada": {
+            "type": "boolean"
+          }
+        }
+      },
       "CodigoRecuperacaoDto": {
         "required": [
           "codigoRecuperacao"
@@ -1090,6 +1866,126 @@
           }
         }
       },
+      "ContaDoLancamentoDto": {
+        "required": [
+          "id",
+          "apelido",
+          "tipo"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "apelido": {
+            "type": "string"
+          },
+          "tipo": {
+            "type": "string"
+          }
+        }
+      },
+      "ContaDto": {
+        "required": [
+          "id",
+          "tipo",
+          "apelido",
+          "instituicao",
+          "titular",
+          "agenciaMascarada",
+          "numeroMascarado",
+          "saldoInicialCentavos",
+          "saldoInicialEm",
+          "diaFechamento",
+          "diaVencimento",
+          "limiteCentavos",
+          "arquivada"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "tipo": {
+            "type": "string"
+          },
+          "apelido": {
+            "type": "string"
+          },
+          "instituicao": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "titular": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/TitularDto"
+              }
+            ]
+          },
+          "agenciaMascarada": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "numeroMascarado": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "saldoInicialCentavos": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "saldoInicialEm": {
+            "type": "string",
+            "format": "date"
+          },
+          "diaFechamento": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "diaVencimento": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "limiteCentavos": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "arquivada": {
+            "type": "boolean"
+          }
+        }
+      },
       "CredencialDto": {
         "required": [
           "id",
@@ -1138,6 +2034,48 @@
           }
         }
       },
+      "EditarLancamentoDto": {
+        "required": [
+          "natureza",
+          "valorCentavos",
+          "data",
+          "descricao"
+        ],
+        "type": "object",
+        "properties": {
+          "natureza": {
+            "type": "string"
+          },
+          "valorCentavos": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "data": {
+            "type": "string",
+            "format": "date"
+          },
+          "descricao": {
+            "type": "string"
+          },
+          "contraparte": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "categoriaId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          }
+        }
+      },
       "EntrarComTotpDto": {
         "required": [
           "cpf",
@@ -1180,7 +2118,8 @@
           "usuarioId",
           "apelido",
           "apelidoDoConjuge",
-          "confirmacaoRecente"
+          "confirmacaoRecente",
+          "usuarioIdDoConjuge"
         ],
         "type": "object",
         "properties": {
@@ -1196,6 +2135,62 @@
           },
           "confirmacaoRecente": {
             "type": "boolean"
+          },
+          "usuarioIdDoConjuge": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          }
+        }
+      },
+      "ExtratoDto": {
+        "required": [
+          "total",
+          "lancamentos"
+        ],
+        "type": "object",
+        "properties": {
+          "total": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "lancamentos": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LancamentoDto"
+            }
+          }
+        }
+      },
+      "FaturaDto": {
+        "required": [
+          "vencimento",
+          "fechamento",
+          "totalCentavos"
+        ],
+        "type": "object",
+        "properties": {
+          "vencimento": {
+            "type": "string",
+            "format": "date"
+          },
+          "fechamento": {
+            "type": "string",
+            "format": "date"
+          },
+          "totalCentavos": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
           }
         }
       },
@@ -1246,6 +2241,106 @@
           }
         }
       },
+      "LancamentoDto": {
+        "required": [
+          "id",
+          "data",
+          "descricao",
+          "contraparte",
+          "categoria",
+          "conta",
+          "quem",
+          "origem",
+          "natureza",
+          "valorCentavos",
+          "parcela",
+          "parcelas",
+          "grupoId",
+          "faturaVencimento"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "data": {
+            "type": "string",
+            "format": "date"
+          },
+          "descricao": {
+            "type": "string"
+          },
+          "contraparte": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "categoria": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CategoriaDoLancamentoDto"
+              }
+            ]
+          },
+          "conta": {
+            "$ref": "#/components/schemas/ContaDoLancamentoDto"
+          },
+          "quem": {
+            "type": "string"
+          },
+          "origem": {
+            "type": "string"
+          },
+          "natureza": {
+            "type": "string"
+          },
+          "valorCentavos": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "parcela": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "parcelas": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "grupoId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "faturaVencimento": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date"
+          }
+        }
+      },
       "MembroDto": {
         "required": [
           "id",
@@ -1266,6 +2361,121 @@
           }
         }
       },
+      "NovaCategoriaDto": {
+        "required": [
+          "nome",
+          "tipo"
+        ],
+        "type": "object",
+        "properties": {
+          "nome": {
+            "type": "string"
+          },
+          "tipo": {
+            "type": "string"
+          },
+          "arquivada": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          }
+        }
+      },
+      "NovaContaDto": {
+        "required": [
+          "tipo",
+          "apelido",
+          "instituicao",
+          "titularUsuarioId",
+          "agencia",
+          "numero",
+          "saldoInicialCentavos",
+          "saldoInicialEm",
+          "diaFechamento",
+          "diaVencimento",
+          "limiteCentavos"
+        ],
+        "type": "object",
+        "properties": {
+          "tipo": {
+            "type": "string"
+          },
+          "apelido": {
+            "type": "string"
+          },
+          "instituicao": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "titularUsuarioId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "agencia": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "numero": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "saldoInicialCentavos": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "saldoInicialEm": {
+            "type": "string",
+            "format": "date"
+          },
+          "diaFechamento": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "diaVencimento": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "limiteCentavos": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "arquivada": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          }
+        }
+      },
       "NovaPasskeyDto": {
         "required": [
           "apelido",
@@ -1278,6 +2488,106 @@
           },
           "resposta": {
             "$ref": "#/components/schemas/RespostaDeRegistroDePasskeyDto"
+          }
+        }
+      },
+      "NovaTransferenciaDto": {
+        "required": [
+          "chaveIdempotente",
+          "contaOrigemId",
+          "contaDestinoId",
+          "valorCentavos",
+          "data",
+          "descricao"
+        ],
+        "type": "object",
+        "properties": {
+          "chaveIdempotente": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "contaOrigemId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "contaDestinoId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "valorCentavos": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "data": {
+            "type": "string",
+            "format": "date"
+          },
+          "descricao": {
+            "type": "string"
+          }
+        }
+      },
+      "NovoLancamentoDto": {
+        "required": [
+          "chaveIdempotente",
+          "contaId",
+          "natureza",
+          "valorCentavos",
+          "data",
+          "descricao",
+          "contraparte",
+          "categoriaId"
+        ],
+        "type": "object",
+        "properties": {
+          "chaveIdempotente": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "contaId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "natureza": {
+            "type": "string"
+          },
+          "valorCentavos": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "data": {
+            "type": "string",
+            "format": "date"
+          },
+          "descricao": {
+            "type": "string"
+          },
+          "contraparte": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "categoriaId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "parcelas": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32",
+            "default": 1
           }
         }
       },
@@ -1597,6 +2907,49 @@
           }
         }
       },
+      "SaldoDaContaDto": {
+        "required": [
+          "contaId",
+          "saldoCentavos",
+          "faturaAberta",
+          "faturaFechada"
+        ],
+        "type": "object",
+        "properties": {
+          "contaId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "saldoCentavos": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "faturaAberta": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/FaturaDto"
+              }
+            ]
+          },
+          "faturaFechada": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/FaturaDto"
+              }
+            ]
+          }
+        }
+      },
       "SaudeDto": {
         "required": [
           "status",
@@ -1632,6 +2985,22 @@
           }
         }
       },
+      "TitularDto": {
+        "required": [
+          "usuarioId",
+          "apelido"
+        ],
+        "type": "object",
+        "properties": {
+          "usuarioId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "apelido": {
+            "type": "string"
+          }
+        }
+      },
       "TotpGeradoDto": {
         "required": [
           "credencialId",
@@ -1645,6 +3014,26 @@
           },
           "otpauthUri": {
             "type": "string"
+          }
+        }
+      },
+      "TransferenciaDto": {
+        "required": [
+          "grupoId",
+          "saida",
+          "entrada"
+        ],
+        "type": "object",
+        "properties": {
+          "grupoId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "saida": {
+            "$ref": "#/components/schemas/LancamentoDto"
+          },
+          "entrada": {
+            "$ref": "#/components/schemas/LancamentoDto"
           }
         }
       },
@@ -1677,10 +3066,16 @@
       "name": "Identidade"
     },
     {
+      "name": "Lancamentos"
+    },
+    {
       "name": "Autenticacao"
     },
     {
       "name": "Dispositivos"
+    },
+    {
+      "name": "Contas"
     }
   ]
 }

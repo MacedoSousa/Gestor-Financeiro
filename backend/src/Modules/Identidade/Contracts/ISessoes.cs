@@ -25,4 +25,5 @@ public static class NomesDoLogin
 }
 
 /// <summary>Resposta de GET /api/v1/auth/eu.</summary>
-public sealed record EuDto(Guid UsuarioId, string Apelido, string ApelidoDoConjuge, bool ConfirmacaoRecente);
+/// <param name="UsuarioIdDoConjuge">Para escolher o titular de uma conta; nulo se o casal ainda não tem o outro cônjuge.</param>
+public sealed record EuDto(Guid UsuarioId, string Apelido, string ApelidoDoConjuge, bool ConfirmacaoRecente, Guid? UsuarioIdDoConjuge);

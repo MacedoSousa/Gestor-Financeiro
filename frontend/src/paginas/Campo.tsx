@@ -8,11 +8,13 @@ type CampoProps = {
   nota?: string;
   tipo?: string;
   autoComplete?: string;
-  inputMode?: "numeric";
+  inputMode?: "numeric" | "decimal";
+  placeholder?: string;
+  classeEntrada?: string;
   maxLength?: number;
 };
 
-export function Campo({ rotulo, valor, aoMudar, erro, nota, tipo = "text", autoComplete, inputMode, maxLength }: CampoProps) {
+export function Campo({ rotulo, valor, aoMudar, erro, nota, tipo = "text", autoComplete, inputMode, maxLength, placeholder, classeEntrada }: CampoProps) {
   const id = useId();
   const descricao = [nota ? `${id}-nota` : null, erro ? `${id}-erro` : null].filter(Boolean).join(" ");
   return (
@@ -22,8 +24,9 @@ export function Campo({ rotulo, valor, aoMudar, erro, nota, tipo = "text", autoC
       </label>
       <input
         id={id}
-        className="entrada"
+        className={classeEntrada ? `entrada ${classeEntrada}` : "entrada"}
         type={tipo}
+        placeholder={placeholder}
         value={valor}
         autoComplete={autoComplete}
         inputMode={inputMode}
@@ -40,6 +43,43 @@ export function Campo({ rotulo, valor, aoMudar, erro, nota, tipo = "text", autoC
       {erro && (
         <span id={`${id}-erro`} className="campo-erro">
           {erro}
+        </span>
+      )}
+    </div>
+  );
+}
+
+type CampoSelecaoProps = {
+  rotulo: string;
+  valor: string;
+  aoMudar: (v: string) => void;
+  opcoes: ReadonlyArray<{ valor: string; rotulo: string }>;
+  nota?: string;
+};
+
+export function CampoSelecao({ rotulo, valor, aoMudar, opcoes, nota }: CampoSelecaoProps) {
+  const id = useId();
+  return (
+    <div className="campo">
+      <label className="campo-rotulo" htmlFor={id}>
+        {rotulo}
+      </label>
+      <select
+        id={id}
+        className="entrada"
+        value={valor}
+        aria-describedby={nota ? `${id}-nota` : undefined}
+        onChange={(e) => aoMudar(e.target.value)}
+      >
+        {opcoes.map((o) => (
+          <option key={o.valor} value={o.valor}>
+            {o.rotulo}
+          </option>
+        ))}
+      </select>
+      {nota && (
+        <span id={`${id}-nota`} className="cartao-nota">
+          {nota}
         </span>
       )}
     </div>

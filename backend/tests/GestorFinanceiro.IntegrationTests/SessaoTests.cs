@@ -72,7 +72,7 @@ public class SessaoTests(PostgresFixture pg)
     {
         var banco = await pg.NovoBancoAsync();
         await using var api = new ApiDeTeste(banco);
-        var (ana, _) = await CadastrarAsync(api, banco);
+        var (ana, bruno) = await CadastrarAsync(api, banco);
         var cliente = await api.ClienteLogadoAsync(ana);
 
         var resposta = await cliente.GetAsync(RotaEu);
@@ -82,6 +82,7 @@ public class SessaoTests(PostgresFixture pg)
         Assert.Equal(ana, eu.UsuarioId);
         Assert.Equal("Ana", eu.Apelido);
         Assert.Equal("Bruno", eu.ApelidoDoConjuge);
+        Assert.Equal(bruno, eu.UsuarioIdDoConjuge);
         Assert.True(eu.ConfirmacaoRecente);
         Assert.Equal(HttpStatusCode.OK, (await cliente.GetAsync("/api/v1/casal")).StatusCode);
     }
