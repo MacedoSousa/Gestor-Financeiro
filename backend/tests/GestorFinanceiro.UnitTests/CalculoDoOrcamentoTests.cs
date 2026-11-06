@@ -123,4 +123,28 @@ public class CalculoDoOrcamentoTests
         var o = Calc(uso: new() { [Inv] = 10_000 }, aportes: 40_000);
         Assert.Equal(50_000, o.Fatias.Investir.UsadoCentavos);
     }
+
+    [Fact]
+    public void Teto_de_gastos_sem_nenhum_teto_e_nulo()
+    {
+        var o = Calc(tetos: new() { [Inv] = 680_000, [Div] = 390_000 });
+        Assert.Null(o.Fatias.TetoDeGastos.TetoCentavos);
+        Assert.Null(o.Fatias.TetoDeGastos.Percentual);
+        Assert.Equal(1_850_000 - 1_070_000, o.FolgaCentavos);
+    }
+
+    [Fact]
+    public void Teto_de_gastos_com_um_teto_zero_e_zero()
+    {
+        var o = Calc(tetos: new() { [Laz] = 0 });
+        Assert.Equal(0, o.Fatias.TetoDeGastos.TetoCentavos);
+        Assert.Equal(0m, o.Fatias.TetoDeGastos.Percentual);
+    }
+
+    [Fact]
+    public void Percentual_no_meio_arredonda_para_longe_do_zero()
+    {
+        var o = Calc(receita: 1_000_000, tetos: new() { [Mer] = 2_500 });
+        Assert.Equal(0.3m, o.Fatias.TetoDeGastos.Percentual);
+    }
 }

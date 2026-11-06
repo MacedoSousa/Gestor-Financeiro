@@ -37,7 +37,7 @@ internal static class CalculoDoOrcamento
 
         var tetoInvestir = investimento?.TetoCentavos;
         var tetoDividas = dividas?.TetoCentavos;
-        var tetoGastos = comuns.Sum(l => l.TetoCentavos ?? 0);
+        long? tetoGastos = comuns.Any(l => l.TetoCentavos is not null) ? comuns.Sum(l => l.TetoCentavos ?? 0) : null;
         var usadoGastos = comuns.Sum(l => l.UsadoCentavos);
 
         var fatias = new FatiasDto(
@@ -45,7 +45,7 @@ internal static class CalculoDoOrcamento
             new FatiaDto(tetoDividas, dividas?.UsadoCentavos ?? 0, Percentual(tetoDividas)),
             new FatiaDto(tetoGastos, usadoGastos, Percentual(tetoGastos)));
 
-        long? folga = receitaPrevista - ((tetoInvestir ?? 0) + tetoGastos + (tetoDividas ?? 0));
+        long? folga = receitaPrevista - ((tetoInvestir ?? 0) + (tetoGastos ?? 0) + (tetoDividas ?? 0));
 
         return new OrcamentoDoMesDto(mes.Texto, receitaPrevista, receitaSugerida, fatias, folga, linhas, mesParaCopiar?.Texto);
     }
