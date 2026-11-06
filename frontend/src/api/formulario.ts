@@ -3,7 +3,7 @@ import { ErroDeApi } from "./autenticacao";
 const SEM_CONEXAO = "Sem conexão com o servidor. Tente de novo.";
 
 /**
- * Títulos fixos que Contas e Lancamentos escrevem nos Problem Details. Só estes vão para a tela; qualquer outro
+ * Títulos fixos que Contas, Lancamentos e Investimentos escrevem nos Problem Details. Só estes vão para a tela; qualquer outro
  * título cai na mensagem genérica.
  */
 const TITULOS: ReadonlySet<string> = new Set([
@@ -15,6 +15,11 @@ const TITULOS: ReadonlySet<string> = new Set([
   "Categoria com papel não pode ser apagada: arquive ou renomeie.",
   "Chave de idempotência já usada.",
   "Fatura fechada: só descrição e categoria podem mudar.",
+  "Esta conta já pertence a outra meta.",
+  "Já existe uma meta com esse nome.",
+  "Só contas de poupança ou investimento entram numa meta.",
+  "Só contas de poupança ou investimento são conciliadas aqui.",
+  "O saldo mudou desde que a tela foi aberta. Confira de novo.",
 ]);
 
 type Resposta<T> = { data?: T; error?: unknown; response: Response };

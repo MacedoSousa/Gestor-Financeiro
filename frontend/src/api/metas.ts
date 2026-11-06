@@ -1,4 +1,5 @@
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ErroDeApi } from "./autenticacao";
 import { api } from "./cliente";
 import { chamarFormulario } from "./formulario";
 import type { components } from "./schema";
@@ -50,5 +51,33 @@ export function useAcoesDeMetas() {
     criarMeta: (corpo: NovaMeta) => depois(criar(corpo)),
     editarMeta: (id: string, corpo: NovaMeta) => depois(editar(id, corpo)),
     apagarMeta: (id: string) => depois(apagar(id)),
+  };
+}
+
+export type ContaDeInvestimento = PainelDeMetas["contas"][number];
+export type Conciliacao = components["schemas"]["ConciliacaoDto"];
+
+/** 409 (saldo mudou) também recarrega o painel: a tela mostra o saldo novo para conferir de novo. */
+export function useConciliacao() {
+  const qc = useQueryClient();
+  const recarregar = () =>
+    Promise.all(["metas", "saldos", "lancamentos"].map((k) => qc.invalidateQueries({ queryKey: [k] })));
+  return async (contaId: string, saldoInformadoCentavos: number, saldoExibidoCentavos: number): Promise<Conciliacao> => {
+    try {
+      const r = await chamarFormulario(
+        () =>
+          api.POST("/api/v1/contas/{id}/conciliacao", {
+            params: { path: { id: contaId } },
+            body: { saldoInformadoCentavos, saldoExibidoCentavos },
+          }),
+        "Não foi possível atualizar o saldo. Tente de novo.",
+        "Esta conta já não existe. Atualize a página.",
+      );
+      await recarregar();
+      return r;
+    } catch (e) {
+      if (e instanceof ErroDeApi && e.status === 409) await recarregar();
+      throw e;
+    }
   };
 }
