@@ -7,7 +7,8 @@ export type Segmento = { fatia: "investir" | "gastos" | "dividas" | "folga"; cen
 const LIMITE_CENTAVOS = 100_000_000_000;
 const MENSAGEM_LIMITE = "Use um valor entre R$ 0,00 e R$ 1.000.000.000,00.";
 
-const umaCasa = (x: number) => Math.round(x * 10) / 10;
+/** Percentual com 1 casa, meio para cima (como o servidor); só inteiros positivos, então a conta é exata. */
+const umaCasa = (centavos: number, receita: number) => Math.round((centavos * 1000) / receita) / 10;
 
 /** Segmentos da barra, na ordem Investir, Teto de gastos, Dívidas, Folga. Vazio sem receita prevista. */
 export function segmentosDaBarra(o: OrcamentoDoMes): Segmento[] {
@@ -22,10 +23,10 @@ export function segmentosDaBarra(o: OrcamentoDoMes): Segmento[] {
   const segmentos: Segmento[] = [];
   for (const [fatia, teto, percentual] of fatias) {
     const centavos = teto == null ? 0 : n(teto);
-    if (centavos > 0) segmentos.push({ fatia, centavos, percentual: percentual == null ? umaCasa((centavos / receita) * 100) : n(percentual) });
+    if (centavos > 0) segmentos.push({ fatia, centavos, percentual: percentual == null ? umaCasa(centavos, receita) : n(percentual) });
   }
   const folga = o.folgaCentavos == null ? 0 : n(o.folgaCentavos);
-  if (folga > 0) segmentos.push({ fatia: "folga", centavos: folga, percentual: umaCasa((folga / receita) * 100) });
+  if (folga > 0) segmentos.push({ fatia: "folga", centavos: folga, percentual: umaCasa(folga, receita) });
   return segmentos;
 }
 

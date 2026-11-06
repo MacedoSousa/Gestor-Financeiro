@@ -41,6 +41,11 @@ describe("segmentosDaBarra", () => {
     expect(segmentosDaBarra(o).map((x) => x.fatia)).toEqual(["investir", "gastos", "folga"]);
   });
 
+  it("arredonda a folga no ponto médio para cima (28,75% vira 28,8%)", () => {
+    const s = segmentosDaBarra(orcamento({ receitaPrevistaCentavos: 800_000, folgaCentavos: 230_000 }));
+    expect(s.find((x) => x.fatia === "folga")?.percentual).toBe(28.8);
+  });
+
   it.each([null, 0])("é vazio sem receita prevista (%s)", (receita) => {
     expect(segmentosDaBarra(orcamento({ receitaPrevistaCentavos: receita, folgaCentavos: null }))).toEqual([]);
   });

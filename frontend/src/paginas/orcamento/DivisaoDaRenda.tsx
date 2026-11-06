@@ -20,6 +20,8 @@ export function DivisaoDaRenda({ orcamento }: { orcamento: OrcamentoDoMes }) {
   const segmentos = segmentosDaBarra(orcamento);
   const folga = orcamento.folgaCentavos == null ? null : n(orcamento.folgaCentavos);
   const { investir, tetoDeGastos, dividas } = orcamento.fatias;
+  // O usado de Investir já inclui os aportes (conta de investimento) somados à categoria.
+  const aportes = n(investir.aportesCentavos);
   const usado = (u: number | string, teto: number | string | null) =>
     teto == null ? `usado ${formatarReais(n(u))}, sem teto` : `usado ${formatarReais(n(u))} de ${formatarReais(n(teto))}`;
   const pct = (fatia: Segmento["fatia"]) => segmentos.find((s) => s.fatia === fatia)?.percentual ?? null;
@@ -28,7 +30,7 @@ export function DivisaoDaRenda({ orcamento }: { orcamento: OrcamentoDoMes }) {
       fatia: "investir",
       centavos: investir.tetoCentavos == null ? null : n(investir.tetoCentavos),
       pct: pct("investir"),
-      detalhe: `aportes ${formatarReais(n(investir.aportesCentavos))} + categoria ${formatarReais(n(investir.usadoCentavos))}`,
+      detalhe: `${usado(investir.usadoCentavos, investir.tetoCentavos)} (aportes ${formatarReais(aportes)} + categoria ${formatarReais(n(investir.usadoCentavos) - aportes)})`,
     },
     { fatia: "gastos", centavos: tetoDeGastos.tetoCentavos == null ? null : n(tetoDeGastos.tetoCentavos), pct: pct("gastos"), detalhe: usado(tetoDeGastos.usadoCentavos, tetoDeGastos.tetoCentavos) },
     { fatia: "dividas", centavos: dividas.tetoCentavos == null ? null : n(dividas.tetoCentavos), pct: pct("dividas"), detalhe: usado(dividas.usadoCentavos, dividas.tetoCentavos) },

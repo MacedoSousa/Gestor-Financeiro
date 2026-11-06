@@ -46,27 +46,33 @@ export function LinhaDoTeto({ mes, categoria, acoes }: { mes: string; categoria:
   const [texto, setTexto] = useState(() => textoDoServidor(categoria));
   const [status, setStatus] = useState<"ocioso" | "salvando" | "salvo">("ocioso");
   const [erro, setErro] = useState<string>();
-  const ocupada = useRef(false);
+  const fila = useRef<Promise<void>>(Promise.resolve());
   const saindoComEsc = useRef(false);
+  // Mudança vinda de fora (copiar tetos, outra aba): acompanha o servidor se a linha não tem digitação própria.
+  const doServidor = textoDoServidor(categoria);
+  const [vistoDoServidor, setVistoDoServidor] = useState(doServidor);
+  if (doServidor !== vistoDoServidor) {
+    setVistoDoServidor(doServidor);
+    if (!erro && texto === vistoDoServidor) setTexto(doServidor);
+  }
   const idErro = `erro-teto-${categoria.categoriaId}`;
   const semTeto = categoria.tetoCentavos == null;
   const desabilitado = categoria.arquivada && semTeto;
 
-  async function executar(acao: () => Promise<unknown>, textoDepois: string) {
-    if (ocupada.current) return;
-    ocupada.current = true;
-    setStatus("salvando");
-    setErro(undefined);
-    try {
-      await acao();
-      setTexto(textoDepois);
-      setStatus("salvo");
-    } catch (e) {
-      setStatus("ocioso");
-      setErro(e instanceof Error ? e.message : "Não foi possível salvar. Tente de novo.");
-    } finally {
-      ocupada.current = false;
-    }
+  // Ações da linha rodam uma depois da outra; nenhuma é descartada (a última a ser pedida vale por último).
+  function executar(acao: () => Promise<unknown>, textoDepois: string) {
+    fila.current = fila.current.then(async () => {
+      setStatus("salvando");
+      setErro(undefined);
+      try {
+        await acao();
+        setTexto(textoDepois);
+        setStatus("salvo");
+      } catch (e) {
+        setStatus("ocioso");
+        setErro(e instanceof Error ? e.message : "Não foi possível salvar. Tente de novo.");
+      }
+    });
   }
 
   function aoSair() {
@@ -89,7 +95,7 @@ export function LinhaDoTeto({ mes, categoria, acoes }: { mes: string; categoria:
       setTexto(textoDoServidor(categoria));
       return;
     }
-    void executar(() => acoes.definirTeto(mes, categoria.categoriaId, lido.centavos), textoDeCentavos(lido.centavos));
+    executar(() => acoes.definirTeto(mes, categoria.categoriaId, lido.centavos), textoDeCentavos(lido.centavos));
   }
 
   function aoTeclar(e: KeyboardEvent<HTMLInputElement>) {
@@ -113,13 +119,15 @@ export function LinhaDoTeto({ mes, categoria, acoes }: { mes: string; categoria:
       </td>
       <td>
         <div className="celula-teto">
+          <label className="sr-only" htmlFor={`teto-${categoria.categoriaId}`}>
+            Teto {categoria.nome}
+          </label>
           <input
             id={`teto-${categoria.categoriaId}`}
             className="entrada entrada-teto num"
             type="text"
             inputMode="decimal"
             autoComplete="off"
-            aria-label={`Teto ${categoria.nome}`}
             aria-invalid={erro ? true : undefined}
             aria-describedby={erro ? idErro : undefined}
             disabled={desabilitado}
@@ -134,8 +142,8 @@ export function LinhaDoTeto({ mes, categoria, acoes }: { mes: string; categoria:
               type="button"
               className="botao-link"
               aria-label={`Remover teto ${categoria.nome}`}
-              disabled={status === "salvando"}
-              onClick={() => void executar(() => acoes.removerTeto(mes, categoria.categoriaId), "")}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => executar(() => acoes.removerTeto(mes, categoria.categoriaId), "")}
             >
               Remover teto
             </button>
