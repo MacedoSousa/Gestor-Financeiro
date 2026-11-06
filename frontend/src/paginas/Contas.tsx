@@ -201,7 +201,7 @@ export function Contas() {
           {(contas.isPending || saldos.isPending) && <p className="cartao-nota">Carregando…</p>}
           {contas.isError && <p className="alerta-form">{contas.error.message}</p>}
           {saldos.isError && <p className="alerta-form">{saldos.error.message}</p>}
-          {vazio && <p className="cartao-nota">Nenhuma conta ainda. Comece pela conta conjunta ao lado.</p>}
+          {vazio && <p className="cartao-nota">Nenhuma conta ainda. Comece pela conta conjunta Itaú.</p>}
           {contas.data && contas.data.length > 0 && (
             <ul className="lista-itens">
               {contas.data.map((c) => (

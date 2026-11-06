@@ -170,22 +170,6 @@ a {
   background: var(--negativo);
 }
 
-@media (max-width: 900px) {
-  .lateral {
-    max-width: none;
-    border-right: 0;
-    border-bottom: 1px solid var(--divisor);
-  }
-  .conteudo {
-    padding: 20px 16px 40px;
-  }
-  .lateral-rodape {
-    margin-top: 0;
-    flex-direction: row;
-    align-items: center;
-  }
-}
-
 /* Cadastro do casal */
 .pagina-centro {
   width: 100%;
@@ -811,5 +795,60 @@ select.entrada {
   .coluna-principal,
   .coluna-lateral {
     flex-basis: 100%;
+  }
+}
+
+/* Até 900 px a barra lateral vira topo: marca e "Sair" numa linha, menus rolando na horizontal. */
+@media (max-width: 900px) {
+  .casca {
+    flex-direction: column;
+    flex-wrap: nowrap;
+  }
+  .lateral {
+    flex: none;
+    max-width: none;
+    padding: 12px 16px;
+    gap: 10px;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    border-right: 0;
+    border-bottom: 1px solid var(--divisor);
+  }
+  .marca {
+    padding: 0;
+  }
+  .lateral-rodape {
+    order: 1;
+    margin: 0 0 0 auto;
+    padding: 0;
+    flex-direction: row;
+    align-items: center;
+  }
+  .lateral-rodape .botao-secundario {
+    height: 36px;
+    padding: 0 14px;
+  }
+  .nav {
+    order: 2;
+    flex: 1 1 100%;
+    flex-direction: row;
+    gap: 4px;
+    overflow-x: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--borda) transparent;
+  }
+  .nav a {
+    flex: none;
+    white-space: nowrap;
+    padding: 8px 12px;
+  }
+  /* O nome da seção continua no aria-label do <nav>. */
+  .nav-secao {
+    display: none;
+  }
+  .conteudo {
+    flex: 1 1 auto;
+    padding: 20px 16px 40px;
   }
 }
