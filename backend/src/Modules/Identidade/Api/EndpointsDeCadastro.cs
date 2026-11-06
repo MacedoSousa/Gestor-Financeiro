@@ -17,6 +17,7 @@ internal static class EndpointsDeCadastro
     {
         grupo.MapGet("/cadastro", async (CadastroDoCasal cadastro, CancellationToken ct) =>
             TypedResults.Ok(new EstadoDoCadastroDto(await cadastro.EstaDisponivelAsync(ct))))
+        .AllowAnonymous()
         .WithName("ObterEstadoDoCadastro")
         .WithSummary("Informa se o cadastro do casal ainda está aberto nesta instalação.");
 
@@ -38,6 +39,7 @@ internal static class EndpointsDeCadastro
                     throw new UnreachableException(outro.GetType().Name);
             }
         })
+        .AllowAnonymous()
         .WithName("CadastrarCasal")
         .WithSummary("Cadastra o casal, os dois cônjuges e os envelopes da DEK. Devolve o código de recuperação uma única vez.")
         .ProducesProblem(StatusCodes.Status403Forbidden);

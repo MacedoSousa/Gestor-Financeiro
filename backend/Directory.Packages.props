@@ -12,6 +12,8 @@
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.0" />
     <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.0" />
     <PackageVersion Include="Konscious.Security.Cryptography.Argon2" Version="1.3.1" />
+    <PackageVersion Include="Otp.NET" Version="1.4.1" />
+    <PackageVersion Include="Fido2" Version="4.3.1" />
 
     <!-- Transitivas fixadas por segurança -->
     <!-- Microsoft.AspNetCore.OpenApi 10.0.0 traz a 2.0.0, vulnerável (GHSA-v5pm-xwqc-g5wc); 2.7.5 corrige. -->

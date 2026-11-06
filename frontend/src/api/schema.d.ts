@@ -21,6 +21,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/casal/codigo-recuperacao": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Gera um código de recuperação novo para o casal (o anterior deixa de valer); mostrado uma única vez, no-store. Exige confirmação recente. */
+        post: operations["GerarCodigoDeRecuperacao"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/casal": {
         parameters: {
             query?: never;
@@ -56,10 +73,379 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/eu": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Quem está logado e se a confirmação de identidade ainda é recente. */
+        get: operations["ObterEu"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/sair": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Encerra a sessão (se houver) e apaga o cookie; sempre 204. */
+        post: operations["Sair"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/primeiro-acesso": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Primeiro acesso por CPF e senha do cadastro; responde 204 com o cookie de autorização de registro. */
+        post: operations["PrimeiroAcesso"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/confirmar/opcoes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Opções de asserção para confirmar a identidade, com as passkeys do usuário da sessão; o desafio fica ligado à sessão. */
+        post: operations["OpcoesDeConfirmacao"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/confirmar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Renova a confirmação recente com o TOTP ou uma passkey do próprio usuário; erro conta falha. */
+        post: operations["ConfirmarIdentidade"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/totp/registro": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Gera um segredo TOTP não confirmado e devolve a URI otpauth (no-store). Exige o cookie de autorização de registro. */
+        post: operations["RegistrarTotp"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/totp/confirmacao": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirma o TOTP com o primeiro código, encerra o primeiro acesso e abre a sessão (204 com cookie). */
+        post: operations["ConfirmarTotp"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/totp": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Entra com CPF e código TOTP; 204 com o cookie de sessão. */
+        post: operations["EntrarComTotp"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/passkey/registro/opcoes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Opções de criação da passkey (credencial descobrível, UV obrigatória, attestation none). Exige o cookie de autorização de registro. */
+        post: operations["OpcoesDeRegistroDePasskey"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/passkey/registro": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Grava a passkey, encerra o primeiro acesso e abre a sessão (204 com cookie). */
+        post: operations["RegistrarPasskey"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/passkey/opcoes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Opções de asserção sem allowCredentials (credencial descobrível) e com UV obrigatória. */
+        post: operations["OpcoesDeLoginComPasskey"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/passkey": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Entra com a asserção da passkey; 204 com o cookie de sessão. Vale com a conta bloqueada e encerra o bloqueio. */
+        post: operations["EntrarComPasskey"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/dispositivo/pedido": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Só o estado do pedido (PENDENTE, APROVADO ou EXPIRADO), sem efeito colateral. Sem cookie válido: PENDENTE. */
+        get: operations["ConsultarPedidoDeDispositivo"];
+        put?: never;
+        /** Pede a entrada de um celular novo; devolve o código de 6 dígitos (no-store) e o cookie do pedido, exista o CPF ou não. 429 quando o cônjuge já tem pedidos pendentes demais (nada é gravado). */
+        post: operations["PedirDispositivo"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/dispositivo/pedido/resgate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Pedido aprovado e no prazo vira o cookie de autorização de registro (uso único); senão 409. */
+        post: operations["ResgatarPedidoDeDispositivo"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/recuperacao": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** CPF + código de recuperação: gira o código (o novo vem uma única vez, no-store) e emite o cookie de autorização de registro. */
+        post: operations["RecuperarAcesso"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/dispositivos/pedidos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Pedidos de celular novo do outro cônjuge, pendentes e no prazo, com o código para conferir. */
+        get: operations["ListarPedidosDoConjuge"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/dispositivos/pedidos/{id}/aprovacao": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Aprova o pedido do outro cônjuge (exige confirmação recente). O próprio dono não aprova (403). */
+        post: operations["AprovarPedidoDeDispositivo"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/dispositivos/conjuge/destravar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Destrava o outro cônjuge na hora (exige confirmação recente). */
+        post: operations["DestravarConjuge"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/dispositivos/credenciais": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Passkeys e TOTPs ativos e confirmados do próprio usuário. */
+        get: operations["ListarCredenciais"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/dispositivos/credenciais/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove (soft delete) uma credencial do próprio usuário e encerra as outras sessões dele; exige confirmação recente. A última ativa e confirmada dá 409. */
+        delete: operations["RemoverCredencial"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/dispositivos/credenciais/autorizacao": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Emite o cookie de autorização de registro para o próprio usuário adicionar outra passkey ou TOTP; exige confirmação recente. */
+        post: operations["AutorizarNovaCredencial"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        AssercaoDePasskeyDto: {
+            clientDataJSON: string;
+            authenticatorData: string;
+            signature: string;
+            userHandle: null | string;
+        };
+        AtestacaoDePasskeyDto: {
+            clientDataJSON: string;
+            attestationObject: string;
+            transports: null | string[];
+        };
         CadastroDoCasalDto: {
             codigoInstalacao: string;
             nomeFamilia: string;
@@ -76,13 +462,53 @@ export interface components {
             id: string;
             membros: components["schemas"]["MembroDto"][];
         };
+        CodigoRecuperacaoDto: {
+            codigoRecuperacao: string;
+        };
+        ConfirmacaoDeIdentidadeDto: {
+            codigoTotp: null | string;
+            passkey: null | components["schemas"]["RespostaDeLoginComPasskeyDto"];
+        };
+        ConfirmarTotpDto: {
+            /** Format: uuid */
+            credencialId: string;
+            codigo: string;
+        };
         ConjugeNovoDto: {
             nomeCompleto: string;
             cpf: string;
             senha: string;
         };
+        CredencialDto: {
+            /** Format: uuid */
+            id: string;
+            tipo: string;
+            apelido: string;
+            /** Format: date-time */
+            criadaEm: string;
+            /** Format: date-time */
+            ultimoUsoEm: null | string;
+        };
+        DescritorDeCredencialDto: {
+            id: string;
+            type: string;
+        };
+        EntrarComTotpDto: {
+            cpf: string;
+            codigo: string;
+        };
         EstadoDoCadastroDto: {
             disponivel: boolean;
+        };
+        EstadoDoPedidoDto: {
+            estado: string;
+        };
+        EuDto: {
+            /** Format: uuid */
+            usuarioId: string;
+            apelido: string;
+            apelidoDoConjuge: string;
+            confirmacaoRecente: boolean;
         };
         HttpValidationProblemDetails: {
             type?: null | string;
@@ -101,6 +527,61 @@ export interface components {
             apelido: string;
             ehVoce: boolean;
         };
+        NovaPasskeyDto: {
+            apelido: string;
+            resposta: components["schemas"]["RespostaDeRegistroDePasskeyDto"];
+        };
+        NovoPedidoDeDispositivoDto: {
+            cpf: string;
+        };
+        NovoTotpDto: {
+            apelido: string;
+        };
+        OpcoesDeConfirmacaoDto: {
+            challenge: string;
+            /** Format: int64 */
+            timeout: number | string;
+            rpId: string;
+            allowCredentials: components["schemas"]["DescritorDeCredencialDto"][];
+            userVerification: string;
+        };
+        OpcoesDeLoginComPasskeyDto: {
+            challenge: string;
+            /** Format: int64 */
+            timeout: number | string;
+            rpId: string;
+            userVerification: string;
+        };
+        OpcoesDeRegistroDePasskeyDto: {
+            rp: components["schemas"]["RpDePasskeyDto"];
+            user: components["schemas"]["UsuarioDePasskeyDto"];
+            challenge: string;
+            pubKeyCredParams: components["schemas"]["ParametroDeChaveDto"][];
+            /** Format: int64 */
+            timeout: number | string;
+            excludeCredentials: components["schemas"]["DescritorDeCredencialDto"][];
+            authenticatorSelection: components["schemas"]["SelecaoDeAutenticadorDto"];
+            attestation: string;
+        };
+        ParametroDeChaveDto: {
+            type: string;
+            /** Format: int32 */
+            alg: number | string;
+        };
+        PedidoCriadoDto: {
+            codigo: string;
+        };
+        PedidoPendenteDto: {
+            /** Format: uuid */
+            id: string;
+            codigo: string;
+            /** Format: date-time */
+            expiraEm: string;
+        };
+        PrimeiroAcessoDto: {
+            cpf: string;
+            senha: string;
+        };
         ProblemDetails: {
             type?: null | string;
             title?: null | string;
@@ -109,10 +590,45 @@ export interface components {
             detail?: null | string;
             instance?: null | string;
         };
+        RecuperacaoDto: {
+            cpf: string;
+            codigo: string;
+        };
+        RespostaDeLoginComPasskeyDto: {
+            id: string;
+            rawId: string;
+            type: string;
+            response: components["schemas"]["AssercaoDePasskeyDto"];
+        };
+        RespostaDeRegistroDePasskeyDto: {
+            id: string;
+            rawId: string;
+            type: string;
+            response: components["schemas"]["AtestacaoDePasskeyDto"];
+        };
+        RpDePasskeyDto: {
+            id: string;
+            name: string;
+        };
         SaudeDto: {
             status: string;
             /** Format: date-time */
             horario: string;
+        };
+        SelecaoDeAutenticadorDto: {
+            residentKey: string;
+            requireResidentKey: boolean;
+            userVerification: string;
+        };
+        TotpGeradoDto: {
+            /** Format: uuid */
+            credencialId: string;
+            otpauthUri: string;
+        };
+        UsuarioDePasskeyDto: {
+            id: string;
+            name: string;
+            displayName: string;
         };
     };
     responses: never;
@@ -139,6 +655,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SaudeDto"];
+                };
+            };
+        };
+    };
+    GerarCodigoDeRecuperacao: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CodigoRecuperacaoDto"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
         };
@@ -235,6 +780,708 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EstadoDoCadastroDto"];
+                };
+            };
+        };
+    };
+    ObterEu: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EuDto"];
+                };
+            };
+        };
+    };
+    Sair: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PrimeiroAcesso: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PrimeiroAcessoDto"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Locked */
+            423: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    OpcoesDeConfirmacao: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpcoesDeConfirmacaoDto"];
+                };
+            };
+        };
+    };
+    ConfirmarIdentidade: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfirmacaoDeIdentidadeDto"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Locked */
+            423: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    RegistrarTotp: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NovoTotpDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TotpGeradoDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    ConfirmarTotp: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfirmarTotpDto"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Locked */
+            423: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    EntrarComTotp: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EntrarComTotpDto"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Locked */
+            423: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    OpcoesDeRegistroDePasskey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpcoesDeRegistroDePasskeyDto"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    RegistrarPasskey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NovaPasskeyDto"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    OpcoesDeLoginComPasskey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpcoesDeLoginComPasskeyDto"];
+                };
+            };
+        };
+    };
+    EntrarComPasskey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RespostaDeLoginComPasskeyDto"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    ConsultarPedidoDeDispositivo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EstadoDoPedidoDto"];
+                };
+            };
+        };
+    };
+    PedirDispositivo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NovoPedidoDeDispositivoDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PedidoCriadoDto"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    ResgatarPedidoDeDispositivo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    RecuperarAcesso: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecuperacaoDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CodigoRecuperacaoDto"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Locked */
+            423: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    ListarPedidosDoConjuge: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PedidoPendenteDto"][];
+                };
+            };
+        };
+    };
+    AprovarPedidoDeDispositivo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    DestravarConjuge: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ListarCredenciais: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CredencialDto"][];
+                };
+            };
+        };
+    };
+    RemoverCredencial: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    AutorizarNovaCredencial: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
         };

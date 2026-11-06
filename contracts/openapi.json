@@ -26,6 +26,37 @@
         }
       }
     },
+    "/api/v1/casal/codigo-recuperacao": {
+      "post": {
+        "tags": [
+          "Identidade"
+        ],
+        "summary": "Gera um código de recuperação novo para o casal (o anterior deixa de valer); mostrado uma única vez, no-store. Exige confirmação recente.",
+        "operationId": "GerarCodigoDeRecuperacao",
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodigoRecuperacaoDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/casal": {
       "get": {
         "tags": [
@@ -122,10 +153,814 @@
           }
         }
       }
+    },
+    "/api/v1/auth/eu": {
+      "get": {
+        "tags": [
+          "Autenticacao"
+        ],
+        "summary": "Quem está logado e se a confirmação de identidade ainda é recente.",
+        "operationId": "ObterEu",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EuDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/sair": {
+      "post": {
+        "tags": [
+          "Autenticacao"
+        ],
+        "summary": "Encerra a sessão (se houver) e apaga o cookie; sempre 204.",
+        "operationId": "Sair",
+        "responses": {
+          "204": {
+            "description": "No Content"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/primeiro-acesso": {
+      "post": {
+        "tags": [
+          "Autenticacao"
+        ],
+        "summary": "Primeiro acesso por CPF e senha do cadastro; responde 204 com o cookie de autorização de registro.",
+        "operationId": "PrimeiroAcesso",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PrimeiroAcessoDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "423": {
+            "description": "Locked",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/confirmar/opcoes": {
+      "post": {
+        "tags": [
+          "Autenticacao"
+        ],
+        "summary": "Opções de asserção para confirmar a identidade, com as passkeys do usuário da sessão; o desafio fica ligado à sessão.",
+        "operationId": "OpcoesDeConfirmacao",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpcoesDeConfirmacaoDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/confirmar": {
+      "post": {
+        "tags": [
+          "Autenticacao"
+        ],
+        "summary": "Renova a confirmação recente com o TOTP ou uma passkey do próprio usuário; erro conta falha.",
+        "operationId": "ConfirmarIdentidade",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmacaoDeIdentidadeDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "423": {
+            "description": "Locked",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/totp/registro": {
+      "post": {
+        "tags": [
+          "Autenticacao"
+        ],
+        "summary": "Gera um segredo TOTP não confirmado e devolve a URI otpauth (no-store). Exige o cookie de autorização de registro.",
+        "operationId": "RegistrarTotp",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NovoTotpDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TotpGeradoDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/totp/confirmacao": {
+      "post": {
+        "tags": [
+          "Autenticacao"
+        ],
+        "summary": "Confirma o TOTP com o primeiro código, encerra o primeiro acesso e abre a sessão (204 com cookie).",
+        "operationId": "ConfirmarTotp",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmarTotpDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "423": {
+            "description": "Locked",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/totp": {
+      "post": {
+        "tags": [
+          "Autenticacao"
+        ],
+        "summary": "Entra com CPF e código TOTP; 204 com o cookie de sessão.",
+        "operationId": "EntrarComTotp",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EntrarComTotpDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "423": {
+            "description": "Locked",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/passkey/registro/opcoes": {
+      "post": {
+        "tags": [
+          "Autenticacao"
+        ],
+        "summary": "Opções de criação da passkey (credencial descobrível, UV obrigatória, attestation none). Exige o cookie de autorização de registro.",
+        "operationId": "OpcoesDeRegistroDePasskey",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpcoesDeRegistroDePasskeyDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/passkey/registro": {
+      "post": {
+        "tags": [
+          "Autenticacao"
+        ],
+        "summary": "Grava a passkey, encerra o primeiro acesso e abre a sessão (204 com cookie).",
+        "operationId": "RegistrarPasskey",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NovaPasskeyDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/passkey/opcoes": {
+      "post": {
+        "tags": [
+          "Autenticacao"
+        ],
+        "summary": "Opções de asserção sem allowCredentials (credencial descobrível) e com UV obrigatória.",
+        "operationId": "OpcoesDeLoginComPasskey",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpcoesDeLoginComPasskeyDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/passkey": {
+      "post": {
+        "tags": [
+          "Autenticacao"
+        ],
+        "summary": "Entra com a asserção da passkey; 204 com o cookie de sessão. Vale com a conta bloqueada e encerra o bloqueio.",
+        "operationId": "EntrarComPasskey",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RespostaDeLoginComPasskeyDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/dispositivo/pedido": {
+      "post": {
+        "tags": [
+          "Autenticacao"
+        ],
+        "summary": "Pede a entrada de um celular novo; devolve o código de 6 dígitos (no-store) e o cookie do pedido, exista o CPF ou não. 429 quando o cônjuge já tem pedidos pendentes demais (nada é gravado).",
+        "operationId": "PedirDispositivo",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NovoPedidoDeDispositivoDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PedidoCriadoDto"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Autenticacao"
+        ],
+        "summary": "Só o estado do pedido (PENDENTE, APROVADO ou EXPIRADO), sem efeito colateral. Sem cookie válido: PENDENTE.",
+        "operationId": "ConsultarPedidoDeDispositivo",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EstadoDoPedidoDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/dispositivo/pedido/resgate": {
+      "post": {
+        "tags": [
+          "Autenticacao"
+        ],
+        "summary": "Pedido aprovado e no prazo vira o cookie de autorização de registro (uso único); senão 409.",
+        "operationId": "ResgatarPedidoDeDispositivo",
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/recuperacao": {
+      "post": {
+        "tags": [
+          "Autenticacao"
+        ],
+        "summary": "CPF + código de recuperação: gira o código (o novo vem uma única vez, no-store) e emite o cookie de autorização de registro.",
+        "operationId": "RecuperarAcesso",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecuperacaoDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodigoRecuperacaoDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "423": {
+            "description": "Locked",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dispositivos/pedidos": {
+      "get": {
+        "tags": [
+          "Dispositivos"
+        ],
+        "summary": "Pedidos de celular novo do outro cônjuge, pendentes e no prazo, com o código para conferir.",
+        "operationId": "ListarPedidosDoConjuge",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PedidoPendenteDto"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dispositivos/pedidos/{id}/aprovacao": {
+      "post": {
+        "tags": [
+          "Dispositivos"
+        ],
+        "summary": "Aprova o pedido do outro cônjuge (exige confirmação recente). O próprio dono não aprova (403).",
+        "operationId": "AprovarPedidoDeDispositivo",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dispositivos/conjuge/destravar": {
+      "post": {
+        "tags": [
+          "Dispositivos"
+        ],
+        "summary": "Destrava o outro cônjuge na hora (exige confirmação recente).",
+        "operationId": "DestravarConjuge",
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dispositivos/credenciais": {
+      "get": {
+        "tags": [
+          "Dispositivos"
+        ],
+        "summary": "Passkeys e TOTPs ativos e confirmados do próprio usuário.",
+        "operationId": "ListarCredenciais",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CredencialDto"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dispositivos/credenciais/{id}": {
+      "delete": {
+        "tags": [
+          "Dispositivos"
+        ],
+        "summary": "Remove (soft delete) uma credencial do próprio usuário e encerra as outras sessões dele; exige confirmação recente. A última ativa e confirmada dá 409.",
+        "operationId": "RemoverCredencial",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dispositivos/credenciais/autorizacao": {
+      "post": {
+        "tags": [
+          "Dispositivos"
+        ],
+        "summary": "Emite o cookie de autorização de registro para o próprio usuário adicionar outra passkey ou TOTP; exige confirmação recente.",
+        "operationId": "AutorizarNovaCredencial",
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
     "schemas": {
+      "AssercaoDePasskeyDto": {
+        "required": [
+          "clientDataJSON",
+          "authenticatorData",
+          "signature",
+          "userHandle"
+        ],
+        "type": "object",
+        "properties": {
+          "clientDataJSON": {
+            "type": "string"
+          },
+          "authenticatorData": {
+            "type": "string"
+          },
+          "signature": {
+            "type": "string"
+          },
+          "userHandle": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "AtestacaoDePasskeyDto": {
+        "required": [
+          "clientDataJSON",
+          "attestationObject",
+          "transports"
+        ],
+        "type": "object",
+        "properties": {
+          "clientDataJSON": {
+            "type": "string"
+          },
+          "attestationObject": {
+            "type": "string"
+          },
+          "transports": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
       "CadastroDoCasalDto": {
         "required": [
           "codigoInstalacao",
@@ -184,6 +1019,58 @@
           }
         }
       },
+      "CodigoRecuperacaoDto": {
+        "required": [
+          "codigoRecuperacao"
+        ],
+        "type": "object",
+        "properties": {
+          "codigoRecuperacao": {
+            "type": "string"
+          }
+        }
+      },
+      "ConfirmacaoDeIdentidadeDto": {
+        "required": [
+          "codigoTotp",
+          "passkey"
+        ],
+        "type": "object",
+        "properties": {
+          "codigoTotp": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "passkey": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RespostaDeLoginComPasskeyDto"
+              }
+            ]
+          }
+        }
+      },
+      "ConfirmarTotpDto": {
+        "required": [
+          "credencialId",
+          "codigo"
+        ],
+        "type": "object",
+        "properties": {
+          "credencialId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "codigo": {
+            "type": "string"
+          }
+        }
+      },
       "ConjugeNovoDto": {
         "required": [
           "nomeCompleto",
@@ -203,6 +1090,69 @@
           }
         }
       },
+      "CredencialDto": {
+        "required": [
+          "id",
+          "tipo",
+          "apelido",
+          "criadaEm",
+          "ultimoUsoEm"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "tipo": {
+            "type": "string"
+          },
+          "apelido": {
+            "type": "string"
+          },
+          "criadaEm": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "ultimoUsoEm": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
+      "DescritorDeCredencialDto": {
+        "required": [
+          "id",
+          "type"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          }
+        }
+      },
+      "EntrarComTotpDto": {
+        "required": [
+          "cpf",
+          "codigo"
+        ],
+        "type": "object",
+        "properties": {
+          "cpf": {
+            "type": "string"
+          },
+          "codigo": {
+            "type": "string"
+          }
+        }
+      },
       "EstadoDoCadastroDto": {
         "required": [
           "disponivel"
@@ -210,6 +1160,41 @@
         "type": "object",
         "properties": {
           "disponivel": {
+            "type": "boolean"
+          }
+        }
+      },
+      "EstadoDoPedidoDto": {
+        "required": [
+          "estado"
+        ],
+        "type": "object",
+        "properties": {
+          "estado": {
+            "type": "string"
+          }
+        }
+      },
+      "EuDto": {
+        "required": [
+          "usuarioId",
+          "apelido",
+          "apelidoDoConjuge",
+          "confirmacaoRecente"
+        ],
+        "type": "object",
+        "properties": {
+          "usuarioId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "apelido": {
+            "type": "string"
+          },
+          "apelidoDoConjuge": {
+            "type": "string"
+          },
+          "confirmacaoRecente": {
             "type": "boolean"
           }
         }
@@ -281,6 +1266,223 @@
           }
         }
       },
+      "NovaPasskeyDto": {
+        "required": [
+          "apelido",
+          "resposta"
+        ],
+        "type": "object",
+        "properties": {
+          "apelido": {
+            "type": "string"
+          },
+          "resposta": {
+            "$ref": "#/components/schemas/RespostaDeRegistroDePasskeyDto"
+          }
+        }
+      },
+      "NovoPedidoDeDispositivoDto": {
+        "required": [
+          "cpf"
+        ],
+        "type": "object",
+        "properties": {
+          "cpf": {
+            "type": "string"
+          }
+        }
+      },
+      "NovoTotpDto": {
+        "required": [
+          "apelido"
+        ],
+        "type": "object",
+        "properties": {
+          "apelido": {
+            "type": "string"
+          }
+        }
+      },
+      "OpcoesDeConfirmacaoDto": {
+        "required": [
+          "challenge",
+          "timeout",
+          "rpId",
+          "allowCredentials",
+          "userVerification"
+        ],
+        "type": "object",
+        "properties": {
+          "challenge": {
+            "type": "string"
+          },
+          "timeout": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "rpId": {
+            "type": "string"
+          },
+          "allowCredentials": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DescritorDeCredencialDto"
+            }
+          },
+          "userVerification": {
+            "type": "string"
+          }
+        }
+      },
+      "OpcoesDeLoginComPasskeyDto": {
+        "required": [
+          "challenge",
+          "timeout",
+          "rpId",
+          "userVerification"
+        ],
+        "type": "object",
+        "properties": {
+          "challenge": {
+            "type": "string"
+          },
+          "timeout": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "rpId": {
+            "type": "string"
+          },
+          "userVerification": {
+            "type": "string"
+          }
+        }
+      },
+      "OpcoesDeRegistroDePasskeyDto": {
+        "required": [
+          "rp",
+          "user",
+          "challenge",
+          "pubKeyCredParams",
+          "timeout",
+          "excludeCredentials",
+          "authenticatorSelection",
+          "attestation"
+        ],
+        "type": "object",
+        "properties": {
+          "rp": {
+            "$ref": "#/components/schemas/RpDePasskeyDto"
+          },
+          "user": {
+            "$ref": "#/components/schemas/UsuarioDePasskeyDto"
+          },
+          "challenge": {
+            "type": "string"
+          },
+          "pubKeyCredParams": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ParametroDeChaveDto"
+            }
+          },
+          "timeout": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "excludeCredentials": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DescritorDeCredencialDto"
+            }
+          },
+          "authenticatorSelection": {
+            "$ref": "#/components/schemas/SelecaoDeAutenticadorDto"
+          },
+          "attestation": {
+            "type": "string"
+          }
+        }
+      },
+      "ParametroDeChaveDto": {
+        "required": [
+          "type",
+          "alg"
+        ],
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string"
+          },
+          "alg": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "PedidoCriadoDto": {
+        "required": [
+          "codigo"
+        ],
+        "type": "object",
+        "properties": {
+          "codigo": {
+            "type": "string"
+          }
+        }
+      },
+      "PedidoPendenteDto": {
+        "required": [
+          "id",
+          "codigo",
+          "expiraEm"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "codigo": {
+            "type": "string"
+          },
+          "expiraEm": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "PrimeiroAcessoDto": {
+        "required": [
+          "cpf",
+          "senha"
+        ],
+        "type": "object",
+        "properties": {
+          "cpf": {
+            "type": "string"
+          },
+          "senha": {
+            "type": "string"
+          }
+        }
+      },
       "ProblemDetails": {
         "type": "object",
         "properties": {
@@ -319,6 +1521,82 @@
           }
         }
       },
+      "RecuperacaoDto": {
+        "required": [
+          "cpf",
+          "codigo"
+        ],
+        "type": "object",
+        "properties": {
+          "cpf": {
+            "type": "string"
+          },
+          "codigo": {
+            "type": "string"
+          }
+        }
+      },
+      "RespostaDeLoginComPasskeyDto": {
+        "required": [
+          "id",
+          "rawId",
+          "type",
+          "response"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "rawId": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "response": {
+            "$ref": "#/components/schemas/AssercaoDePasskeyDto"
+          }
+        }
+      },
+      "RespostaDeRegistroDePasskeyDto": {
+        "required": [
+          "id",
+          "rawId",
+          "type",
+          "response"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "rawId": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "response": {
+            "$ref": "#/components/schemas/AtestacaoDePasskeyDto"
+          }
+        }
+      },
+      "RpDePasskeyDto": {
+        "required": [
+          "id",
+          "name"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
       "SaudeDto": {
         "required": [
           "status",
@@ -334,6 +1612,60 @@
             "format": "date-time"
           }
         }
+      },
+      "SelecaoDeAutenticadorDto": {
+        "required": [
+          "residentKey",
+          "requireResidentKey",
+          "userVerification"
+        ],
+        "type": "object",
+        "properties": {
+          "residentKey": {
+            "type": "string"
+          },
+          "requireResidentKey": {
+            "type": "boolean"
+          },
+          "userVerification": {
+            "type": "string"
+          }
+        }
+      },
+      "TotpGeradoDto": {
+        "required": [
+          "credencialId",
+          "otpauthUri"
+        ],
+        "type": "object",
+        "properties": {
+          "credencialId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "otpauthUri": {
+            "type": "string"
+          }
+        }
+      },
+      "UsuarioDePasskeyDto": {
+        "required": [
+          "id",
+          "name",
+          "displayName"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          }
+        }
       }
     }
   },
@@ -343,6 +1675,12 @@
     },
     {
       "name": "Identidade"
+    },
+    {
+      "name": "Autenticacao"
+    },
+    {
+      "name": "Dispositivos"
     }
   ]
 }

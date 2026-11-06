@@ -179,6 +179,11 @@ a {
   .conteudo {
     padding: 20px 16px 40px;
   }
+  .lateral-rodape {
+    margin-top: 0;
+    flex-direction: row;
+    align-items: center;
+  }
 }
 
 /* Cadastro do casal */
@@ -329,4 +334,149 @@ a {
     color: #000 !important;
     background: none !important;
   }
+}
+
+/* Login e dispositivos */
+.pagina-centro.estreita {
+  max-width: 480px;
+}
+
+.links-acesso {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  font-size: 14px;
+}
+
+.botao-link {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: var(--destaque-claro);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.botao-link:focus-visible {
+  outline: 2px solid var(--destaque-claro);
+  outline-offset: 2px;
+}
+
+.codigo-pedido {
+  margin: 0;
+  font-size: 44px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+}
+
+.codigo-pedido-pequeno {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+}
+
+.nav-secao {
+  padding: 0 12px 6px;
+  font-size: 12px;
+  color: var(--texto-fraco);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.lateral-rodape {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 0 8px;
+}
+
+.lista-itens {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.item-linha {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  padding: 12px 0;
+  border-top: 1px solid var(--divisor);
+}
+
+.item-linha:first-child {
+  border-top: 0;
+}
+
+.item-texto {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.acoes-linha {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.aviso-form {
+  margin: 0;
+  padding: 12px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--borda);
+  background: var(--superficie);
+  color: var(--texto);
+  font-size: 14px;
+}
+
+.qr {
+  align-self: flex-start;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.segredo-totp {
+  color: var(--texto);
+  letter-spacing: 0.06em;
+  overflow-wrap: anywhere;
+}
+
+.bloco-embutido {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.dialogo {
+  width: min(440px, calc(100vw - 32px));
+  padding: 24px;
+  border-radius: var(--raio);
+  border: 1px solid var(--borda);
+  background: var(--superficie);
+  color: var(--texto);
+}
+
+.dialogo[open] {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.dialogo::backdrop {
+  background: rgb(0 0 0 / 0.6);
+}
+
+.dialogo-titulo {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
 }

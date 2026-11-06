@@ -20,3 +20,9 @@ public sealed record CasalCadastradoDto(Guid CasalId, string CodigoRecuperacao)
 
 /// <summary>Resposta de GET /api/v1/casal/cadastro: se o cadastro ainda está aberto.</summary>
 public sealed record EstadoDoCadastroDto(bool Disponivel);
+
+/// <summary>Corpo de POST /api/v1/auth/primeiro-acesso. Traz CPF e senha: ToString não mostra nada.</summary>
+public sealed record PrimeiroAcessoDto(string Cpf, string Senha)
+{
+    public override string ToString() => nameof(PrimeiroAcessoDto);
+}

@@ -44,6 +44,6 @@ Um casal (dois CPFs, uma conta conjunta Itaú) vê num só lugar contas, cartõe
 - [ ] Primeiro build no CI e commit de `contracts/openapi.json` gerado
 - [ ] Teste de integração com Postgres (Testcontainers) cobrindo `audit.verificar_cadeia`
 - [x] Cadastro do casal: CPF + nome + vínculo de cônjuge + envelopes da DEK em `identidade.chaves`
-- [ ] Login com sessão em cookie (BFF), passkey e TOTP, bloqueio após 5 falhas
+- [x] Login com sessão em cookie (BFF), passkey e TOTP, bloqueio após 5 falhas
 - [ ] Lint no front (ESLint) dentro de `npm run check`
 - [ ] Módulo Lancamentos: tabela `transacoes` com `UNIQUE (origem, id_externo) WHERE NOT is_deleted`
