@@ -1626,8 +1626,10 @@
             "format": "int64"
           },
           "arquivada": {
-            "type": "boolean",
-            "default": false
+            "type": [
+              "null",
+              "boolean"
+            ]
           }
         }
       },

@@ -602,8 +602,7 @@ export interface components {
             diaVencimento: null | number | string;
             /** Format: int64 */
             limiteCentavos: null | number | string;
-            /** @default false */
-            arquivada: boolean;
+            arquivada?: null | boolean;
         };
         NovaPasskeyDto: {
             apelido: string;

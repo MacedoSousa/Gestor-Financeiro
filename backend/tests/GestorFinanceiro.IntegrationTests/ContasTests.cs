@@ -259,6 +259,50 @@ public class ContasTests(PostgresFixture pg)
     }
 
     [Fact]
+    public async Task Atualizar_sem_arquivada_mantem_o_estado()
+    {
+        var (api, _, cliente, _, _) = await IniciarAsync();
+        await using var _ = api;
+        var id = await CriarAsync(cliente, Corrente("Itaú conjunta"));
+        var arquivar = new { tipo = "CORRENTE", apelido = "Itaú conjunta", saldoInicialCentavos = 150_000L, saldoInicialEm = "2026-11-01", arquivada = true };
+        Assert.Equal(HttpStatusCode.NoContent, (await cliente.PutAsJsonAsync($"{Rota}/{id}", arquivar)).StatusCode);
+
+        Assert.Equal(HttpStatusCode.NoContent, (await cliente.PutAsJsonAsync($"{Rota}/{id}", Corrente("Itaú renomeada"))).StatusCode);
+
+        var conta = (await JsonAsync(await cliente.GetAsync(Rota))).EnumerateArray().Single();
+        Assert.Equal("Itaú renomeada", conta.GetProperty("apelido").GetString());
+        Assert.True(conta.GetProperty("arquivada").GetBoolean());
+    }
+
+    [Fact]
+    public async Task Data_do_saldo_inicial_e_obrigatoria_e_nao_pode_ser_futura()
+    {
+        var (api, _, cliente, _, _) = await IniciarAsync();
+        await using var _ = api;
+
+        var semData = await cliente.PostAsJsonAsync(Rota, new { tipo = "CORRENTE", apelido = "Sem data", saldoInicialCentavos = 0L });
+        var futura = await cliente.PostAsJsonAsync(Rota, new { tipo = "CORRENTE", apelido = "Futura", saldoInicialCentavos = 0L, saldoInicialEm = "2999-01-01" });
+
+        Assert.Equal(HttpStatusCode.BadRequest, semData.StatusCode);
+        Assert.Equal("Informe a data do saldo inicial.", (await JsonAsync(semData)).GetProperty("errors").GetProperty("saldoInicialEm")[0].GetString());
+        Assert.Equal(HttpStatusCode.BadRequest, futura.StatusCode);
+        Assert.Equal("A data do saldo inicial não pode ser no futuro.", (await JsonAsync(futura)).GetProperty("errors").GetProperty("saldoInicialEm")[0].GetString());
+    }
+
+    [Fact]
+    public async Task Tipo_nao_muda_no_put()
+    {
+        var (api, banco, cliente, _, _) = await IniciarAsync();
+        await using var _ = api;
+        var id = await CriarAsync(cliente, Corrente("Itaú conjunta"));
+
+        var resposta = await cliente.PutAsJsonAsync($"{Rota}/{id}", new { tipo = "POUPANCA", apelido = "Itaú conjunta", saldoInicialCentavos = 0L, saldoInicialEm = "2026-11-01" });
+
+        Assert.Equal(HttpStatusCode.BadRequest, resposta.StatusCode);
+        Assert.Equal("CORRENTE", await EscalarAsync<string>(banco, $"SELECT tipo FROM contas.contas WHERE id = '{id}'"));
+    }
+
+    [Fact]
     public async Task Sem_sessao_responde_401()
     {
         var banco = await pg.NovoBancoAsync();

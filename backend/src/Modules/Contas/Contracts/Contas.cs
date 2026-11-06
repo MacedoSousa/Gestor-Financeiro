@@ -7,7 +7,8 @@ namespace GestorFinanceiro.Modules.Contas.Contracts;
 /// <param name="Numero">No PUT: nulo mantém o que está guardado, texto vazio apaga.</param>
 /// <param name="DiaFechamento">Obrigatório (1 a 31) em cartão; proibido nos demais.</param>
 /// <param name="DiaVencimento">Obrigatório (1 a 31) em cartão; proibido nos demais.</param>
-/// <param name="Arquivada">Só vale no PUT; a conta nasce ativa.</param>
+/// <param name="Arquivada">Só vale no PUT: nulo mantém o estado atual. A conta nasce ativa.</param>
+/// <param name="SaldoInicialEm">Obrigatória e não pode ser futura (fuso de Brasília).</param>
 public sealed record NovaContaDto(
     string Tipo,
     string Apelido,
@@ -20,7 +21,7 @@ public sealed record NovaContaDto(
     int? DiaFechamento,
     int? DiaVencimento,
     long? LimiteCentavos,
-    bool Arquivada = false)
+    bool? Arquivada = null)
 {
     // Agência e número em claro não vão para log nem para ToString.
     public override string ToString() => $"NovaContaDto {{ Tipo = {Tipo} }}";

@@ -25,6 +25,7 @@ internal sealed class ServicoDeContas(
     IUsuarioAtual atual,
     ICofre cofre,
     IConsultaDeUsuarios usuarios,
+    TimeProvider relogio,
     IEnumerable<IVerificadorDeUsoDaConta> verificadores)
 {
     internal const string TituloApelidoRepetido = "Já existe uma conta com esse nome.";
@@ -61,7 +62,7 @@ internal sealed class ServicoDeContas(
         var erros = await ValidarAsync(pedido, casalId, conta.Tipo, ct);
         if (erros.Count > 0) return new ResultadoDeConta.Invalido(erros);
 
-        Aplicar(conta, pedido, pedido.Arquivada);
+        Aplicar(conta, pedido, pedido.Arquivada ?? conta.Arquivada);
         if (pedido.Agencia is not null) conta.DefinirAgencia(pedido.Agencia, cofre);
         if (pedido.Numero is not null) conta.DefinirNumero(pedido.Numero, cofre);
         return await SalvarAsync(conta.Id, ct);
@@ -129,6 +130,11 @@ internal sealed class ServicoDeContas(
                 erros["diaFechamento"] = ["Só cartão tem dia de fechamento e de vencimento."];
         }
 
+        if (p.SaldoInicialEm == default)
+            erros["saldoInicialEm"] = ["Informe a data do saldo inicial."];
+        else if (p.SaldoInicialEm > Hoje())
+            erros["saldoInicialEm"] = ["A data do saldo inicial não pode ser no futuro."];
+
         if (p.LimiteCentavos is < 0) erros["limiteCentavos"] = ["O limite não pode ser negativo."];
 
         if (p.TitularUsuarioId is { } titular)
@@ -139,6 +145,12 @@ internal sealed class ServicoDeContas(
         }
 
         return erros;
+    }
+
+    private DateOnly Hoje()
+    {
+        var fuso = TimeZoneInfo.FindSystemTimeZoneById("America/Sao_Paulo");
+        return DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(relogio.GetUtcNow(), fuso).DateTime);
     }
 
     /// <summary>Só os nomes do enum (sem diferenciar maiúsculas); "2" não vale.</summary>
