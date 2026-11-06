@@ -34,16 +34,16 @@ describe("projecaoExibida", () => {
   const planejada = { aporteMensalCentavos: 200_000, mesesAteMeta: 40 };
   const simulada = { aporteMensalCentavos: 250_000, mesesAteMeta: 36 };
   it("no planejado mostra a do painel", () => {
-    expect(projecaoExibida(false, 200_000, planejada, { isError: false, isFetching: false })).toEqual({ tipo: "projecao", projecao: planejada, atualizando: false });
+    expect(projecaoExibida(false, 200_000, planejada, { isError: false, isFetching: false })).toEqual({ tipo: "projecao", projecao: planejada, atualizando: false, deOutroAporte: false });
   });
-  it("simulando sem resposta fica pendente", () => {
-    expect(projecaoExibida(true, 250_000, planejada, { isError: false, isFetching: true })).toEqual({ tipo: "pendente" });
+  it("primeiro passo, sem resposta, mostra a planejada rotulada como de outro aporte", () => {
+    expect(projecaoExibida(true, 250_000, planejada, { isError: false, isFetching: true })).toEqual({ tipo: "projecao", projecao: planejada, atualizando: true, deOutroAporte: true });
   });
-  it("resposta de outro aporte fica pendente", () => {
-    expect(projecaoExibida(true, 300_000, planejada, { data: simulada, isError: false, isFetching: true })).toEqual({ tipo: "pendente" });
+  it("resposta de outro aporte (cliques rápidos) mantém o último resultado rotulado", () => {
+    expect(projecaoExibida(true, 300_000, planejada, { data: simulada, isError: false, isFetching: true })).toEqual({ tipo: "projecao", projecao: simulada, atualizando: true, deOutroAporte: true });
   });
   it("resposta do aporte exibido aparece, atualizando conforme a busca", () => {
-    expect(projecaoExibida(true, 250_000, planejada, { data: simulada, isError: false, isFetching: false })).toEqual({ tipo: "projecao", projecao: simulada, atualizando: false });
+    expect(projecaoExibida(true, 250_000, planejada, { data: simulada, isError: false, isFetching: false })).toEqual({ tipo: "projecao", projecao: simulada, atualizando: false, deOutroAporte: false });
     expect(projecaoExibida(true, 250_000, planejada, { data: simulada, isError: false, isFetching: true })).toMatchObject({ atualizando: true });
   });
   it("erro da simulação é erro, mesmo com dado antigo", () => {

@@ -25,14 +25,13 @@ type ProjecaoDaMeta = {
 };
 
 export type ProjecaoExibida<P extends ProjecaoDaMeta> =
-  | { tipo: "projecao"; projecao: P; atualizando: boolean }
-  | { tipo: "pendente" }
+  | { tipo: "projecao"; projecao: P; atualizando: boolean; deOutroAporte: boolean }
   | { tipo: "erro" };
 
 /**
- * Qual projeção o cartão mostra. No planejado, a do painel. Simulando, só a resposta do servidor que seja
- * do aporte exibido; resposta de outro aporte (placeholder dos cliques anteriores), ou ainda sem resposta, é "pendente";
- * falha da simulação é "erro". Nunca se mostra número de um aporte ao lado de outro.
+ * Qual projeção o cartão mostra. No planejado, a do painel. Simulando, a resposta do aporte exibido; enquanto ela
+ * não chega, o último resultado (ou a projeção planejada, no primeiro passo), marcado `deOutroAporte` para a tela
+ * rotular com o aporte a que pertence. Falha da simulação é "erro".
  */
 export function projecaoExibida<P extends ProjecaoDaMeta>(
   simulando: boolean,
@@ -40,10 +39,11 @@ export function projecaoExibida<P extends ProjecaoDaMeta>(
   planejada: P,
   simulacao: { data?: P; isError: boolean; isFetching: boolean },
 ): ProjecaoExibida<P> {
-  if (!simulando) return { tipo: "projecao", projecao: planejada, atualizando: false };
+  if (!simulando) return { tipo: "projecao", projecao: planejada, atualizando: false, deOutroAporte: false };
   if (simulacao.isError) return { tipo: "erro" };
-  if (simulacao.data && Number(simulacao.data.aporteMensalCentavos) === aporte) {
-    return { tipo: "projecao", projecao: simulacao.data, atualizando: simulacao.isFetching };
+  const base = simulacao.data ?? planejada;
+  if (Number(base.aporteMensalCentavos) === aporte) {
+    return { tipo: "projecao", projecao: base, atualizando: simulacao.isFetching, deOutroAporte: false };
   }
-  return { tipo: "pendente" };
+  return { tipo: "projecao", projecao: base, atualizando: true, deOutroAporte: true };
 }

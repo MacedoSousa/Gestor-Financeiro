@@ -54,7 +54,11 @@ export function CartaoDaMeta({ meta, aoEditar, aoAtualizarSaldo }: Props) {
   // Os números vêm sempre do servidor, e só se mostram os do aporte que está na tela.
   const exibida = projecaoExibida(simulando, aporte, meta.projecao, simulacao);
   const projecao = exibida.tipo === "projecao" ? exibida.projecao : null;
-  const atualizando = exibida.tipo === "pendente" || (exibida.tipo === "projecao" && exibida.atualizando);
+  const atualizando = exibida.tipo === "projecao" && exibida.atualizando;
+  // Resultado de outro aporte (resposta em andamento): sempre rotulado com o aporte a que pertence.
+  const rotuloDoAporte =
+    exibida.tipo === "projecao" && exibida.deOutroAporte ? `para ${formatarReais(n(exibida.projecao.aporteMensalCentavos))}` : null;
+  const erroDaSimulacao = exibida.tipo === "erro" ? (simulacao.error?.message ?? "Não foi possível simular.") : undefined;
 
   const guardado = n(meta.guardadoCentavos);
   const progresso = Math.min(100, Math.max(0, n(meta.progressoPercentual)));
@@ -96,6 +100,7 @@ export function CartaoDaMeta({ meta, aoEditar, aoAtualizarSaldo }: Props) {
           <div className="num meta-chega-valor" aria-live="polite">
             {projecao ? textoChegaEm(projecao) : "—"}
           </div>
+          {rotuloDoAporte && <div className="atualizando num">{rotuloDoAporte}</div>}
         </div>
       </div>
 
@@ -156,8 +161,15 @@ export function CartaoDaMeta({ meta, aoEditar, aoAtualizarSaldo }: Props) {
           </div>
         </div>
         <div className="simulador-meses">
-          <span aria-live="polite">{projecao ? textoDaMeta(projecao) : exibida.tipo === "erro" ? "Não foi possível simular." : "—"}</span>
+          <span aria-live="polite">{projecao ? textoDaMeta(projecao) : "—"}</span>
+          {rotuloDoAporte && <span className="atualizando num"> ({rotuloDoAporte})</span>}
           {atualizando && <span className="atualizando"> atualizando…</span>}
+          {erroDaSimulacao && (
+            <span role="status" className="campo-erro">
+              {" "}
+              {erroDaSimulacao}
+            </span>
+          )}
         </div>
         {simulando && (
           <div className="simulador-simulacao">
@@ -174,7 +186,7 @@ export function CartaoDaMeta({ meta, aoEditar, aoAtualizarSaldo }: Props) {
             </div>
           </div>
         )}
-        <Alerta mensagem={erro ?? (exibida.tipo === "erro" ? simulacao.error?.message : undefined)} tentativa={tentativa} />
+        <Alerta mensagem={erro} tentativa={tentativa} />
       </div>
 
       <div className="meta-contas">
