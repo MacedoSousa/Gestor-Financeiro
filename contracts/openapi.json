@@ -1638,6 +1638,275 @@
           }
         }
       }
+    },
+    "/api/v1/orcamento": {
+      "get": {
+        "tags": [
+          "Orcamento"
+        ],
+        "summary": "Orçamento do mês (AAAA-MM de 2020-01 até hoje + 24 meses; padrão: o mês de hoje em Brasília): fatias, folga, teto e usado por categoria de despesa e o mês de onde copiar tetos.",
+        "operationId": "ObterOrcamento",
+        "parameters": [
+          {
+            "name": "mes",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrcamentoDoMesDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/orcamento/tetos/{mes}/{categoriaId}": {
+      "put": {
+        "tags": [
+          "Orcamento"
+        ],
+        "summary": "Cria ou atualiza o teto da categoria de despesa no mês (0 a 100.000.000.000 centavos; zero é um teto). Categoria de receita dá 400; teto novo em categoria arquivada dá 400 (atualizar é permitido).",
+        "operationId": "DefinirTeto",
+        "parameters": [
+          {
+            "name": "mes",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "categoriaId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ValorDoMesDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Orcamento"
+        ],
+        "summary": "Remove o teto (soft delete). Sem teto no mês dá 404.",
+        "operationId": "RemoverTeto",
+        "parameters": [
+          {
+            "name": "mes",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "categoriaId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/orcamento/receita/{mes}": {
+      "put": {
+        "tags": [
+          "Orcamento"
+        ],
+        "summary": "Cria ou atualiza a receita prevista do mês (0 a 100.000.000.000 centavos).",
+        "operationId": "DefinirReceitaPrevista",
+        "parameters": [
+          {
+            "name": "mes",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ValorDoMesDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Orcamento"
+        ],
+        "summary": "Remove a receita prevista (soft delete). Sem receita no mês dá 404.",
+        "operationId": "RemoverReceitaPrevista",
+        "parameters": [
+          {
+            "name": "mes",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/orcamento/{mes}/copia": {
+      "post": {
+        "tags": [
+          "Orcamento"
+        ],
+        "summary": "Copia para o mês os tetos do último mês anterior com teto, só nas categorias ativas sem linha no mês. origem é nula quando não há de onde copiar.",
+        "operationId": "CopiarTetos",
+        "parameters": [
+          {
+            "name": "mes",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CopiaDeTetosDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1993,6 +2262,29 @@
           }
         }
       },
+      "CopiaDeTetosDto": {
+        "required": [
+          "copiados",
+          "origem"
+        ],
+        "type": "object",
+        "properties": {
+          "copiados": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "origem": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
       "CredencialDto": {
         "required": [
           "id",
@@ -2172,6 +2464,106 @@
             "items": {
               "$ref": "#/components/schemas/LancamentoDto"
             }
+          }
+        }
+      },
+      "FatiaDeInvestirDto": {
+        "required": [
+          "tetoCentavos",
+          "usadoCentavos",
+          "aportesCentavos",
+          "percentual"
+        ],
+        "type": "object",
+        "properties": {
+          "tetoCentavos": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "usadoCentavos": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "aportesCentavos": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "percentual": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "format": "double"
+          }
+        }
+      },
+      "FatiaDto": {
+        "required": [
+          "tetoCentavos",
+          "usadoCentavos",
+          "percentual"
+        ],
+        "type": "object",
+        "properties": {
+          "tetoCentavos": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "usadoCentavos": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "percentual": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "format": "double"
+          }
+        }
+      },
+      "FatiasDto": {
+        "required": [
+          "investir",
+          "dividas",
+          "tetoDeGastos"
+        ],
+        "type": "object",
+        "properties": {
+          "investir": {
+            "$ref": "#/components/schemas/FatiaDeInvestirDto"
+          },
+          "dividas": {
+            "$ref": "#/components/schemas/FatiaDto"
+          },
+          "tetoDeGastos": {
+            "$ref": "#/components/schemas/FatiaDto"
           }
         }
       },
@@ -2733,6 +3125,64 @@
           }
         }
       },
+      "OrcamentoDoMesDto": {
+        "required": [
+          "mes",
+          "receitaPrevistaCentavos",
+          "receitaSugeridaCentavos",
+          "fatias",
+          "folgaCentavos",
+          "categorias",
+          "mesParaCopiar"
+        ],
+        "type": "object",
+        "properties": {
+          "mes": {
+            "type": "string"
+          },
+          "receitaPrevistaCentavos": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "receitaSugeridaCentavos": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "fatias": {
+            "$ref": "#/components/schemas/FatiasDto"
+          },
+          "folgaCentavos": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "categorias": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TetoDaCategoriaDto"
+            }
+          },
+          "mesParaCopiar": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
       "ParametroDeChaveDto": {
         "required": [
           "type",
@@ -2992,6 +3442,62 @@
           }
         }
       },
+      "TetoDaCategoriaDto": {
+        "required": [
+          "categoriaId",
+          "nome",
+          "papel",
+          "arquivada",
+          "tetoCentavos",
+          "usadoCentavos",
+          "restanteCentavos"
+        ],
+        "type": "object",
+        "properties": {
+          "categoriaId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "nome": {
+            "type": "string"
+          },
+          "papel": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "arquivada": {
+            "type": "boolean"
+          },
+          "tetoCentavos": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "usadoCentavos": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "restanteCentavos": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          }
+        }
+      },
       "TitularDto": {
         "required": [
           "usuarioId",
@@ -3062,6 +3568,22 @@
             "type": "string"
           }
         }
+      },
+      "ValorDoMesDto": {
+        "required": [
+          "valorCentavos"
+        ],
+        "type": "object",
+        "properties": {
+          "valorCentavos": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          }
+        }
       }
     }
   },
@@ -3083,6 +3605,9 @@
     },
     {
       "name": "Contas"
+    },
+    {
+      "name": "Orcamento"
     }
   ]
 }

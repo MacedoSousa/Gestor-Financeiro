@@ -18,4 +18,7 @@ internal sealed class ConsultaDeCategorias(LancamentosDbContext db, ServicoDeCat
             .Select(c => new CategoriaDeDespesa(c.Id, c.Nome, c.Papel, c.Arquivada))
             .ToListAsync(ct);
     }
+
+    public Task<bool> EhDeReceitaAsync(Guid categoriaId, CancellationToken ct = default) =>
+        db.Categorias.AnyAsync(c => c.Id == categoriaId && c.Tipo == TipoDeCategoria.Receita, ct);
 }

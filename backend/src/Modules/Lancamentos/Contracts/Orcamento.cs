@@ -8,6 +8,12 @@ public interface IConsultaDeCategorias
 {
     /// <summary>Inclui as arquivadas, exclui as apagadas e cria as padrão do casal se ele ainda não tem nenhuma.</summary>
     Task<IReadOnlyList<CategoriaDeDespesa>> ListarDeDespesaAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// Verdadeiro só para categoria de receita do casal e não apagada. Serve para separar "categoria de receita" (400)
+    /// de "categoria inexistente ou de outro casal" (404) quando um id não está em <see cref="ListarDeDespesaAsync"/>.
+    /// </summary>
+    Task<bool> EhDeReceitaAsync(Guid categoriaId, CancellationToken ct = default);
 }
 
 /// <param name="UsadoCentavos">Despesas menos estornos da categoria no mês; pode ser negativo se só houve estorno.</param>

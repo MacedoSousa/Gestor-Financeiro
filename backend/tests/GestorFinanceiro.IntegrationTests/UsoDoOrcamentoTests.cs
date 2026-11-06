@@ -292,4 +292,27 @@ public class UsoDoOrcamentoTests(PostgresFixture pg)
         Assert.True(lista.Single(x => x.Id == lazer).Arquivada);
         Assert.Equal(1, lista.Count(x => x.Arquivada));
     }
+
+    [Fact]
+    public async Task EhDeReceita_distingue_receita_de_despesa_inexistente_apagada_e_de_outro_casal()
+    {
+        await using var c = await IniciarAsync();
+        var salario = await CategoriaAsync(c.Cliente, "Salário");
+        var mercado = await CategoriaAsync(c.Cliente, "Mercado");
+        var outras = await CategoriaAsync(c.Cliente, "Outras receitas");
+        Assert.Equal(HttpStatusCode.NoContent, (await c.Cliente.DeleteAsync($"/api/v1/categorias/{outras}")).StatusCode);
+        var outroCasal = Guid.NewGuid();
+        var alheia = Guid.NewGuid();
+        await ExecutarAsync(c.Banco, $"INSERT INTO identidade.casais (id, nome_familia) VALUES ('{outroCasal}', 'Outra')");
+        await ExecutarAsync(c.Banco,
+            $"INSERT INTO lancamentos.categorias (id, casal_id, nome, tipo) VALUES ('{alheia}', '{outroCasal}', 'Salário', 'RECEITA')");
+
+        Task<bool> EhDeReceita(Guid id) => c.ComConsultasAsync((_, cat) => cat.EhDeReceitaAsync(id));
+
+        Assert.True(await EhDeReceita(salario));
+        Assert.False(await EhDeReceita(mercado));
+        Assert.False(await EhDeReceita(outras));
+        Assert.False(await EhDeReceita(alheia));
+        Assert.False(await EhDeReceita(Guid.NewGuid()));
+    }
 }
