@@ -302,22 +302,28 @@ public class LancamentosTests(PostgresFixture pg)
         var primeira = await LancarAsync(c.Cliente, Novo(cartao, lazer, 40_000, "2026-09-20", "TV", parcelas: 4));
         var grupo = primeira.GetProperty("grupoId").GetGuid();
 
-        var resposta = await c.Cliente.PutAsJsonAsync($"{Rota}/{primeira.GetProperty("id").GetGuid()}?escopo=proximos", new
+        // A partir da parcela 1 (fatura fechada), só texto: todas recebem a descrição nova; valores e datas ficam.
+        var texto = await c.Cliente.PutAsJsonAsync($"{Rota}/{primeira.GetProperty("id").GetGuid()}?escopo=proximos", new
         {
-            natureza = "DESPESA", valorCentavos = 9_000L, data = "2026-09-20", descricao = "TV da sala", contraparte = (string?)null,
+            natureza = "DESPESA", valorCentavos = 10_000L, data = "2026-09-20", descricao = "TV da sala", contraparte = (string?)null,
             categoriaId = lazer,
+        });
+        Assert.Equal(HttpStatusCode.NoContent, texto.StatusCode);
+        Assert.Equal("TV da sala", Assert.Single(await ExtratoAsync(c.Cliente, "mes=2026-09")).GetProperty("descricao").GetString());
+
+        // A partir da parcela 2 (fecha hoje: ainda aberta), com valor novo: a 1 (fechada) não muda.
+        var segunda = Assert.Single(await ExtratoAsync(c.Cliente, "mes=2026-10")).GetProperty("id").GetGuid();
+        var resposta = await c.Cliente.PutAsJsonAsync($"{Rota}/{segunda}?escopo=proximos", new
+        {
+            natureza = "DESPESA", valorCentavos = 9_000L, data = "2026-10-20", descricao = "TV da sala", categoriaId = lazer,
         });
 
         Assert.Equal(HttpStatusCode.NoContent, resposta.StatusCode);
         Assert.Equal(
             ["1|-10000|false|2026-10-12|2026-09-20", "2|-9000|false|2026-11-12|2026-10-20", "3|-9000|false|2026-12-12|2026-11-20", "4|-9000|false|2027-01-12|2026-12-20"],
             await ParcelasAsync(c.Banco, grupo));
-        var novembro = await ExtratoAsync(c.Cliente, "mes=2026-11");
-        Assert.Equal("TV da sala", Assert.Single(novembro).GetProperty("descricao").GetString());
-        Assert.Equal("TV", Assert.Single(await ExtratoAsync(c.Cliente, "mes=2026-09")).GetProperty("descricao").GetString());
 
         // Escopo "este" (padrão) muda só a parcela escolhida.
-        var segunda = Assert.Single(await ExtratoAsync(c.Cliente, "mes=2026-10")).GetProperty("id").GetGuid();
         var so = await c.Cliente.PutAsJsonAsync($"{Rota}/{segunda}", new
         {
             natureza = "DESPESA", valorCentavos = 8_000L, data = "2026-10-20", descricao = "TV da sala", categoriaId = lazer,
@@ -475,7 +481,7 @@ public class LancamentosTests(PostgresFixture pg)
         {
             natureza = "DESPESA", valorCentavos = 3_000L, data = "2026-11-04", descricao = "Cinema e pipoca", categoriaId = lazer,
         })).StatusCode);
-        // Trocar para outra categoria arquivada não pode.
+        // Trocar para uma categoria ativa pode; voltar para a arquivada, não.
         Assert.Equal(HttpStatusCode.NoContent, (await c.Cliente.PutAsJsonAsync($"{Rota}/{id}", new
         {
             natureza = "DESPESA", valorCentavos = 3_000L, data = "2026-11-04", descricao = "Cinema e pipoca", categoriaId = mercado,
@@ -535,6 +541,127 @@ public class LancamentosTests(PostgresFixture pg)
 
         Assert.Equal(0L, await EscalarAsync<long>(c.Banco,
             "SELECT count(*) FROM lancamentos.transacoes t JOIN lancamentos.categorias k ON k.id = t.categoria_id WHERE NOT t.is_deleted AND k.is_deleted"));
+    }
+
+    private static object Edicao(Guid categoria, long valor, string data, string descricao) =>
+        new { natureza = "DESPESA", valorCentavos = valor, data, descricao, categoriaId = categoria };
+
+    private static async Task Assert409FaturaFechadaAsync(HttpResponseMessage resposta)
+    {
+        Assert.Equal(HttpStatusCode.Conflict, resposta.StatusCode);
+        Assert.Equal("Fatura fechada: só descrição e categoria podem mudar.", (await JsonAsync(resposta)).GetProperty("title").GetString());
+    }
+
+    [Fact]
+    public async Task Editar_data_nao_move_parcela_para_fatura_fechada()
+    {
+        // Hoje: 05/11/2026. Faturas que vencem até 12/10 estão fechadas; a de 12/11 fecha hoje (ainda aberta).
+        await using var c = await IniciarAsync();
+        var cartao = await CriarCartaoAsync(c.Cliente);
+        var lazer = await CategoriaAsync(c.Cliente, "Lazer");
+        var primeira = await LancarAsync(c.Cliente, Novo(cartao, lazer, 30_000, "2026-11-06", "Sofá", parcelas: 3));
+        var id = primeira.GetProperty("id").GetGuid();
+        var grupo = primeira.GetProperty("grupoId").GetGuid();
+        string[] original = ["1|-10000|false|2026-12-12|2026-11-06", "2|-10000|false|2027-01-12|2026-12-06", "3|-10000|false|2027-02-12|2027-01-06"];
+
+        // 01/10 cai na fatura que vence 12/10 (fechada): recusa nos dois escopos e nada muda.
+        await Assert409FaturaFechadaAsync(await c.Cliente.PutAsJsonAsync($"{Rota}/{id}?escopo=proximos", Edicao(lazer, 10_000, "2026-10-01", "Sofá")));
+        await Assert409FaturaFechadaAsync(await c.Cliente.PutAsJsonAsync($"{Rota}/{id}", Edicao(lazer, 10_000, "2026-10-01", "Sofá")));
+        Assert.Equal(original, await ParcelasAsync(c.Banco, grupo));
+
+        // 05/11 cai na fatura que vence 12/11 (fecha hoje, aberta): as três andam juntas.
+        Assert.Equal(HttpStatusCode.NoContent,
+            (await c.Cliente.PutAsJsonAsync($"{Rota}/{id}?escopo=proximos", Edicao(lazer, 10_000, "2026-11-05", "Sofá"))).StatusCode);
+        Assert.Equal(
+            ["1|-10000|false|2026-11-12|2026-11-05", "2|-10000|false|2026-12-12|2026-12-05", "3|-10000|false|2027-01-12|2027-01-05"],
+            await ParcelasAsync(c.Banco, grupo));
+
+        // Compra à vista: mesma regra.
+        var avulsa = (await LancarAsync(c.Cliente, Novo(cartao, lazer, 5_000, "2026-11-06", "Livro"))).GetProperty("id").GetGuid();
+        await Assert409FaturaFechadaAsync(await c.Cliente.PutAsJsonAsync($"{Rota}/{avulsa}", Edicao(lazer, 5_000, "2026-09-30", "Livro")));
+        Assert.Equal(HttpStatusCode.NoContent, (await c.Cliente.PutAsJsonAsync($"{Rota}/{avulsa}", Edicao(lazer, 5_000, "2026-10-20", "Livro"))).StatusCode);
+        Assert.Equal("2026-11-12", (await TextosAsync(c.Banco, $"SELECT fatura_vencimento::text FROM lancamentos.transacoes WHERE id = '{avulsa}'")).Single());
+    }
+
+    [Fact]
+    public async Task Fatura_fechada_so_aceita_descricao_e_categoria()
+    {
+        await using var c = await IniciarAsync();
+        var cartao = await CriarCartaoAsync(c.Cliente);
+        var lazer = await CategoriaAsync(c.Cliente, "Lazer");
+        var restaurantes = await CategoriaAsync(c.Cliente, "Restaurantes");
+        // 01/10: fatura que vence 12/10, fechada em 05/10.
+        var id = (await LancarAsync(c.Cliente, Novo(cartao, lazer, 5_000, "2026-10-01", "Show"))).GetProperty("id").GetGuid();
+        const string sqlLinha = "SELECT valor_centavos || '|' || data || '|' || fatura_vencimento || '|' || is_deleted FROM lancamentos.transacoes WHERE id = ";
+
+        await Assert409FaturaFechadaAsync(await c.Cliente.PutAsJsonAsync($"{Rota}/{id}", Edicao(lazer, 6_000, "2026-10-01", "Show")));
+        await Assert409FaturaFechadaAsync(await c.Cliente.PutAsJsonAsync($"{Rota}/{id}", Edicao(lazer, 5_000, "2026-10-02", "Show")));
+        await Assert409FaturaFechadaAsync(await c.Cliente.PutAsJsonAsync($"{Rota}/{id}", new
+        {
+            natureza = "RECEITA", valorCentavos = 5_000L, data = "2026-10-01", descricao = "Show", categoriaId = await CategoriaAsync(c.Cliente, "Outras receitas"),
+        }));
+        await Assert409FaturaFechadaAsync(await c.Cliente.DeleteAsync($"{Rota}/{id}"));
+        await Assert409FaturaFechadaAsync(await c.Cliente.DeleteAsync($"{Rota}/{id}?escopo=proximos"));
+        Assert.Equal("-5000|2026-10-01|2026-10-12|false", (await TextosAsync(c.Banco, $"{sqlLinha}'{id}'")).Single());
+
+        var texto = await c.Cliente.PutAsJsonAsync($"{Rota}/{id}", new
+        {
+            natureza = "DESPESA", valorCentavos = 5_000L, data = "2026-10-01", descricao = "Jantar", contraparte = "Bistrô", categoriaId = restaurantes,
+        });
+
+        Assert.Equal(HttpStatusCode.NoContent, texto.StatusCode);
+        var item = await JsonAsync(await c.Cliente.GetAsync($"{Rota}/{id}"));
+        Assert.Equal("Jantar", item.GetProperty("descricao").GetString());
+        Assert.Equal("Bistrô", item.GetProperty("contraparte").GetString());
+        Assert.Equal(restaurantes, item.GetProperty("categoria").GetProperty("id").GetGuid());
+        Assert.Equal("-5000|2026-10-01|2026-10-12|false", (await TextosAsync(c.Banco, $"{sqlLinha}'{id}'")).Single());
+    }
+
+    [Fact]
+    public async Task Proximas_a_partir_de_parcela_em_fatura_fechada_com_valor_responde_409()
+    {
+        await using var c = await IniciarAsync();
+        var cartao = await CriarCartaoAsync(c.Cliente);
+        var lazer = await CategoriaAsync(c.Cliente, "Lazer");
+        // Parcela 1 na fatura de 12/10 (fechada); as outras abertas.
+        var primeira = await LancarAsync(c.Cliente, Novo(cartao, lazer, 40_000, "2026-09-20", "TV", parcelas: 4));
+        var grupo = primeira.GetProperty("grupoId").GetGuid();
+        var antes = await ParcelasAsync(c.Banco, grupo);
+
+        await Assert409FaturaFechadaAsync(await c.Cliente.PutAsJsonAsync(
+            $"{Rota}/{primeira.GetProperty("id").GetGuid()}?escopo=proximos", Edicao(lazer, 9_000, "2026-09-20", "TV da sala")));
+
+        // Tudo ou nada: nem as parcelas abertas mudaram, nem o texto.
+        Assert.Equal(antes, await ParcelasAsync(c.Banco, grupo));
+        Assert.All(await ExtratoAsync(c.Cliente, "mes=2026-11"), l => Assert.Equal("TV", l.GetProperty("descricao").GetString()));
+    }
+
+    [Fact]
+    public async Task Chave_de_outro_casal_responde_409_sem_vazar()
+    {
+        await using var c = await IniciarAsync();
+        var conta = await CriarCorrenteAsync(c.Cliente);
+        var mercado = await CategoriaAsync(c.Cliente, "Mercado");
+        var outroCasal = Guid.NewGuid();
+        var contaDeFora = Guid.NewGuid();
+        var lancamentoDeFora = Guid.NewGuid();
+        var chave = Guid.NewGuid();
+        await ExecutarAsync(c.Banco, $"INSERT INTO identidade.casais (id, nome_familia) VALUES ('{outroCasal}', 'Outra')");
+        await ExecutarAsync(c.Banco,
+            "INSERT INTO contas.contas (id, casal_id, tipo, apelido, saldo_inicial_centavos, saldo_inicial_em) " +
+            $"VALUES ('{contaDeFora}', '{outroCasal}', 'CORRENTE', 'Alheia', 0, '2026-01-01')");
+        await ExecutarAsync(c.Banco,
+            "INSERT INTO lancamentos.transacoes (id, casal_id, conta_id, data, valor_centavos, natureza, descricao_cifrada, origem, id_externo) " +
+            $"VALUES ('{lancamentoDeFora}', '{outroCasal}', '{contaDeFora}', '2026-11-02', -43210, 'DESPESA', convert_to('Segredo alheio', 'UTF8'), 'MANUAL', '{chave}')");
+
+        var resposta = await c.Cliente.PostAsJsonAsync(Rota, Novo(conta, mercado, 1_000, chave: chave));
+
+        Assert.Equal(HttpStatusCode.Conflict, resposta.StatusCode);
+        var corpo = await resposta.Content.ReadAsStringAsync();
+        Assert.Equal("Chave de idempotência já usada.", JsonDocument.Parse(corpo).RootElement.GetProperty("title").GetString());
+        foreach (var vazamento in new[] { "43210", "Segredo", "Alheia", lancamentoDeFora.ToString(), contaDeFora.ToString(), outroCasal.ToString(), "2026-11-02" })
+            Assert.DoesNotContain(vazamento, corpo, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(1L, await EscalarAsync<long>(c.Banco, "SELECT count(*) FROM lancamentos.transacoes"));
     }
 
     [Fact]

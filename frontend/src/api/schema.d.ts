@@ -547,10 +547,10 @@ export interface paths {
         };
         /** Um lançamento do casal. */
         get: operations["ObterLancamento"];
-        /** Edita um lançamento. escopo: este (padrão) ou proximos (esta parcela e as seguintes cuja fatura não fechou). */
+        /** Edita um lançamento. escopo: este (padrão) ou proximos (esta parcela e as seguintes). Em fatura fechada só descrição, contraparte e categoria mudam; mudar valor ou data ali, ou levar algo para fatura fechada, dá 409. */
         put: operations["EditarLancamento"];
         post?: never;
-        /** Apaga (soft delete). escopo: este (padrão) ou proximos (esta parcela e as seguintes cuja fatura não fechou). */
+        /** Apaga (soft delete). escopo: este (padrão) ou proximos (esta parcela e as seguintes, pulando faturas fechadas). Apagar lançamento de fatura fechada dá 409. */
         delete: operations["ApagarLancamento"];
         options?: never;
         head?: never;

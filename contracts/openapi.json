@@ -1462,7 +1462,7 @@
         "tags": [
           "Lancamentos"
         ],
-        "summary": "Edita um lançamento. escopo: este (padrão) ou proximos (esta parcela e as seguintes cuja fatura não fechou).",
+        "summary": "Edita um lançamento. escopo: este (padrão) ou proximos (esta parcela e as seguintes). Em fatura fechada só descrição, contraparte e categoria mudam; mudar valor ou data ali, ou levar algo para fatura fechada, dá 409.",
         "operationId": "EditarLancamento",
         "parameters": [
           {
@@ -1525,7 +1525,7 @@
         "tags": [
           "Lancamentos"
         ],
-        "summary": "Apaga (soft delete). escopo: este (padrão) ou proximos (esta parcela e as seguintes cuja fatura não fechou).",
+        "summary": "Apaga (soft delete). escopo: este (padrão) ou proximos (esta parcela e as seguintes, pulando faturas fechadas). Apagar lançamento de fatura fechada dá 409.",
         "operationId": "ApagarLancamento",
         "parameters": [
           {

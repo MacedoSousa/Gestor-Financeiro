@@ -30,7 +30,7 @@ internal sealed class ServicoDeLancamentos(LancamentosDbContext db, IUsuarioAtua
     internal const string TituloContaArquivada = "Conta arquivada: escolha outra.";
     internal const string TituloCategoriaArquivada = "Categoria arquivada: escolha outra.";
     internal const string TituloChaveUsada = "Chave de idempotência já usada.";
-    internal const string TituloFaturasFechadas = "As parcelas escolhidas estão em faturas já fechadas.";
+    internal const string TituloFaturaFechada = "Fatura fechada: só descrição e categoria podem mudar.";
     private const string IndiceDaChave = "ux_transacoes_origem_id_externo";
     private const int TamanhoMaximoDoTexto = 140;
 
@@ -102,8 +102,10 @@ internal sealed class ServicoDeLancamentos(LancamentosDbContext db, IUsuarioAtua
 
     /// <summary>
     /// Edita um lançamento. Em parcelado com escopo "proximos", aplica às parcelas do grupo com número maior ou igual
-    /// ao da escolhida cuja fatura ainda não fechou; o valor informado é o de cada parcela, e mudar a data desloca as
-    /// seguintes mês a mês (com a fatura recalculada).
+    /// ao da escolhida; o valor informado é o de cada parcela, e mudar a data desloca as seguintes mês a mês (com a
+    /// fatura recalculada). Fatura fechada (ruling C7): ali só descrição, contraparte e categoria mudam; mudar valor ou
+    /// data do lançamento escolhido numa fatura fechada, ou levar qualquer lançamento para uma fatura fechada, dá 409.
+    /// Tudo é conferido antes de gravar (tudo ou nada).
     /// </summary>
     public async Task<ResultadoDeLancamento> EditarAsync(Guid id, string? escopo, EditarLancamentoDto p, CancellationToken ct)
     {
@@ -123,18 +125,35 @@ internal sealed class ServicoDeLancamentos(LancamentosDbContext db, IUsuarioAtua
         if (await ValidarCategoriaAsync(p.CategoriaId, natureza, alvo.CategoriaId, ct) is { } recusa) return recusa;
 
         var conta = await contas.ObterAsync(alvo.ContaId, ct);
-        var lista = await AlvosAsync(alvo, proximas, conta, ct);
-        if (lista.Count == 0) return new ResultadoDeLancamento.Recusado(TituloFaturasFechadas, 409);
-
+        var hoje = Brasilia.Hoje(relogio);
+        var lista = await AlvosAsync(alvo, proximas, ct);
+        var valorComSinal = natureza == NaturezaDaTransacao.Despesa ? -p.ValorCentavos : p.ValorCentavos;
         var dataMudou = p.Data != alvo.Data;
+
+        // Primeiro decide tudo; só grava se nenhuma parcela esbarrar numa fatura fechada.
+        var planos = new List<(Transacao T, DateOnly Data, DateOnly? Fatura, long Valor, NaturezaDaTransacao Natureza)>(lista.Count);
         foreach (var t in lista)
         {
             var k = (t.Parcela ?? 1) - (alvo.Parcela ?? 1);
-            var data = dataMudou ? p.Data.AddMonths(k) : t.Data;
+            var novaData = dataMudou ? p.Data.AddMonths(k) : t.Data;
             // Data nova recalcula a fatura (nula fora de cartão); sem mudar a data, a fatura fica.
-            var fatura = dataMudou && conta is not null ? FaturaDaParcela(conta, p.Data, k) : t.FaturaVencimento;
-            t.Editar(natureza, new Dinheiro(p.ValorCentavos), data, p.Descricao, p.Contraparte, p.CategoriaId, fatura, cofre);
+            var novaFatura = dataMudou && conta is not null ? FaturaDaParcela(conta, p.Data, k) : t.FaturaVencimento;
+            var mudaValorOuData = valorComSinal != t.ValorCentavos || novaData != t.Data;
+
+            if (FaturaFechada(conta, t.FaturaVencimento, hoje))
+            {
+                if (mudaValorOuData && t == alvo) return new ResultadoDeLancamento.Recusado(TituloFaturaFechada, 409);
+                // Fatura fechada: valor, data e fatura ficam como estão; texto e categoria mudam.
+                planos.Add((t, t.Data, t.FaturaVencimento, t.ValorCentavos, t.Natureza));
+                continue;
+            }
+
+            if (FaturaFechada(conta, novaFatura, hoje)) return new ResultadoDeLancamento.Recusado(TituloFaturaFechada, 409);
+            planos.Add((t, novaData, novaFatura, valorComSinal, natureza));
         }
+
+        foreach (var (t, data, fatura, valor, nat) in planos)
+            t.Editar(nat, new Dinheiro(Math.Abs(valor)), data, p.Descricao, p.Contraparte, p.CategoriaId, fatura, cofre);
 
         await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
@@ -142,8 +161,9 @@ internal sealed class ServicoDeLancamentos(LancamentosDbContext db, IUsuarioAtua
     }
 
     /// <summary>
-    /// Apaga (soft delete). Escopo "proximos" em parcelado: as parcelas do grupo a partir da escolhida, menos as de
-    /// faturas já fechadas. Transferência apaga sempre os dois lados.
+    /// Apaga (soft delete). Escopo "proximos" em parcelado: as parcelas do grupo a partir da escolhida, pulando as de
+    /// faturas já fechadas. Apagar o escolhido numa fatura fechada dá 409 (ruling C7). Transferência apaga sempre os
+    /// dois lados, e nenhum se algum estiver em fatura fechada.
     /// </summary>
     public async Task<ResultadoDeLancamento> ApagarAsync(Guid id, string? escopo, CancellationToken ct)
     {
@@ -153,33 +173,37 @@ internal sealed class ServicoDeLancamentos(LancamentosDbContext db, IUsuarioAtua
         var alvo = await db.Transacoes.FirstOrDefaultAsync(t => t.Id == id, ct);
         if (alvo is null) return new ResultadoDeLancamento.NaoEncontrado();
 
-        List<Transacao> lista;
-        if (alvo is { Natureza: NaturezaDaTransacao.Transferencia, GrupoId: { } grupo })
-            lista = await db.Transacoes.Where(t => t.GrupoId == grupo).ToListAsync(ct);
-        else
-            lista = await AlvosAsync(alvo, proximas, await contas.ObterAsync(alvo.ContaId, ct), ct);
-        if (lista.Count == 0) return new ResultadoDeLancamento.Recusado(TituloFaturasFechadas, 409);
+        var hoje = Brasilia.Hoje(relogio);
+        var transferencia = alvo is { Natureza: NaturezaDaTransacao.Transferencia, GrupoId: not null };
+        var lista = transferencia
+            ? await db.Transacoes.Where(t => t.GrupoId == alvo.GrupoId).ToListAsync(ct)
+            : await AlvosAsync(alvo, proximas, ct);
 
-        db.Transacoes.RemoveRange(lista); // SoftDeleteInterceptor converte em is_deleted = true.
+        var contasPorId = new Dictionary<Guid, ContaResumo?>();
+        foreach (var contaId in lista.Select(t => t.ContaId).Distinct()) contasPorId[contaId] = await contas.ObterAsync(contaId, ct);
+        bool Fechada(Transacao t) => FaturaFechada(contasPorId[t.ContaId], t.FaturaVencimento, hoje);
+
+        if (Fechada(alvo) || (transferencia && lista.Any(Fechada)))
+            return new ResultadoDeLancamento.Recusado(TituloFaturaFechada, 409);
+
+        db.Transacoes.RemoveRange(lista.Where(t => t == alvo || !Fechada(t))); // SoftDeleteInterceptor converte em is_deleted = true.
         await db.SaveChangesAsync(ct);
         return new ResultadoDeLancamento.Feito();
     }
 
-    private async Task<List<Transacao>> AlvosAsync(Transacao alvo, bool proximas, ContaResumo? conta, CancellationToken ct)
+    /// <summary>O lançamento escolhido e, em "proximos" de um parcelado, as parcelas seguintes do mesmo grupo.</summary>
+    private async Task<List<Transacao>> AlvosAsync(Transacao alvo, bool proximas, CancellationToken ct)
     {
         if (!proximas || alvo is not { GrupoId: { } grupo, Parcela: { } parcela }) return [alvo];
-
-        var hoje = Brasilia.Hoje(relogio);
-        var doGrupo = await db.Transacoes.Where(t => t.GrupoId == grupo && t.Parcela >= parcela).OrderBy(t => t.Parcela).ToListAsync(ct);
-        return doGrupo.Where(t => !FaturaFechada(conta, t, hoje)).ToList();
+        return await db.Transacoes.Where(t => t.GrupoId == grupo && t.Parcela >= parcela).OrderBy(t => t.Parcela).ToListAsync(ct);
     }
 
     /// <summary>
     /// A fatura está fechada a partir do dia seguinte ao fechamento (compra no dia do fechamento ainda entra nela):
     /// fechada quando <c>fechamento &lt; hoje</c>, com hoje no fuso de Brasília.
     /// </summary>
-    private bool FaturaFechada(ContaResumo? conta, Transacao t, DateOnly hoje) =>
-        conta is not null && t.FaturaVencimento is { } vencimento
+    private bool FaturaFechada(ContaResumo? conta, DateOnly? faturaVencimento, DateOnly hoje) =>
+        conta is not null && faturaVencimento is { } vencimento
         && contas.FechamentoDaFatura(conta, vencimento) is { } fechamento && fechamento < hoje;
 
     /// <summary>

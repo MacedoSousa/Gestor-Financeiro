@@ -61,7 +61,8 @@ internal static class EndpointsDeLancamentos
             Guid id, string? escopo, EditarLancamentoDto pedido, ServicoDeLancamentos servico, CancellationToken ct) =>
             Traduzir(await servico.EditarAsync(id, escopo, pedido, ct)))
         .WithName("EditarLancamento")
-        .WithSummary("Edita um lançamento. escopo: este (padrão) ou proximos (esta parcela e as seguintes cuja fatura não fechou).")
+        .WithSummary("Edita um lançamento. escopo: este (padrão) ou proximos (esta parcela e as seguintes). " +
+                     "Em fatura fechada só descrição, contraparte e categoria mudam; mudar valor ou data ali, ou levar algo para fatura fechada, dá 409.")
         .ProducesProblem(StatusCodes.Status400BadRequest)
         .ProducesProblem(StatusCodes.Status409Conflict);
 
@@ -69,7 +70,8 @@ internal static class EndpointsDeLancamentos
             Guid id, string? escopo, ServicoDeLancamentos servico, CancellationToken ct) =>
             Traduzir(await servico.ApagarAsync(id, escopo, ct)))
         .WithName("ApagarLancamento")
-        .WithSummary("Apaga (soft delete). escopo: este (padrão) ou proximos (esta parcela e as seguintes cuja fatura não fechou).")
+        .WithSummary("Apaga (soft delete). escopo: este (padrão) ou proximos (esta parcela e as seguintes, pulando faturas fechadas). " +
+                     "Apagar lançamento de fatura fechada dá 409.")
         .ProducesProblem(StatusCodes.Status409Conflict);
 
         return api;
