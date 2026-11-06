@@ -6,6 +6,7 @@ using GestorFinanceiro.SharedKernel.Aplicacao;
 using GestorFinanceiro.SharedKernel.Dominio;
 using GestorFinanceiro.SharedKernel.Seguranca;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Npgsql;
 
 namespace GestorFinanceiro.Modules.Lancamentos.Aplicacao;
@@ -37,7 +38,7 @@ internal sealed class ServicoDeLancamentos(LancamentosDbContext db, IUsuarioAtua
     public async Task<ResultadoDeLancamento> CriarAsync(NovoLancamentoDto p, CancellationToken ct)
     {
         if (atual.CasalId is not { } casalId) return new ResultadoDeLancamento.NaoEncontrado();
-        var erros = ValidarCampos(p.Natureza, p.ValorCentavos, p.Data, p.Descricao, p.Contraparte);
+        var erros = ValidarCampos(p.Natureza, p.ValorCentavos, p.Data, p.Descricao, p.Contraparte, aceitaTransferencia: false);
         if (p.ChaveIdempotente == Guid.Empty) erros["chaveIdempotente"] = ["Informe a chave de idempotência."];
         if (p.Parcelas is < 1 or > Parcelamento.MaximoDeParcelas) erros["parcelas"] = ["Parcelas devem ser de 1 a 24."];
         else if (p.Parcelas > 1 && p.Natureza != "DESPESA") erros["parcelas"] = ["Só despesa pode ser parcelada."];
@@ -111,18 +112,19 @@ internal sealed class ServicoDeLancamentos(LancamentosDbContext db, IUsuarioAtua
     {
         if (atual.CasalId is null) return new ResultadoDeLancamento.NaoEncontrado();
         if (LerEscopo(escopo) is not { } proximas) return Invalido("escopo", "Escopo inválido: use este ou proximos.");
-        var erros = ValidarCampos(p.Natureza, p.ValorCentavos, p.Data, p.Descricao, p.Contraparte);
+        var erros = ValidarCampos(p.Natureza, p.ValorCentavos, p.Data, p.Descricao, p.Contraparte, aceitaTransferencia: true);
         if (erros.Count > 0) return new ResultadoDeLancamento.Invalido(erros);
 
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         var alvo = await db.Transacoes.FirstOrDefaultAsync(t => t.Id == id, ct);
         if (alvo is null) return new ResultadoDeLancamento.NaoEncontrado();
-        if (alvo.Natureza == NaturezaDaTransacao.Transferencia)
-            return Invalido("natureza", "Transferência se edita pelos dois lados, na rota de transferências.");
+        if (alvo.Natureza == NaturezaDaTransacao.Transferencia) return await EditarTransferenciaAsync(alvo, p, tx, ct);
+        if (p.Natureza == "TRANSFERENCIA") return Invalido("natureza", "Despesa ou receita não vira transferência.");
+        if (p.CategoriaId is not { } categoriaId) return Invalido("categoriaId", "Informe a categoria.");
         var natureza = LerNatureza(p.Natureza);
         if (alvo.Parcela is not null && natureza != NaturezaDaTransacao.Despesa)
             return Invalido("natureza", "Só despesa pode ser parcelada.");
-        if (await ValidarCategoriaAsync(p.CategoriaId, natureza, alvo.CategoriaId, ct) is { } recusa) return recusa;
+        if (await ValidarCategoriaAsync(categoriaId, natureza, alvo.CategoriaId, ct) is { } recusa) return recusa;
 
         var conta = await contas.ObterAsync(alvo.ContaId, ct);
         var hoje = Brasilia.Hoje(relogio);
@@ -153,7 +155,26 @@ internal sealed class ServicoDeLancamentos(LancamentosDbContext db, IUsuarioAtua
         }
 
         foreach (var (t, data, fatura, valor, nat) in planos)
-            t.Editar(nat, new Dinheiro(Math.Abs(valor)), data, p.Descricao, p.Contraparte, p.CategoriaId, fatura, cofre);
+            t.Editar(nat, new Dinheiro(Math.Abs(valor)), data, p.Descricao, p.Contraparte, categoriaId, fatura, cofre);
+
+        await db.SaveChangesAsync(ct);
+        await tx.CommitAsync(ct);
+        return new ResultadoDeLancamento.Feito();
+    }
+
+    /// <summary>
+    /// Perna de transferência: valor, data e descrição mudam nas duas pernas do grupo, o escopo não importa.
+    /// Não vira despesa nem receita e não ganha categoria nem contraparte. As pernas nunca têm fatura.
+    /// </summary>
+    private async Task<ResultadoDeLancamento> EditarTransferenciaAsync(Transacao alvo, EditarLancamentoDto p,
+        IDbContextTransaction tx, CancellationToken ct)
+    {
+        if (p.Natureza != "TRANSFERENCIA") return Invalido("natureza", "Transferência continua transferência: apague e lance de novo.");
+        if (p.CategoriaId is not null) return Invalido("categoriaId", "Transferência não tem categoria.");
+        if (!string.IsNullOrWhiteSpace(p.Contraparte)) return Invalido("contraparte", "Transferência não tem contraparte.");
+
+        var pernas = alvo.GrupoId is { } grupo ? await db.Transacoes.Where(t => t.GrupoId == grupo).ToListAsync(ct) : [alvo];
+        foreach (var t in pernas) t.EditarTransferencia(new Dinheiro(p.ValorCentavos), p.Data, p.Descricao, cofre);
 
         await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
@@ -236,10 +257,14 @@ internal sealed class ServicoDeLancamentos(LancamentosDbContext db, IUsuarioAtua
         return null;
     }
 
-    private static Dictionary<string, string[]> ValidarCampos(string natureza, long valorCentavos, DateOnly data, string descricao, string? contraparte)
+    internal static Dictionary<string, string[]> ValidarCampos(string natureza, long valorCentavos, DateOnly data, string descricao,
+        string? contraparte, bool aceitaTransferencia)
     {
         var erros = new Dictionary<string, string[]>();
-        if (natureza is not ("DESPESA" or "RECEITA")) erros["natureza"] = ["Natureza inválida: use DESPESA ou RECEITA."];
+        if (natureza is not ("DESPESA" or "RECEITA") && !(aceitaTransferencia && natureza == "TRANSFERENCIA"))
+            erros["natureza"] = [aceitaTransferencia
+                ? "Natureza inválida: use DESPESA, RECEITA ou TRANSFERENCIA."
+                : "Natureza inválida: use DESPESA ou RECEITA."];
         if (valorCentavos <= 0) erros["valorCentavos"] = ["Informe um valor positivo; o sinal vem da natureza."];
         if (data == default) erros["data"] = ["Informe a data."];
         if ((descricao?.Trim().Length ?? 0) is < 1 or > TamanhoMaximoDoTexto)
@@ -260,6 +285,6 @@ internal sealed class ServicoDeLancamentos(LancamentosDbContext db, IUsuarioAtua
     private static NaturezaDaTransacao LerNatureza(string natureza) =>
         natureza == "RECEITA" ? NaturezaDaTransacao.Receita : NaturezaDaTransacao.Despesa;
 
-    private static ResultadoDeLancamento.Invalido Invalido(string campo, string mensagem) =>
+    internal static ResultadoDeLancamento.Invalido Invalido(string campo, string mensagem) =>
         new(new Dictionary<string, string[]> { [campo] = [mensagem] });
 }

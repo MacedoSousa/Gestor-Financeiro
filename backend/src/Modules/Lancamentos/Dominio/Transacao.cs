@@ -99,6 +99,20 @@ internal sealed class Transacao : Entidade, ICasalScoped
             : cofre.Cifrar(contraparte.Trim(), Cofre.Aad(Tabela, ColunaContraparte, Id));
     }
 
+    /// <summary>
+    /// Edita uma perna de transferência: valor absoluto, data e descrição. O sinal da perna fica (saída continua
+    /// negativa); quem chama aplica o mesmo às duas pernas do grupo.
+    /// </summary>
+    public void EditarTransferencia(Dinheiro valor, DateOnly data, string descricao, ICofre cofre)
+    {
+        if (Natureza != NaturezaDaTransacao.Transferencia) throw new InvalidOperationException("Não é transferência.");
+        ExigirPositivo(valor);
+        ArgumentException.ThrowIfNullOrWhiteSpace(descricao);
+        ValorCentavos = ValorCentavos < 0 ? -valor.Centavos : valor.Centavos;
+        Data = data;
+        DescricaoCifrada = cofre.Cifrar(descricao.Trim(), Cofre.Aad(Tabela, ColunaDescricao, Id));
+    }
+
     public string LerDescricao(ICofre cofre) => cofre.Decifrar(DescricaoCifrada, Cofre.Aad(Tabela, ColunaDescricao, Id));
 
     public string? LerContraparte(ICofre cofre) =>

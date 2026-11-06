@@ -557,6 +557,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/transferencias": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Transfere entre duas contas do casal (pagar a fatura = destino no cartão). Grava as duas pernas juntas; repetir a mesma chave devolve 200 com a transferência já criada. Origem igual ao destino ou conta arquivada dá 400. Editar ou apagar uma perna, pelas rotas de lançamentos, age nas duas. */
+        post: operations["CriarTransferencia"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -666,9 +683,9 @@ export interface components {
             /** Format: date */
             data: string;
             descricao: string;
-            contraparte: null | string;
+            contraparte?: null | string;
             /** Format: uuid */
-            categoriaId: string;
+            categoriaId?: null | string;
         };
         EntrarComTotpDto: {
             cpf: string;
@@ -768,6 +785,19 @@ export interface components {
         NovaPasskeyDto: {
             apelido: string;
             resposta: components["schemas"]["RespostaDeRegistroDePasskeyDto"];
+        };
+        NovaTransferenciaDto: {
+            /** Format: uuid */
+            chaveIdempotente: string;
+            /** Format: uuid */
+            contaOrigemId: string;
+            /** Format: uuid */
+            contaDestinoId: string;
+            /** Format: int64 */
+            valorCentavos: number | string;
+            /** Format: date */
+            data: string;
+            descricao: string;
         };
         NovoLancamentoDto: {
             /** Format: uuid */
@@ -895,6 +925,12 @@ export interface components {
             /** Format: uuid */
             credencialId: string;
             otpauthUri: string;
+        };
+        TransferenciaDto: {
+            /** Format: uuid */
+            grupoId: string;
+            saida: components["schemas"]["LancamentoDto"];
+            entrada: components["schemas"]["LancamentoDto"];
         };
         UsuarioDePasskeyDto: {
             id: string;
@@ -2315,6 +2351,64 @@ export interface operations {
                 };
                 content: {
                     "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    CriarTransferencia: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NovaTransferenciaDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransferenciaDto"];
+                };
+            };
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransferenciaDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
             /** @description Not Found */

@@ -1574,6 +1574,70 @@
           }
         }
       }
+    },
+    "/api/v1/transferencias": {
+      "post": {
+        "tags": [
+          "Lancamentos"
+        ],
+        "summary": "Transfere entre duas contas do casal (pagar a fatura = destino no cartão). Grava as duas pernas juntas; repetir a mesma chave devolve 200 com a transferência já criada. Origem igual ao destino ou conta arquivada dá 400. Editar ou apagar uma perna, pelas rotas de lançamentos, age nas duas.",
+        "operationId": "CriarTransferencia",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NovaTransferenciaDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransferenciaDto"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransferenciaDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1975,9 +2039,7 @@
           "natureza",
           "valorCentavos",
           "data",
-          "descricao",
-          "contraparte",
-          "categoriaId"
+          "descricao"
         ],
         "type": "object",
         "properties": {
@@ -2006,7 +2068,10 @@
             ]
           },
           "categoriaId": {
-            "type": "string",
+            "type": [
+              "null",
+              "string"
+            ],
             "format": "uuid"
           }
         }
@@ -2415,6 +2480,46 @@
           },
           "resposta": {
             "$ref": "#/components/schemas/RespostaDeRegistroDePasskeyDto"
+          }
+        }
+      },
+      "NovaTransferenciaDto": {
+        "required": [
+          "chaveIdempotente",
+          "contaOrigemId",
+          "contaDestinoId",
+          "valorCentavos",
+          "data",
+          "descricao"
+        ],
+        "type": "object",
+        "properties": {
+          "chaveIdempotente": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "contaOrigemId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "contaDestinoId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "valorCentavos": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "data": {
+            "type": "string",
+            "format": "date"
+          },
+          "descricao": {
+            "type": "string"
           }
         }
       },
@@ -2901,6 +3006,26 @@
           },
           "otpauthUri": {
             "type": "string"
+          }
+        }
+      },
+      "TransferenciaDto": {
+        "required": [
+          "grupoId",
+          "saida",
+          "entrada"
+        ],
+        "type": "object",
+        "properties": {
+          "grupoId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "saida": {
+            "$ref": "#/components/schemas/LancamentoDto"
+          },
+          "entrada": {
+            "$ref": "#/components/schemas/LancamentoDto"
           }
         }
       },

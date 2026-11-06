@@ -36,14 +36,17 @@ public sealed record NovoLancamentoDto(
 }
 
 /// <summary>Corpo de PUT /api/v1/lancamentos/{id}: os campos do lançamento menos a conta e as parcelas.</summary>
-/// <param name="ValorCentavos">Positivo; em parcelado, o valor de cada parcela alterada.</param>
+/// <param name="Natureza">DESPESA ou RECEITA; TRANSFERENCIA só numa perna de transferência (que não muda de natureza).</param>
+/// <param name="ValorCentavos">Positivo; em parcelado, o valor de cada parcela alterada; em transferência, o das duas pernas.</param>
+/// <param name="Contraparte">Transferência não tem contraparte.</param>
+/// <param name="CategoriaId">Obrigatória em despesa e receita; transferência não tem categoria.</param>
 public sealed record EditarLancamentoDto(
     string Natureza,
     long ValorCentavos,
     DateOnly Data,
     string Descricao,
-    string? Contraparte,
-    Guid CategoriaId)
+    string? Contraparte = null,
+    Guid? CategoriaId = null)
 {
     public override string ToString() => $"EditarLancamentoDto {{ Natureza = {Natureza} }}";
 }
@@ -80,3 +83,22 @@ public sealed record LancamentoDto(
 
 /// <summary>Resposta de GET /api/v1/lancamentos: os lançamentos do mês, por data decrescente.</summary>
 public sealed record ExtratoDto(int Total, IReadOnlyList<LancamentoDto> Lancamentos);
+
+/// <summary>Corpo de POST /api/v1/transferencias. Pagar a fatura é uma transferência com destino ao cartão.</summary>
+/// <param name="ChaveIdempotente">UUID gerado pelo front a cada formulário aberto; repetir o POST devolve a transferência já criada.</param>
+/// <param name="ValorCentavos">Positivo: sai da origem e entra no destino.</param>
+public sealed record NovaTransferenciaDto(
+    Guid ChaveIdempotente,
+    Guid ContaOrigemId,
+    Guid ContaDestinoId,
+    long ValorCentavos,
+    DateOnly Data,
+    string Descricao)
+{
+    public override string ToString() => $"NovaTransferenciaDto {{ ContaOrigemId = {ContaOrigemId}, ContaDestinoId = {ContaDestinoId} }}";
+}
+
+/// <summary>As duas pernas de uma transferência, ligadas pelo mesmo grupo.</summary>
+/// <param name="Saida">Perna negativa, na conta de origem.</param>
+/// <param name="Entrada">Perna positiva, na conta de destino.</param>
+public sealed record TransferenciaDto(Guid GrupoId, LancamentoDto Saida, LancamentoDto Entrada);

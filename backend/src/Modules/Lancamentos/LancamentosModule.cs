@@ -27,11 +27,13 @@ public static class LancamentosModule
         services.AddScoped<ConsultaDeSaldos>();
         services.AddScoped<ConsultaDoExtrato>();
         services.AddScoped<ServicoDeLancamentos>();
+        services.AddScoped<ServicoDeTransferencias>();
         return services;
     }
 
     public static IEndpointRouteBuilder MapLancamentos(this IEndpointRouteBuilder api) => api
         .MapEndpointsDeCategorias()
         .MapEndpointsDeSaldos()
-        .MapEndpointsDeLancamentos();
+        .MapEndpointsDeLancamentos()
+        .MapEndpointsDeTransferencias();
 }
