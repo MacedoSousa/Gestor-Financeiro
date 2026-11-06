@@ -99,6 +99,23 @@ public class CalculoDaMetaTests
     }
 
     [Fact]
+    public void Aporte_do_mes_ja_feito_adia_o_primeiro_mes_com_valores_fixos()
+    {
+        // Falta 1.000; o aporte do mês (1.000) já está em "guardado" e reduz o 1º mês a 0: chega no mês seguinte.
+        var p = CalculoDaMeta.Projetar(Mes, 9_000, 10_000, 1_000, 1_000, 0m, null);
+        Assert.Equal(2, p.MesesAteMeta);
+        Assert.Equal("2026-12", p.ChegaEm);
+    }
+
+    [Fact]
+    public void Aporte_necessario_desconta_o_aporte_do_mes_ja_feito()
+    {
+        // 9.000 + P − 400 ≥ 10.000 em 1 mês => P = 1.400.
+        var p = CalculoDaMeta.Projetar(Mes, 9_000, 10_000, 1_000, 400, 0m, new DateOnly(2026, 11, 1));
+        Assert.Equal(1_400, p.AporteNecessarioCentavos);
+    }
+
+    [Fact]
     public void Percentual_e_fracao()
     {
         Assert.Equal(0.0085m, CalculoDaMeta.FracaoDePercentual(0.85m));
