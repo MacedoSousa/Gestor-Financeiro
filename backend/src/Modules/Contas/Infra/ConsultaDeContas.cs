@@ -33,5 +33,5 @@ internal sealed class ConsultaDeContas(ContasDbContext db) : IConsultaDeContas
 
     internal static ContaResumo ParaResumo(Conta c) =>
         new(c.Id, c.Apelido, c.Tipo.ToString().ToUpperInvariant(), c.TitularUsuarioId, c.SaldoInicialCentavos, c.SaldoInicialEm,
-            c.DiaFechamento, c.DiaVencimento, c.Arquivada);
+            c.DiaFechamento, c.DiaVencimento, c.Arquivada, c.Instituicao);
 }

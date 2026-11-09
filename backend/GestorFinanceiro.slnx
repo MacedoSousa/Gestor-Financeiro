@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/Financas/GestorFinanceiro.Financas.csproj" />
     <Project Path="src/SharedKernel/GestorFinanceiro.SharedKernel.csproj" />
     <Project Path="src/Host/GestorFinanceiro.Api/GestorFinanceiro.Api.csproj" />
   </Folder>

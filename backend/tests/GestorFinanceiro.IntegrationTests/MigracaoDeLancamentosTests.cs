@@ -45,6 +45,91 @@ public class MigracaoDeLancamentosTests(PostgresFixture pg)
         throw new FileNotFoundException("V0006__categorias_papel.sql não encontrada");
     }
 
+    private static string SqlDaV0009()
+    {
+        for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
+        {
+            var arquivo = Path.Combine(dir.FullName, "db", "migrations", "V0009__rendimentos.sql");
+            if (File.Exists(arquivo))
+                return string.Join("\n", string.Join("\n", File.ReadAllLines(arquivo).Where(l => !l.TrimStart().StartsWith("--", StringComparison.Ordinal))).Split(';')
+                    .Select(c => c.Trim()).Where(c => c.StartsWith("UPDATE lancamentos.categorias", StringComparison.Ordinal)
+                        || c.StartsWith("INSERT INTO lancamentos.categorias", StringComparison.Ordinal)).Select(c => c + ";"));
+        }
+        throw new FileNotFoundException("V0009__rendimentos.sql não encontrada");
+    }
+
+    private static async Task<long> ContarAsync(NpgsqlConnection db, string sql)
+    {
+        await using var cmd = new NpgsqlCommand(sql, db);
+        return Convert.ToInt64(await cmd.ExecuteScalarAsync(), System.Globalization.CultureInfo.InvariantCulture);
+    }
+
+    [Fact]
+    public async Task V0009_insere_rendimentos_onde_falta()
+    {
+        var banco = await pg.NovoBancoAsync();
+        var (db, casal) = await PrepararAsync(banco);
+        await using var _ = db;
+        var comRendimentos = Guid.NewGuid();
+        var apagada = Guid.NewGuid();
+        foreach (var c in new[] { comRendimentos, apagada })
+            await ExecutarAsync(db, $"INSERT INTO identidade.casais (id, nome_familia) VALUES ('{c}', 'Outra')");
+        await ExecutarAsync(db, $"INSERT INTO lancamentos.categorias (id, casal_id, nome, tipo, papel) VALUES ('{Guid.NewGuid()}', '{comRendimentos}', 'Qualquer', 'RECEITA', 'RENDIMENTOS')");
+        await ExecutarAsync(db, $"INSERT INTO lancamentos.categorias (id, casal_id, nome, tipo, papel, is_deleted, deleted_at) VALUES ('{Guid.NewGuid()}', '{apagada}', 'Rendimentos', 'RECEITA', NULL, true, now())");
+        await ExecutarAsync(db, $"INSERT INTO lancamentos.categorias (id, casal_id, nome, tipo) VALUES ('{Guid.NewGuid()}', '{casal}', 'Salário', 'RECEITA')");
+
+        await ExecutarAsync(db, SqlDaV0009());
+
+        Assert.Equal(1, await ContarAsync(db, $"SELECT count(*) FROM lancamentos.categorias WHERE casal_id = '{casal}' AND nome = 'Rendimentos' AND tipo = 'RECEITA' AND papel = 'RENDIMENTOS' AND NOT is_deleted"));
+        Assert.Equal(1, await ContarAsync(db, $"SELECT count(*) FROM lancamentos.categorias WHERE casal_id = '{comRendimentos}' AND papel = 'RENDIMENTOS' AND NOT is_deleted"));
+        Assert.Equal(0, await ContarAsync(db, $"SELECT count(*) FROM lancamentos.categorias WHERE casal_id = '{apagada}' AND NOT is_deleted"));
+    }
+
+    [Fact]
+    public async Task V0009_atribui_papel_a_rendimentos_existente_sem_caixa()
+    {
+        var banco = await pg.NovoBancoAsync();
+        var (db, casal) = await PrepararAsync(banco);
+        await using var _ = db;
+        await ExecutarAsync(db, $"INSERT INTO lancamentos.categorias (id, casal_id, nome, tipo) VALUES ('{Guid.NewGuid()}', '{casal}', 'rendimentos', 'RECEITA')");
+
+        await ExecutarAsync(db, SqlDaV0009());
+
+        Assert.Equal(1, await ContarAsync(db, $"SELECT count(*) FROM lancamentos.categorias WHERE casal_id = '{casal}' AND lower(nome) = 'rendimentos' AND NOT is_deleted"));
+        Assert.Equal(1, await ContarAsync(db, $"SELECT count(*) FROM lancamentos.categorias WHERE casal_id = '{casal}' AND nome = 'rendimentos' AND papel = 'RENDIMENTOS'"));
+    }
+
+    [Fact]
+    public async Task V0009_e_idempotente()
+    {
+        var banco = await pg.NovoBancoAsync();
+        var (db, casal) = await PrepararAsync(banco);
+        await using var _ = db;
+        await ExecutarAsync(db, $"INSERT INTO lancamentos.categorias (id, casal_id, nome, tipo) VALUES ('{Guid.NewGuid()}', '{casal}', 'Salário', 'RECEITA')");
+
+        var sql = SqlDaV0009();
+        await ExecutarAsync(db, sql);
+        await ExecutarAsync(db, sql);
+
+        Assert.Equal(1, await ContarAsync(db, $"SELECT count(*) FROM lancamentos.categorias WHERE casal_id = '{casal}' AND papel = 'RENDIMENTOS'"));
+    }
+
+    [Theory]
+    [InlineData("RENDIMENTOS", "DESPESA")]
+    [InlineData("INVESTIMENTO", "RECEITA")]
+    [InlineData("DIVIDAS", "RECEITA")]
+    public async Task Papel_tipo_incoerente_da_23514(string papel, string tipo)
+    {
+        var banco = await pg.NovoBancoAsync();
+        var (db, casal) = await PrepararAsync(banco);
+        await using var _ = db;
+
+        var ex = await Assert.ThrowsAsync<PostgresException>(() => ExecutarAsync(db,
+            $"INSERT INTO lancamentos.categorias (id, casal_id, nome, tipo, papel) VALUES ('{Guid.NewGuid()}', '{casal}', 'X', '{tipo}', '{papel}')"));
+        Assert.Equal("23514", ex.SqlState);
+        Assert.Equal("ck_categorias_papel_tipo", ex.ConstraintName);
+    }
+
     // O MigradorSql aplica a pasta inteira (sem "até a versão"): o banco-modelo já tem a V0006, então as
     // categorias entram sem papel e o texto do UPDATE da V0006 roda de novo (ele precisa ser idempotente).
     [Fact]
@@ -83,7 +168,7 @@ public class MigracaoDeLancamentosTests(PostgresFixture pg)
 
         var ex = await Assert.ThrowsAsync<PostgresException>(() => ExecutarAsync(db, $"UPDATE lancamentos.categorias SET tipo = 'RECEITA' WHERE id = '{id}'"));
         Assert.Equal("23514", ex.SqlState);
-        Assert.Equal("ck_categorias_papel_so_despesa", ex.ConstraintName);
+        Assert.Equal("ck_categorias_papel_tipo", ex.ConstraintName);
     }
 
     [Fact]

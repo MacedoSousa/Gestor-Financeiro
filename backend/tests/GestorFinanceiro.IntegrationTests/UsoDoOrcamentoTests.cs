@@ -47,6 +47,7 @@ public class UsoDoOrcamentoTests(PostgresFixture pg)
                 escopo.ServiceProvider.GetRequiredService<IConsultaDeCategorias>());
         }
 
+        public Task<IReadOnlyList<AporteDaConta>> AportesPorContaAsync(DateOnly mes) => ComConsultasAsync((u, _) => u.AportesPorContaAsync(mes));
         public Task<long> AportesAsync(DateOnly mes) => ComConsultasAsync((u, _) => u.AportesAsync(mes));
         public Task<long> ReceitasAsync(DateOnly mes) => ComConsultasAsync((u, _) => u.ReceitasAsync(mes));
         public Task<IReadOnlyList<UsoDaCategoria>> UsoAsync(DateOnly mes) => ComConsultasAsync((u, _) => u.UsoPorCategoriaAsync(mes));
@@ -192,6 +193,44 @@ public class UsoDoOrcamentoTests(PostgresFixture pg)
         Assert.Equal(50_000, await c.AportesAsync(Novembro));
         Assert.Equal(7_000, await c.AportesAsync(new DateOnly(2026, 10, 1)));
         Assert.Equal(9_000, await c.AportesAsync(Dezembro));
+    }
+
+    [Fact]
+    public async Task AportesPorConta_separa_por_conta()
+    {
+        await using var c = await IniciarAsync();
+        var corrente = await CriarContaSimplesAsync(c.Cliente, "CORRENTE", "Itaú");
+        var poupanca = await CriarContaSimplesAsync(c.Cliente, "POUPANCA", "Reserva");
+        var investimento = await CriarContaSimplesAsync(c.Cliente, "INVESTIMENTO", "Corretora");
+        await TransferirAsync(c.Cliente, corrente, poupanca, 50_000);
+        await TransferirAsync(c.Cliente, corrente, poupanca, 5_000);
+        await TransferirAsync(c.Cliente, corrente, investimento, 20_000);
+        await TransferirAsync(c.Cliente, poupanca, investimento, 3_000);
+
+        var porConta = await c.AportesPorContaAsync(Novembro);
+
+        Assert.Equal(2, porConta.Count);
+        Assert.Equal(55_000, porConta.Single(a => a.ContaId == poupanca).AporteCentavos);
+        Assert.Equal(20_000, porConta.Single(a => a.ContaId == investimento).AporteCentavos);
+        Assert.Equal(porConta.Sum(a => a.AporteCentavos), await c.AportesAsync(Novembro));
+        Assert.Empty(await c.AportesPorContaAsync(Dezembro));
+    }
+
+    [Fact]
+    public async Task Receita_em_poupanca_ou_investimento_fica_fora_de_ReceitasAsync()
+    {
+        await using var c = await IniciarAsync();
+        var corrente = await CriarContaSimplesAsync(c.Cliente, "CORRENTE", "Itaú");
+        var poupanca = await CriarContaSimplesAsync(c.Cliente, "POUPANCA", "Reserva");
+        var investimento = await CriarContaSimplesAsync(c.Cliente, "INVESTIMENTO", "Corretora");
+        var salario = await CategoriaAsync(c.Cliente, "Salário");
+        var rendimentos = await CategoriaAsync(c.Cliente, "Rendimentos");
+        await LancarAsync(c.Cliente, corrente, salario, "RECEITA", 900_000, "2026-11-05");
+        await LancarAsync(c.Cliente, poupanca, rendimentos, "RECEITA", 4_000, "2026-11-05");
+        await LancarAsync(c.Cliente, investimento, rendimentos, "RECEITA", 6_000, "2026-11-05");
+        await LancarAsync(c.Cliente, corrente, rendimentos, "RECEITA", 1_500, "2026-11-06");
+
+        Assert.Equal(901_500, await c.ReceitasAsync(Novembro));
     }
 
     [Fact]

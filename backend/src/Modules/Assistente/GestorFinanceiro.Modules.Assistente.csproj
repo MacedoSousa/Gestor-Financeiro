@@ -4,6 +4,7 @@
   </PropertyGroup>
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <ProjectReference Include="..\..\Financas\GestorFinanceiro.Financas.csproj" />
     <ProjectReference Include="..\..\SharedKernel\GestorFinanceiro.SharedKernel.csproj" />
     <ProjectReference Include="..\Lancamentos\GestorFinanceiro.Modules.Lancamentos.csproj" />
     <ProjectReference Include="..\Orcamento\GestorFinanceiro.Modules.Orcamento.csproj" />

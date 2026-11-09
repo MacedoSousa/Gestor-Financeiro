@@ -16,3 +16,11 @@ export function soNomeDoMes(mes: string): string {
   const [ano, m] = mes.split("-").map(Number);
   return new Date(ano ?? 2000, (m ?? 1) - 1, 1).toLocaleDateString("pt-BR", { month: "long" });
 }
+
+const MESES_CURTOS = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+
+/** "2029-03" → "mar/2029". */
+export function mesCurto(aaaaMm: string): string {
+  const [ano, m] = aaaaMm.split("-");
+  return `${MESES_CURTOS[Number(m) - 1] ?? "?"}/${ano ?? ""}`;
+}
