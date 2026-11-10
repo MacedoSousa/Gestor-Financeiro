@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { centavosDeTexto, formatarReais, textoDeCentavos } from "./dinheiro";
+import { centavosDeTexto, formatarReais, formatarReaisInteiros, textoDeCentavos } from "./dinheiro";
 
 // O Intl separa "R$" do número com espaço sem quebra.
 const r$ = (texto: string) => texto.replace(" ", " ");
@@ -50,5 +50,18 @@ describe("textoDeCentavos", () => {
     [-1050, "10,50"],
   ])("%i centavos → %j", (centavos, esperado) => {
     expect(textoDeCentavos(centavos)).toBe(esperado);
+  });
+});
+
+describe("formatarReaisInteiros", () => {
+  const nb = (t: string) => t.replace(" ", "\u00a0");
+  it("trunca para zero em vez de arredondar", () => {
+    expect(formatarReaisInteiros(249999)).toBe(nb("R$ 2.499"));
+    expect(formatarReaisInteiros(-249999)).toBe(nb("-R$ 2.499"));
+    expect(formatarReaisInteiros(99)).toBe(nb("R$ 0"));
+  });
+  it("sem símbolo", () => {
+    expect(formatarReaisInteiros(249999, { simbolo: false })).toBe("2.499");
+    expect(formatarReaisInteiros(123456700, { simbolo: false })).toBe("1.234.567");
   });
 });

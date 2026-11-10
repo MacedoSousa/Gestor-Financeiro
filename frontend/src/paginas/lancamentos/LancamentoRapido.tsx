@@ -111,6 +111,7 @@ export function LancamentoRapido({ contas, categorias }: Props) {
       await Promise.all([
         consultas.invalidateQueries({ queryKey: ["lancamentos"] }),
         consultas.invalidateQueries({ queryKey: ["saldos"] }),
+        consultas.invalidateQueries({ queryKey: ["visao-geral"] }),
       ]);
     } catch (err) {
       if (err instanceof ErroDeApi && err.status === 401) void consultas.invalidateQueries({ queryKey: ["eu"] });

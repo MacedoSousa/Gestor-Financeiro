@@ -19,7 +19,7 @@ internal sealed record FiltroDoExtrato(string? Mes, Guid? ContaId, string? Titul
 /// caixa; o texto da busca nunca vai para o SQL nem para o log.
 /// </summary>
 internal sealed class ConsultaDoExtrato(LancamentosDbContext db, IUsuarioAtual atual, IConsultaDeContas contas,
-    IConsultaDeUsuarios usuarios, ICofre cofre, TimeProvider relogio)
+    IConsultaDeUsuarios usuarios, ICofre cofre, TimeProvider relogio) : IConsultaDoExtrato
 {
     internal const string Conjunta = "Conjunta";
     private const int TamanhoMaximoDaBusca = 140;
@@ -84,6 +84,18 @@ internal sealed class ConsultaDoExtrato(LancamentosDbContext db, IUsuarioAtual a
         }
 
         return (new ExtratoDto(itens.Count, itens), null);
+    }
+
+    public async Task<IReadOnlyList<LancamentoDto>> UltimosAsync(int quantos, CancellationToken ct = default)
+    {
+        if (atual.CasalId is not { } casalId || quantos <= 0) return [];
+        var hoje = Brasilia.Hoje(relogio);
+        var transacoes = await db.Transacoes.AsNoTracking()
+            .Where(t => t.Data <= hoje)
+            .OrderByDescending(t => t.Data).ThenByDescending(t => t.Id)
+            .Take(quantos)
+            .ToListAsync(ct);
+        return await MontarAsync(transacoes, casalId, null, ct);
     }
 
     /// <summary>Um lançamento do casal pelo id; nulo se não existe, foi apagado ou é de outro casal.</summary>

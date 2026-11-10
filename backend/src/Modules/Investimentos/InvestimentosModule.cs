@@ -1,5 +1,6 @@
 using GestorFinanceiro.Modules.Investimentos.Api;
 using GestorFinanceiro.Modules.Investimentos.Aplicacao;
+using GestorFinanceiro.Modules.Investimentos.Contracts;
 using GestorFinanceiro.Modules.Investimentos.Infra;
 using GestorFinanceiro.SharedKernel.Persistencia;
 using Microsoft.AspNetCore.Routing;
@@ -22,6 +23,7 @@ public static class InvestimentosModule
                 sp.GetRequiredService<ContextoAuditoriaInterceptor>()));
 
         services.AddScoped<ServicoDeMetas>();
+        services.AddScoped<IConsultaDeMetas, ConsultaDeMetas>();
         return services;
     }
 

@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>GestorFinanceiro.Modules.Painel</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <ProjectReference Include="..\Contas\GestorFinanceiro.Modules.Contas.csproj" />
+    <ProjectReference Include="..\Lancamentos\GestorFinanceiro.Modules.Lancamentos.csproj" />
+    <ProjectReference Include="..\Orcamento\GestorFinanceiro.Modules.Orcamento.csproj" />
+    <ProjectReference Include="..\Investimentos\GestorFinanceiro.Modules.Investimentos.csproj" />
+    <ProjectReference Include="..\..\SharedKernel\GestorFinanceiro.SharedKernel.csproj" />
+    <ProjectReference Include="..\Identidade\GestorFinanceiro.Modules.Identidade.csproj" />
+  </ItemGroup>
+</Project>

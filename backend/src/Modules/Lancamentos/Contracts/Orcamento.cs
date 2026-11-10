@@ -50,8 +50,19 @@ public interface IConsultaDeUso
 /// <summary>Saldo de uma conta do casal numa data: saldo inicial mais os lançamentos de <c>saldo_inicial_em</c> até a data.</summary>
 public sealed record SaldoDeConta(Guid ContaId, long SaldoCentavos);
 
+/// <param name="Mes">AAAA-MM.</param>
+/// <param name="TotalCentavos">Soma dos saldos das contas no ponto do mês; nulo se nenhuma conta existia ainda.</param>
+public sealed record PatrimonioDoMes(string Mes, long? TotalCentavos);
+
 /// <summary>Mesmo cálculo do <c>GET /saldos</c>, para outros módulos; a data é incluída.</summary>
 public interface IConsultaDeSaldos
 {
     Task<IReadOnlyList<SaldoDeConta>> SaldosAsync(DateOnly em, CancellationToken ct = default);
+
+    /// <summary>
+    /// Patrimônio (soma dos saldos, cartão negativo, arquivadas incluídas) em <paramref name="meses"/> meses a partir de
+    /// <paramref name="primeiroMes"/> (dia 1). O ponto de cada mês é o menor entre o fim do mês e hoje; uma conta só entra
+    /// se o saldo inicial é até o ponto; mês sem conta vem nulo.
+    /// </summary>
+    Task<IReadOnlyList<PatrimonioDoMes>> PatrimonioPorMesAsync(DateOnly primeiroMes, int meses, CancellationToken ct = default);
 }

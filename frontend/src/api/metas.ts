@@ -45,6 +45,7 @@ export function useAcoesDeMetas() {
     const r = await chamada;
     await qc.invalidateQueries({ queryKey: ["metas"] });
     await qc.invalidateQueries({ queryKey: ["simulacao"] });
+    await qc.invalidateQueries({ queryKey: ["visao-geral"] });
     return r;
   };
   return {
@@ -61,7 +62,7 @@ export type Conciliacao = components["schemas"]["ConciliacaoDto"];
 export function useConciliacao() {
   const qc = useQueryClient();
   const recarregar = () =>
-    Promise.all(["metas", "saldos", "lancamentos"].map((k) => qc.invalidateQueries({ queryKey: [k] })));
+    Promise.all(["metas", "saldos", "lancamentos", "visao-geral"].map((k) => qc.invalidateQueries({ queryKey: [k] })));
   return async (contaId: string, saldoInformadoCentavos: number, saldoExibidoCentavos: number): Promise<Conciliacao> => {
     try {
       const r = await chamarFormulario(

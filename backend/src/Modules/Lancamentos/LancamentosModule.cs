@@ -27,10 +27,12 @@ public static class LancamentosModule
         services.AddScoped<ServicoDeCategorias>();
         services.AddScoped<IConsultaDeCategorias, ConsultaDeCategorias>();
         services.AddScoped<IConsultaDeUso, ConsultaDeUso>();
+        services.AddScoped<IConsultaDeFaturas, ConsultaDeFaturas>();
         services.AddScoped<ConsultaDeSaldosPorConta>();
         services.AddScoped<IConsultaDeSaldos>(sp => sp.GetRequiredService<ConsultaDeSaldosPorConta>());
         services.AddScoped<ConsultaDeSaldos>();
         services.AddScoped<ConsultaDoExtrato>();
+        services.AddScoped<IConsultaDoExtrato>(sp => sp.GetRequiredService<ConsultaDoExtrato>());
         services.AddScoped<ServicoDeLancamentos>();
         services.AddScoped<ServicoDeTransferencias>();
         services.AddScoped<ServicoDeConciliacao>();

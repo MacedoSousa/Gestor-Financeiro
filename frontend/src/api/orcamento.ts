@@ -47,6 +47,7 @@ export function useAcoesDoOrcamento() {
   const depois = async <T,>(chamada: Promise<T>): Promise<T> => {
     const r = await chamada;
     await qc.invalidateQueries({ queryKey: ["orcamento"] });
+    await qc.invalidateQueries({ queryKey: ["visao-geral"] });
     return r;
   };
   return {

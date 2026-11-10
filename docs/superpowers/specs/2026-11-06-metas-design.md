@@ -97,8 +97,9 @@ Valem para todas as regras: hoje no fuso de Brasília; M = mês corrente.
 | Progresso | `floor(guardado × 100 / alvo)`, limitado a [0, 100] |
 | Aporte do mês | Σ `AportesPorContaAsync(M)` das contas da meta |
 | Aporte do 1º mês da projeção | `máx(0, aporte mensal − aporte do mês)` |
-| Chega em | `n = MesesAteMeta(guardado, alvo, aporte 1º mês, aporte mensal, taxa)`; chega em = `M + n meses` |
-| Diferença | com data: meses de "chega em" até a data desejada (negativo = antes) |
+| Chega em | `n = MesesAteMeta(guardado, alvo, aporte 1º mês, aporte mensal, taxa)`, contando o aporte de fim do mês corrente como o 1º; com `n ≥ 1`, chega em = `M + (n − 1)` meses; `n = 0` é `ALCANCADA` |
+| Meses até a data | `D − M + 1`: os fins de mês de M até a data desejada D, inclusive (data no mês corrente = 1) |
+| Diferença | com data: `chegaEm − D` em meses (negativo = antes) |
 | Aporte necessário | com data e não alcançada: `AporteNecessario(guardado, alvo, meses até a data, taxa, aporte do mês)` = menor P (centavos) tal que o 1º mês contribui `máx(0, P − aporte do mês)` e os demais P; busca binária, arredonda para cima |
 
 **Situações:**
@@ -106,7 +107,9 @@ Valem para todas as regras: hoje no fuso de Brasília; M = mês corrente.
 - **`NAO_CHEGA`:** quando o resultado é nulo (sem aporte e sem rendimento, ou mais de 1.200 meses). Texto: "Com esse aporte, a meta não chega em 100 anos."
 - **`CHEGA`:** nos demais casos.
 
-**Data desejada no passado** e meta não alcançada: `dataDesejadaPassou = true`, sem aporte necessário.
+**Data desejada no passado** (`D < M`) e meta não alcançada: `dataDesejadaPassou = true`, sem aporte necessário. Data no mês corrente não passou.
+
+**Por que `M + (n − 1)`** (corrige o `M + n` da primeira versão): com `M + n`, uma meta com data no mês corrente nasceria "já passou", e um aporte que completa a meta no fim deste mês mostraria o mês seguinte.
 
 A **simulação** usa as mesmas regras, com o aporte da consulta no lugar do planejado.
 
