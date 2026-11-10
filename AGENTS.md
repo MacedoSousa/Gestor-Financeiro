@@ -24,6 +24,7 @@ Skills de cada papel: [`docs/desenvolvimento/papeis-e-skills.md`](docs/desenvolv
 - `.githooks/pre-commit` — bloqueia DELETE físico, segredo no stage, migração já commitada alterada, migração sem `audit.proteger`, `UNIQUE` sem índice parcial e buraco na numeração. Ligue com `scripts/instalar-hooks.sh`.
 - `scripts/verificar.sh` — roda guardas e testes da parte que mudou. Ninguém diz "terminei" sem a saída verde dele.
 - CI (`.github/workflows/ci.yml`) — roda as mesmas guardas no repositório inteiro; `--no-verify` não escapa.
+- **Merge:** só pela pessoa, com os Checks verdes e o sinal do CEO no chat. Commit `WIP:` não entra no `main`.
 
 ## Passagem de trabalho
 

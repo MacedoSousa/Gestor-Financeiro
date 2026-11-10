@@ -9,6 +9,6 @@ description: Atualiza a documentação para refletir o que já está no código,
    - `README.md`: comandos, situação das fases, passos de uso que mudaram.
    - `docs/guia/<tela>.md`: guia de uso para o casal (o que a tela mostra, como fazer cada ação, o que cada aviso significa), em linguagem simples e com exemplos sintéticos.
    - `docs/desenvolvimento/**`: processo e comandos de desenvolvimento.
-4. Não edite `CLAUDE.md`, `.claude/**`, `.agent/rules/**`, `docs/adr/**`, `docs/superpowers/**` nem código. Se achar regra ou decisão faltando, anote em `.revisoes/<branch>.md` para o CEO.
+4. Não edite `CLAUDE.md`, `.claude/**`, `.agent/rules/**`, `docs/adr/**`, `docs/superpowers/**` nem código. Se achar regra ou decisão faltando, inclua na sua resposta, numa seção 'Para o CEO'.
 5. Rode `scripts/verificar.sh`. Commit `Docs: <o que mudou>`. O `pre-commit` vai conferir as guardas.
 6. Termine listando os arquivos alterados e qualquer divergência entre doc e código encontrada.

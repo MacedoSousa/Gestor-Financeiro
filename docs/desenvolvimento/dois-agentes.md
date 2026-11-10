@@ -31,10 +31,10 @@ O QA entrega a revisão no texto da resposta, no formato de [`modelo-de-revisao.
 | Etapa | Quem | Saída |
 | --- | --- | --- |
 | Spec | CEO (`brainstorming`), aprovada pela pessoa | `docs/superpowers/specs/AAAA-MM-DD-<bloco>-design.md` |
-| Leitura crítica da spec | QA (`/revisar` apontando para a spec) | `.revisoes/<branch>.md` |
+| Leitura crítica da spec | QA (`/revisar` apontando para a spec) | texto da resposta (o Dev salva em `.revisoes/<branch>.md` e publica no PR) |
 | Plano | Dev (`superpowers:writing-plans`), aprovado pela pessoa | `docs/superpowers/plans/AAAA-MM-DD-<bloco>.md` |
 | Tarefa *n* | Dev: teste que falha → código → `scripts/verificar.sh` verde → commit | commit no branch `fase-N/<bloco>` |
-| Revisão da tarefa | QA: `/revisar`; se mudou tela, `/testar-no-navegador`, `/auditar-acessibilidade`, `/revisar-textos` | `.revisoes/<branch>.md` |
+| Revisão da tarefa | QA: `/revisar`; se mudou tela, `/testar-no-navegador`, `/auditar-acessibilidade`, `/revisar-textos` | texto da resposta (o Dev salva em `.revisoes/<branch>.md` e publica no PR) |
 | Resposta | Dev: skill `revisao-cruzada`; o que questiona a spec sobe ao CEO | correções com teste, respostas no arquivo |
 | Documentação | QA: `/documentar` | SPEC "Entregue", README, `docs/guia/` |
 | PR | pessoa | CI verde (guardas, testes, contrato, gitleaks) |
@@ -48,6 +48,7 @@ Quem manda cada passo: o CEO, por ordens de serviço (`despacho.md`). Papéis e 
 - **Migração:** skill `nova-migracao`; o `pre-commit` recusa o que fugir dela.
 - **Contrato:** mudou endpoint → `contracts/openapi.json` e `frontend/src/api/schema.d.ts` no mesmo commit.
 - **Pronto:** só com a saída verde de `scripts/verificar.sh` colada. "AVISO: ... NÃO testado" significa que aquela parte não foi verificada. PR só com 'Verificação: tudo verde.' (sem avisos); 'verde COM AVISOS' não vale para PR.
+- **Merge:** só pela pessoa, com os Checks verdes e o sinal do CEO no chat. Commit `WIP:` não entra no `main`.
 - **Dados:** sempre sintéticos, inclusive em capturas de tela e na revisão.
 
 ## Quando um agente discorda do outro
