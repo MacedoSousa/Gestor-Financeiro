@@ -75,6 +75,14 @@ checar_conteudo_de_migracao() {
 
   while read -r tabela; do
     [ -z "$tabela" ] && continue
+    if [[ "$tabela" != *.* ]]; then
+      echo "$(basename "$arquivo"): CREATE TABLE $tabela sem schema; toda tabela tem schema (regras 2 e 7)." >&2
+      falhou=1
+    fi
+  done < <(printf '%s\n' "$comandos" | grep -ioE 'CREATE TABLE (IF NOT EXISTS )?[^ (]+' | awk '{print $NF}')
+
+  while read -r tabela; do
+    [ -z "$tabela" ] && continue
     [ "$tabela" = "audit.eventos" ] && continue
     if ! grep -qF "audit.proteger('$tabela')" "$arquivo"; then
       echo "$(basename "$arquivo"): tabela $tabela sem SELECT audit.proteger('$tabela') (regra 2)." >&2

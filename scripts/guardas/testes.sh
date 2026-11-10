@@ -63,6 +63,18 @@ espera_falha   "UNIQUE sem índice parcial"        checar_conteudo_de_migracao "
 restricao="$(sql V0011__c.sql "CREATE TABLE boletos.y (id uuid PRIMARY KEY, nome text UNIQUE);" "SELECT audit.proteger('boletos.y');")"
 espera_falha   "UNIQUE dentro do CREATE TABLE"    checar_conteudo_de_migracao "$restricao"
 
+sem_schema="$(sql V0011__e.sql "CREATE TABLE sem_schema (id uuid PRIMARY KEY);")"
+espera_falha   "CREATE TABLE sem schema"          checar_conteudo_de_migracao "$sem_schema"
+
+sem_schema_audit="$(sql V0011__f.sql "CREATE TABLE sem_schema (id uuid PRIMARY KEY);" "SELECT audit.proteger('sem_schema');")"
+espera_falha   "CREATE TABLE sem schema, mesmo com audit" checar_conteudo_de_migracao "$sem_schema_audit"
+
+sem_schema_if="$(sql V0011__g.sql "CREATE TABLE IF NOT EXISTS sem_schema (id uuid PRIMARY KEY);")"
+espera_falha   "CREATE TABLE IF NOT EXISTS sem schema" checar_conteudo_de_migracao "$sem_schema_if"
+
+com_schema="$(sql V0011__h.sql "CREATE TABLE a.b (id uuid PRIMARY KEY);" "SELECT audit.proteger('a.b');")"
+espera_sucesso "CREATE TABLE a.b com audit passa"  checar_conteudo_de_migracao "$com_schema"
+
 apaga="$(sql V0011__d.sql "DELETE FROM boletos.x;")"
 espera_falha   "DELETE físico em migração"        checar_conteudo_de_migracao "$apaga"
 

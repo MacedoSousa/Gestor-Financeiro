@@ -166,6 +166,22 @@ public class RegrasDeArquitetura
     }
 
     [Fact]
+    public void Toda_tabela_criada_tem_schema()
+    {
+        var semSchema = Arquivos("db/migrations", "*.sql")
+            .SelectMany(f => TabelasSemSchema(File.ReadAllText(f)).Select(t => $"{Path.GetFileName(f)}: {t}"))
+            .ToList();
+
+        Assert.True(semSchema.Count == 0, $"CREATE TABLE sem schema (regras 2 e 7): {string.Join(", ", semSchema)}");
+    }
+
+    private static List<string> TabelasSemSchema(string sql) =>
+        Regex.Matches(sql, @"CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?([^\s(]+)", RegexOptions.IgnoreCase)
+            .Select(m => m.Groups[1].Value)
+            .Where(t => !t.Contains('.', StringComparison.Ordinal))
+            .ToList();
+
+    [Fact]
     public void Unicidade_e_sempre_indice_parcial_ignorando_excluidos()
     {
         var linhas = Arquivos("db/migrations", "*.sql")
