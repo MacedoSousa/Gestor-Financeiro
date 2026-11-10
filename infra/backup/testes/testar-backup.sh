@@ -273,6 +273,41 @@ EOF
   ! grep -q "segredo-teste" "$T/stderr"
 }
 
+# Falha no meio do pacote (Review Focus): um shim no PATH no lugar de <ferramenta>.
+# Antes, um backup bom do dia anterior; ele tem que continuar intacto.
+falha_no_meio() {
+  local ferramenta="$1" corpo="$2" dir="$3" shims="$T/shims-$1" antes codigo=0
+  rodar_backup "$dir" --data 2026-11-09 || { mostrar_stderr; return 1; }
+  antes="$(sha256sum "$dir/diario/gestor-2026-11-09.tar.age" | cut -d' ' -f1)"
+  rm -f "$MARCAS/rotacionar" "$MARCAS/rotacionar.chamadas" "$MARCAS/enviar.args"
+  mkdir -p "$shims"
+  printf '#!/usr/bin/env bash\n%s\n' "$corpo" >"$shims/$ferramenta"
+  chmod 700 "$shims/$ferramenta"
+  PATH="$shims:$PATH" GF_BACKUP_DIR="$dir" GF_BACKUP_DESTINATARIOS="$DESTINATARIOS" PG_CONTAINER="$FONTE_CONTAINER" \
+    GF_TMP="$TMP_RUN" "$RAIZ_FALSA/infra/backup/backup.sh" --data 2026-11-10 2>"$T/stderr" || codigo=$?
+  [ "$codigo" -ne 0 ] || { echo "  backup saiu com 0"; return 1; }
+  grep -q "^FALHA tar|age codigo=" "$T/stderr" || { mostrar_stderr; return 1; }
+  [ ! -e "$dir/diario/gestor-2026-11-10.tar.age" ] && [ ! -e "$dir/cadeia/cadeia-2026-11-10.txt" ] \
+    || { echo "  ficou pacote ou cadeia do dia"; return 1; }
+  [ -z "$(find "$dir" -name '*.parcial' -print)" ] || { echo "  sobrou .parcial: $(find "$dir" -name '*.parcial')"; return 1; }
+  [ -z "$(find "$dir" \( -name '*.dump' -o -name '*.tar' -o -name 'MANIFESTO' -o -name 'cadeia.txt' \) -print)" ] \
+    || { echo "  sobrou em claro em GF_BACKUP_DIR"; return 1; }
+  [ -z "$(ls -A "$TMP_RUN")" ] || { echo "  GF_TMP não ficou vazio"; return 1; }
+  [ "$(sha256sum "$dir/diario/gestor-2026-11-09.tar.age" | cut -d' ' -f1)" = "$antes" ] \
+    || { echo "  pacote do dia anterior mudou"; return 1; }
+  [ ! -e "$MARCAS/rotacionar" ] && [ ! -e "$MARCAS/enviar.args" ] || { echo "  rotação ou envio rodou"; return 1; }
+}
+
+age_falha_no_meio() {
+  # Lê a entrada, escreve parte de uma saída age no -o e sai com erro (como disco cheio).
+  falha_no_meio age 'saida=""; while [ "$#" -gt 0 ]; do [ "$1" = -o ] && saida="$2"; shift; done
+cat >/dev/null; printf "age-encryption.org/v1\n-> X25519 parcial" >"$saida"; exit 1' "$T/b-age-falha"
+}
+
+tar_falha_no_meio() {
+  falha_no_meio tar 'printf "tar parcial"; exit 2' "$T/b-tar-falha"
+}
+
 # GF_BACKUP_DIR vazio no ambiente (tem precedência sobre o .env) ou relativo no .env: sai
 # antes de criar qualquer coisa. Roda de dentro de uma pasta vazia para ver se algo nasce ali.
 backup_dir_vazio_no_ambiente_recusa() {
@@ -419,6 +454,8 @@ caso mesmo_dia_substitui
 caso cadeia_dentro_e_fora
 caso codigo_do_enviar_e_o_do_backup
 caso le_so_chaves_do_env
+caso age_falha_no_meio
+caso tar_falha_no_meio
 caso backup_dir_vazio_no_ambiente_recusa
 caso backup_dir_relativo_no_env_recusa
 caso duas_execucoes_ao_mesmo_tempo
