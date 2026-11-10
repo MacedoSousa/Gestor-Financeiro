@@ -92,7 +92,7 @@ Por cartão (inclusive arquivado), com F = última fatura fechada e A = fatura a
 
 - **Devido até F** = saldo inicial do cartão + Σ despesas e receitas com `fatura_vencimento ≤ vencimento de F` (qualquer data) + Σ transferências (pagamentos e o que mais entrar ou sair por transferência) com `data ≤ hoje`.
 - **Restante a pagar** = `máx(0, −devido)`.
-- **Em atraso** = `restante − total de F`, quando > 0.
+- **Em atraso** = `restante − total de F`, quando > 0, nunca acima do restante. Se o saldo inicial do cartão (dívida) foi tomado depois do fechamento da fatura anterior a F (durante o período de F ou depois), ele conta como parte de F nesse cálculo (não é atraso); se foi tomado até esse fechamento, é dívida antiga e conta como atraso. O total de F exibido continua sendo só a soma dos lançamentos.
 - F aparece se `vencimento ≥ hoje` e `restante > 0`, com "Fechada em DD/MM". Com atraso, a linha diz "inclui R$ X em atraso" em tom de alerta.
 - A aparece se o total até hoje (lançamentos com `fatura_vencimento` = vencimento de A e `data ≤ hoje`) for > 0, com "Aberta · fecha em DD/MM".
 - Lista por vencimento crescente, até 5. Vazio: "Nenhuma fatura a vencer".

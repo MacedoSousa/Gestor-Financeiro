@@ -254,7 +254,9 @@ public class VisaoGeralTests(PostgresFixture pg)
         var texto = string.Join('\n', logs.Linhas);
         Assert.Contains("Metas", texto);
         Assert.Contains("InvalidOperationException", texto);
-        Assert.Contains(await IdDeCorrelacaoAsync(texto), texto);
+        var idCorrelacao = await IdDeCorrelacaoAsync(texto);
+        Assert.False(string.IsNullOrWhiteSpace(idCorrelacao));
+        Assert.Contains(idCorrelacao, texto);
         Assert.DoesNotContain("Viagem sintética 4471", texto);
         Assert.DoesNotContain("Viagem sintética 4471", await resposta.Content.ReadAsStringAsync());
     }

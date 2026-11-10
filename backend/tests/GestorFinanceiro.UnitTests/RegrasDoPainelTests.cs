@@ -164,6 +164,16 @@ public class RegrasDoPainelTests
     }
 
     [Fact]
+    public void Aviso_de_fatura_ignora_cartao_arquivado()
+    {
+        var (faturas, contas) = Cartao("Itaú Visa", new DateOnly(2026, 11, 1), new DateOnly(2026, 11, 10));
+        var arquivado = contas[faturas[0].ContaId] with { Arquivada = true };
+        var contasArquivadas = new Dictionary<Guid, ContaResumo> { [arquivado.Id] = arquivado };
+
+        Assert.Empty(RegrasDoPainel.AvisosDeFatura(faturas, contasArquivadas, new DateOnly(2026, 11, 6)));
+    }
+
+    [Fact]
     public void Saldo_das_contas_lista_3_ou_as_2_maiores_e_mais_N()
     {
         var a = Conta("A"); var b = Conta("B", "DINHEIRO"); var c = Conta("C"); var d = Conta("D");

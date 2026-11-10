@@ -936,6 +936,11 @@ select.entrada {
 }
 
 .cartao-cabecalho {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
   padding: 20px 20px 4px;
 }
 
@@ -1356,6 +1361,10 @@ select.entrada {
 .grafico-rotulo {
   fill: var(--texto-suave);
   font-size: 11px;
+}
+
+.valores-por-mes .tabela {
+  min-width: 0;
 }
 
 .valores-por-mes summary {

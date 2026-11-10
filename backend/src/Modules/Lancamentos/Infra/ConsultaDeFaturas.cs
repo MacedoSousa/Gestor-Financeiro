@@ -50,7 +50,14 @@ internal sealed class ConsultaDeFaturas(LancamentosDbContext db, IConsultaDeCont
             }
 
             var restante = Math.Max(0, -devido);
-            var atraso = Math.Max(0, restante - totalFechada);
+
+            // Saldo inicial tomado depois do fechamento da fatura anterior à fechada pertence à fechada (não é atraso).
+            // Só a dívida entra (saldo negativo); o total exibido continua sendo a soma dos lançamentos.
+            var vencAnterior = contas.VencimentoDaFatura(conta, fechada.Fechamento.AddMonths(-1))!.Value;
+            var fechAnterior = contas.FechamentoDaFatura(conta, vencAnterior)!.Value;
+            var totalParaAtraso = totalFechada;
+            if (conta.SaldoInicialEm > fechAnterior) totalParaAtraso += Math.Max(0, -conta.SaldoInicialCentavos);
+            var atraso = Math.Min(restante, Math.Max(0, restante - Math.Max(0, totalParaAtraso)));
             resultado.Add(new FaturasDoCartao(
                 conta.Id,
                 new FaturaFechadaAPagar(fechada.Vencimento, fechada.Fechamento, totalFechada, restante, atraso),

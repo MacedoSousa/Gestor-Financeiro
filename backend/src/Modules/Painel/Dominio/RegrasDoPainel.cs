@@ -82,7 +82,7 @@ internal static class RegrasDoPainel
         foreach (var f in faturas)
         {
             var dias = hoje.DayNumber - f.Fechada.Fechamento.DayNumber;
-            if (dias < 0 || dias > 5 || !contas.TryGetValue(f.ContaId, out var conta)) continue;
+            if (dias < 0 || dias > 5 || !contas.TryGetValue(f.ContaId, out var conta) || conta.Arquivada) continue;
 
             avisos.Add(new(f.ContaId,
                 $"Compras no cartão {conta.Apelido} a partir de hoje só vencem em {DiaMes(f.Aberta.Vencimento)} — a fatura fechou em {DiaMes(f.Fechada.Fechamento)}"));

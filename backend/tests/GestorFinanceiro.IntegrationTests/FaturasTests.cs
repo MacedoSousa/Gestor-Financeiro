@@ -96,10 +96,10 @@ public class FaturasTests(PostgresFixture pg)
         return Guid.Parse(resposta.Headers.Location!.ToString().Split('/').Last());
     }
 
-    private static Task<Guid> CriarCartaoAsync(HttpClient cliente, string apelido = "Itaú Visa", long saldo = 0) =>
+    private static Task<Guid> CriarCartaoAsync(HttpClient cliente, string apelido = "Itaú Visa", long saldo = 0, string saldoEm = "2026-09-01") =>
         CriarContaAsync(cliente, new
         {
-            tipo = "CARTAO", apelido, saldoInicialCentavos = saldo, saldoInicialEm = "2026-09-01",
+            tipo = "CARTAO", apelido, saldoInicialCentavos = saldo, saldoInicialEm = saldoEm,
             diaFechamento = 1, diaVencimento = 10, limiteCentavos = 8_000_000L,
         });
 
@@ -211,6 +211,42 @@ public class FaturasTests(PostgresFixture pg)
         var cartao = await CriarCartaoAsync(c.Cliente, saldo: -20_000);
 
         AssertFechada(await c.DoCartaoAsync(cartao), total: 0, restante: 20_000, atraso: 20_000);
+    }
+
+    [Fact]
+    public async Task Saldo_inicial_do_cadastro_no_periodo_da_fechada_nao_e_atraso()
+    {
+        await using var c = await IniciarAsync();
+        var cartao = await CriarCartaoAsync(c.Cliente, saldo: -150_000, saldoEm: "2026-11-05");
+
+        AssertFechada(await c.DoCartaoAsync(cartao), total: 0, restante: 150_000, atraso: 0);
+    }
+
+    [Fact]
+    public async Task Saldo_inicial_durante_o_periodo_da_fechada_nao_e_atraso()
+    {
+        await using var c = await IniciarAsync();
+        var cartao = await CriarCartaoAsync(c.Cliente, saldo: -30_000, saldoEm: "2026-10-15");
+
+        AssertFechada(await c.DoCartaoAsync(cartao), total: 0, restante: 30_000, atraso: 0);
+    }
+
+    [Fact]
+    public async Task Atraso_nunca_passa_do_restante()
+    {
+        await using var c = await IniciarAsync();
+        var cartao = await CriarCartaoAsync(c.Cliente);
+        var mercado = await CategoriaAsync(c.Cliente, "Mercado");
+        await LancarAsync(c.Cliente, cartao, 20_000, "2026-09-20");
+        // Só estorno (receita) na fatura fechada: total negativo, dívida antiga de 20.000 e restante 15.000.
+        await ExecutarAsync(c.Banco,
+            "INSERT INTO lancamentos.transacoes (id, casal_id, conta_id, categoria_id, data, valor_centavos, natureza, descricao_cifrada, origem, id_externo, fatura_vencimento) VALUES " +
+            $"('{Guid.NewGuid()}', '{c.Casal}', '{cartao}', '{mercado}', '2026-10-20', 5000, 'RECEITA', '\\x01', 'MANUAL', '{Guid.NewGuid()}', '2026-11-10')");
+
+        var f = await c.DoCartaoAsync(cartao);
+
+        Assert.Equal(15_000, f.Fechada.RestanteCentavos);
+        Assert.Equal(15_000, f.Fechada.AtrasoCentavos);
     }
 
     [Fact]
