@@ -104,3 +104,16 @@ checar_conteudo_de_migracao() {
   fi
   return "$falhou"
 }
+
+# ADR-013: o Docker do snap não é suportado (o AppArmor nega file_inherit e redirecionamentos
+# de arquivo chegam vazios). Devolve 0 se o docker do PATH vem do snap. Confere o caminho do
+# PATH e o resolvido com readlink -f: no snap, /snap/bin/docker é um link para /usr/bin/snap,
+# e um link nosso pode apontar para /snap/bin/docker.
+docker_e_do_snap() {
+  local caminho resolvido
+  caminho="$(command -v docker 2>/dev/null)" || return 1
+  resolvido="$(readlink -f "$caminho" 2>/dev/null || printf '%s' "$caminho")"
+  case "$caminho" in /snap/*|*/snap/bin/*) return 0 ;; esac
+  case "$resolvido" in /snap/*|*/snap/bin/*|*/bin/snap) return 0 ;; esac
+  return 1
+}
