@@ -233,6 +233,9 @@ public class PatrimonioTests(PostgresFixture pg)
         await using var c = await IniciarAsync(pg);
         var conta = await CriarContaAsync(c.Cliente,
             new { tipo = "CORRENTE", apelido = "Nova", saldoInicialCentavos = 1_000_000L, saldoInicialEm = "2026-10-15" });
+        // Conta mais antiga: a janela da query começa antes de 14/10 e só o filtro em memória exclui a linha. A outra começa num ponto (31/10).
+        await CriarPoupancaAsync(c.Cliente, "2026-09-01", saldo: 500_000);
+        await CriarContaAsync(c.Cliente, new { tipo = "DINHEIRO", apelido = "Carteira", saldoInicialCentavos = 7_000L, saldoInicialEm = "2026-10-31" });
         var mercado = await CategoriaAsync(c.Cliente, "Mercado");
         await LancarAsync(c.Cliente, conta, 2_000, "2026-10-15");
         await LancarAsync(c.Cliente, conta, 3_000, "2026-10-31");
@@ -244,8 +247,8 @@ public class PatrimonioTests(PostgresFixture pg)
 
         var p = await c.PatrimonioAsync();
 
-        Assert.Equal("nulo", Mes(p, "2026-09"));
-        Assert.Equal("995000", Mes(p, "2026-10"));
-        Assert.Equal("991000", Mes(p, "2026-11"));
+        Assert.Equal("500000", Mes(p, "2026-09"));
+        Assert.Equal("1502000", Mes(p, "2026-10"));
+        Assert.Equal("1498000", Mes(p, "2026-11"));
     }
 }
