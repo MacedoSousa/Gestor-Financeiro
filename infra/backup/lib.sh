@@ -119,3 +119,29 @@ gerar_cadeia() {
              ORDER BY casal_id NULLS LAST, seq DESC) ultimos
      ORDER BY casal_id NULLS LAST"
 }
+
+# Uso: ler_env <CHAVE> [padrao]. Lê só a linha "^CHAVE=" de $GF_RAIZ/infra/.env, com grep:
+# nunca faz source/eval do .env (ele tem o DUCKDNS_TOKEN, que não pode chegar ao ambiente
+# de nenhum subprocesso). A última ocorrência vale; aspas simples ou duplas em volta do valor
+# são removidas. Valor vazio ou chave ausente → padrao.
+# Uma variável de ambiente de mesmo nome, se definida (mesmo vazia), tem precedência (testes).
+ler_env() {
+  local chave="$1" padrao="${2:-}" arquivo linha valor
+  [[ "$chave" =~ ^[A-Z_][A-Z0-9_]*$ ]] || { log "ler_env: chave inválida"; return 2; }
+  if [ -n "${!chave+x}" ]; then
+    printf '%s\n' "${!chave}"
+    return 0
+  fi
+  arquivo="${GF_RAIZ:?GF_RAIZ não definido}/infra/.env"
+  linha=""
+  if [ -r "$arquivo" ]; then
+    linha="$(grep -E "^${chave}=" "$arquivo" | tail -n 1 || true)"
+  fi
+  valor="${linha#*=}"
+  valor="${valor%$'\r'}"
+  if [[ "$valor" =~ ^\"(.*)\"$ ]] || [[ "$valor" =~ ^\'(.*)\'$ ]]; then
+    valor="${BASH_REMATCH[1]}"
+  fi
+  [ -n "$valor" ] || valor="$padrao"
+  printf '%s\n' "$valor"
+}

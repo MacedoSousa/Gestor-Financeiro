@@ -152,6 +152,52 @@ cadeia_txt_divergente_falha() {
     && ! grep -q "casal=$CASAL_2" "$GF_TMP/stderr"
 }
 
+emitir_escreve_contagens_e_cadeia() {
+  local total max_seq
+  read -r total max_seq _ <<<"$(contagens_fonte)"
+  rm -rf "$GF_TMP/emitido"; mkdir "$GF_TMP/emitido"
+  "$VERIFICAR" "$GF_TMP/integro.dump" --emitir "$GF_TMP/emitido" 2>"$GF_TMP/stderr" || return 1
+  [ "$(cat "$GF_TMP/emitido/contagens")" = "eventos_total=$total"$'\n'"eventos_max_seq=$max_seq" ] \
+    || { echo "  contagens [$(tr '\n' ' ' <"$GF_TMP/emitido/contagens")]"; return 1; }
+  [ "$(cat "$GF_TMP/emitido/cadeia.txt")" = "$(gerar_cadeia "$FONTE_CONTAINER" gestor)" ]
+}
+
+ancora_presente_passa() {
+  gerar_cadeia "$FONTE_CONTAINER" gestor >"$GF_TMP/ancora.txt"
+  "$VERIFICAR" "$GF_TMP/integro.dump" --ancora "$GF_TMP/ancora.txt" 2>"$GF_TMP/stderr"
+}
+
+# Âncora mais antiga que o dump (prefixo da cadeia) também passa: a cadeia só cresce.
+ancora_antiga_passa() {
+  psql_fonte postgres -F ' ' -c "
+    SELECT casal_id, seq, encode(hash, 'hex') FROM audit.eventos
+     WHERE seq = (SELECT min(seq) FROM audit.eventos WHERE casal_id = '$CASAL_2')" >"$GF_TMP/ancora.txt"
+  [ "$(wc -l <"$GF_TMP/ancora.txt")" -eq 1 ] || return 1
+  "$VERIFICAR" "$GF_TMP/integro.dump" --ancora "$GF_TMP/ancora.txt" 2>"$GF_TMP/stderr"
+}
+
+ancora_ausente_falha_sem_emitir() {
+  local seq
+  gerar_cadeia "$FONTE_CONTAINER" gestor \
+    | sed -E "1s/ [0-9a-f]{64}$/ $(printf 'a%.0s' {1..64})/" >"$GF_TMP/ancora.txt"
+  printf 'nulo 999999 %s\n' "$(printf 'b%.0s' {1..64})" >>"$GF_TMP/ancora.txt"
+  seq="$(head -n1 "$GF_TMP/ancora.txt" | cut -d' ' -f2)"
+  rm -rf "$GF_TMP/emitido"; mkdir "$GF_TMP/emitido"
+  if "$VERIFICAR" "$GF_TMP/integro.dump" --ancora "$GF_TMP/ancora.txt" --emitir "$GF_TMP/emitido" \
+    2>"$GF_TMP/stderr"; then return 1; fi
+  grep -q "FALHA ancora casal=$CASAL_1 seq=$seq$" "$GF_TMP/stderr" || return 1
+  grep -q "FALHA ancora casal=nulo seq=999999$" "$GF_TMP/stderr" || return 1
+  ! grep -q "casal=$CASAL_2" "$GF_TMP/stderr" || return 1
+  # Dump reprovado não deixa contagens nem cadeia.txt para o backup usar.
+  [ -z "$(ls -A "$GF_TMP/emitido")" ]
+}
+
+ancora_mal_formada_falha() {
+  printf 'isto nao e uma linha de cadeia\n' >"$GF_TMP/ancora.txt"
+  if "$VERIFICAR" "$GF_TMP/integro.dump" --ancora "$GF_TMP/ancora.txt" 2>"$GF_TMP/stderr"; then return 1; fi
+  grep -q "FALHA ancora formato linha=1" "$GF_TMP/stderr"
+}
+
 # Destrutivo na fonte: roda por último.
 evento_adulterado_falha_com_seq() {
   local seq
@@ -178,6 +224,11 @@ caso duas_fases_sem_disable_triggers_nao_e_fiel
 caso duas_fases_com_disable_triggers_e_fiel
 caso cadeia_txt_confere
 caso cadeia_txt_divergente_falha
+caso emitir_escreve_contagens_e_cadeia
+caso ancora_presente_passa
+caso ancora_antiga_passa
+caso ancora_ausente_falha_sem_emitir
+caso ancora_mal_formada_falha
 caso evento_adulterado_falha_com_seq
 
 if [ "$sobras" -eq 0 ]; then ok descartavel_some; else falha descartavel_some; fi
