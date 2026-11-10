@@ -303,7 +303,7 @@ falha_no_meio() {
     GF_TMP="$TMP_RUN" "$RAIZ_FALSA/infra/backup/backup.sh" --data 2026-11-10 2>"$T/stderr" || codigo=$?
   [ "$codigo" -ne 0 ] || { echo "  backup saiu com 0"; return 1; }
   grep -q "^FALHA tar|age codigo=" "$T/stderr" || { mostrar_stderr; return 1; }
-  [ ! -e "$dir/diario/gestor-2026-11-10.tar.age" ] && [ ! -e "$dir/cadeia/cadeia-2026-11-10.txt" ] \
+  { [ ! -e "$dir/diario/gestor-2026-11-10.tar.age" ] && [ ! -e "$dir/cadeia/cadeia-2026-11-10.txt" ]; } \
     || { echo "  ficou pacote ou cadeia do dia"; return 1; }
   [ -z "$(find "$dir" -name '*.parcial' -print)" ] || { echo "  sobrou .parcial: $(find "$dir" -name '*.parcial')"; return 1; }
   [ -z "$(find "$dir" \( -name '*.dump' -o -name '*.tar' -o -name 'MANIFESTO' -o -name 'cadeia.txt' \) -print)" ] \
@@ -311,11 +311,12 @@ falha_no_meio() {
   [ -z "$(ls -A "$TMP_RUN")" ] || { echo "  GF_TMP não ficou vazio"; return 1; }
   [ "$(sha256sum "$dir/diario/gestor-2026-11-09.tar.age" | cut -d' ' -f1)" = "$antes" ] \
     || { echo "  pacote do dia anterior mudou"; return 1; }
-  [ ! -e "$MARCAS/rotacionar" ] && [ ! -e "$MARCAS/enviar.args" ] || { echo "  rotação ou envio rodou"; return 1; }
+  { [ ! -e "$MARCAS/rotacionar" ] && [ ! -e "$MARCAS/enviar.args" ]; } || { echo "  rotação ou envio rodou"; return 1; }
 }
 
 age_falha_no_meio() {
   # Lê a entrada, escreve parte de uma saída age no -o e sai com erro (como disco cheio).
+  # shellcheck disable=SC2016  # é o corpo do script falso, expandido só quando ele roda
   falha_no_meio age 'saida=""; while [ "$#" -gt 0 ]; do [ "$1" = -o ] && saida="$2"; shift; done
 cat >/dev/null; printf "age-encryption.org/v1\n-> X25519 parcial" >"$saida"; exit 1' "$T/b-age-falha"
 }
@@ -340,7 +341,7 @@ rodar_sem_gf_tmp() {
   [ "$codigo" -ne 0 ] || { echo "  saiu com 0 ($modo)"; return 1; }
   grep -qx "FALHA GF_TMP obrigatorio" "$T/stderr" || { mostrar_stderr; return 1; }
   ! grep -q "dump:" "$T/stderr" || { echo "  fez o dump ($modo)"; return 1; }
-  [ -z "$(ls -A "$tmpdir")" ] && [ -z "$(ls -A "$cwd")" ] && [ ! -e "$dir" ] \
+  { [ -z "$(ls -A "$tmpdir")" ] && [ -z "$(ls -A "$cwd")" ] && [ ! -e "$dir" ]; } \
     || { echo "  criou arquivo ($modo)"; return 1; }
 }
 
@@ -377,7 +378,7 @@ backup_dir_relativo_no_env_recusa() {
 # Duas execuções ao mesmo tempo. Um age falso segura a primeira com o .parcial já escrito
 # até a segunda terminar; sem isso a segunda quase sempre chegaria antes de existir .parcial.
 duas_execucoes_ao_mesmo_tempo() {
-  local dir="$T/b-concorrente" shims="$T/shims-age" age_real pid codigo1=0 codigo2=0 i
+  local dir="$T/b-concorrente" shims="$T/shims-age" age_real pid codigo1=0 codigo2=0
   age_real="$(command -v age)"
   mkdir -p "$shims"
   cat >"$shims/age" <<EOF
@@ -392,7 +393,7 @@ EOF
   PATH="$shims:$PATH" GF_BACKUP_DIR="$dir" GF_BACKUP_DESTINATARIOS="$DESTINATARIOS" PG_CONTAINER="$FONTE_CONTAINER" \
     GF_TMP="$TMP_RUN" "$RAIZ_FALSA/infra/backup/backup.sh" --data 2026-11-10 2>"$T/stderr-1" &
   pid=$!
-  for i in $(seq 1 600); do [ -e "$MARCAS/age.escreveu" ] && break; sleep 0.1; done
+  for _ in $(seq 1 600); do [ -e "$MARCAS/age.escreveu" ] && break; sleep 0.1; done
   [ -e "$MARCAS/age.escreveu" ] || { echo "  primeira execução não chegou ao age"; touch "$MARCAS/age.liberar"; wait "$pid" || true; return 1; }
   [ -e "$dir/diario/.gestor-2026-11-10.parcial" ] || { echo "  sem .parcial durante o age"; touch "$MARCAS/age.liberar"; wait "$pid" || true; return 1; }
   GF_BACKUP_DIR="$dir" GF_BACKUP_DESTINATARIOS="$DESTINATARIOS" PG_CONTAINER="$FONTE_CONTAINER" \
@@ -401,7 +402,7 @@ EOF
   [ -e "$dir/diario/.gestor-2026-11-10.parcial" ] && parcial_sobreviveu=1
   touch "$MARCAS/age.liberar"
   wait "$pid" || codigo1=$?
-  [ "$codigo2" -ne 0 ] && grep -q "^FALHA outro backup em andamento" "$T/stderr" \
+  { [ "$codigo2" -ne 0 ] && grep -q "^FALHA outro backup em andamento" "$T/stderr"; } \
     || { echo "  segunda execução: código $codigo2"; mostrar_stderr; return 1; }
   [ -z "$(ls -A "$T/tmp-run-2")" ] || { echo "  segunda execução criou arquivo em GF_TMP"; return 1; }
   [ "$parcial_sobreviveu" -eq 1 ] || { echo "  segunda execução apagou o .parcial da primeira"; return 1; }
