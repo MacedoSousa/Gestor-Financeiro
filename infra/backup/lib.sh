@@ -40,10 +40,13 @@ esperar_postgres() {
 # O nome é definido antes do docker run, para o trap do chamador conseguir derrubá-lo
 # mesmo se a interrupção vier no meio. Sem rede e com os dados em tmpfs.
 # Cria gf_migrator e gf_app NOLOGIN: os donos e GRANTs do dump citam esses papéis.
+# Marca o container com o rótulo gf.execucao=<GF_EXECUCAO> (padrão "avulsa"). Os testes usam
+# um id próprio por execução e só conferem/removem os containers com esse rótulo, para
+# nunca derrubar o descartável de um backup de produção rodando ao mesmo tempo.
 subir_descartavel() {
   GF_DESCARTAVEL="gf-verificacao-$(aleatorio)"
   docker run -d --rm --network none --tmpfs /var/lib/postgresql/data \
-    --name "$GF_DESCARTAVEL" \
+    --name "$GF_DESCARTAVEL" --label "gf.execucao=${GF_EXECUCAO:-avulsa}" \
     -e POSTGRES_PASSWORD="$(aleatorio)$(aleatorio)" -e POSTGRES_DB=gestor \
     "$GF_IMAGEM_POSTGRES" >/dev/null 2>&1 || { log "descartável: docker run falhou"; return 1; }
   esperar_postgres "$GF_DESCARTAVEL" || return 1

@@ -9,6 +9,9 @@ source "$(dirname "${BASH_SOURCE[0]}")/comum.sh"
 VERIFICAR="$TESTES_DIR/../verificar-dump.sh"
 
 umask 077
+# Id desta execução: vai como rótulo nos descartáveis (inclusive os do verificar-dump.sh).
+GF_EXECUCAO="teste-$(aleatorio)"
+export GF_EXECUCAO
 GF_TMP="$(mktemp -d)"
 GF_DESCARTAVEL=""
 falhas=0
@@ -25,14 +28,20 @@ trap 'exit 130' INT TERM
 ok()    { echo "ok $1"; }
 falha() { echo "FALHA $1"; falhas=$((falhas + 1)); }
 
-# Roda um caso e confere que nenhum descartável sobrou depois dele.
+# Descartáveis criados por esta execução (rótulo gf.execucao). Nunca olha os de outra execução.
+descartaveis_desta_execucao() {
+  docker ps -aq --filter "label=gf.execucao=$GF_EXECUCAO" --filter name=gf-verificacao-
+}
+
+# Roda um caso e confere que nenhum descartável desta execução sobrou depois dele.
+# Sobra é falha; depois de registrada, remove só os containers com o rótulo desta execução.
 caso() {
   local nome="$1"
   if "$nome"; then ok "$nome"; else falha "$nome"; fi
-  if [ -n "$(docker ps -aq --filter name=gf-verificacao-)" ]; then
-    echo "  sobrou container gf-verificacao- depois de $nome"
+  if [ -n "$(descartaveis_desta_execucao)" ]; then
+    echo "  sobrou descartável desta execução depois de $nome"
     sobras=$((sobras + 1))
-    docker ps -aq --filter name=gf-verificacao- | xargs -r docker rm -f >/dev/null
+    descartaveis_desta_execucao | xargs -r docker rm -f >/dev/null
   fi
 }
 
@@ -44,12 +53,20 @@ CONTAGENS_SQL="SELECT (SELECT count(*) FROM audit.eventos) || ' ' ||
 contagens_fonte() { psql_fonte postgres -c "$CONTAGENS_SQL"; }
 
 # Sobe um descartável, restaura com as opções dadas e põe "<código> <contagens>" em RESULTADO.
+# O log do restaurar_dump (etapa e código) fica em $GF_TMP/restore.log.
 # Roda no shell atual (não em $(...)) para o trap de limpar() enxergar o container.
+# Retorna falha se o descartável não subir: o caso não pode passar sem ter restaurado nada.
 RESULTADO=""
 restaurar_e_contar() {
   local codigo=0 contagens
-  subir_descartavel
-  restaurar_dump "$GF_DESCARTAVEL" gestor "$GF_TMP/integro.dump" "$@" || codigo=$?
+  RESULTADO=""
+  if ! subir_descartavel; then
+    echo "  descartável não subiu"
+    derrubar_descartavel "$GF_DESCARTAVEL"
+    GF_DESCARTAVEL=""
+    return 1
+  fi
+  restaurar_dump "$GF_DESCARTAVEL" gestor "$GF_TMP/integro.dump" "$@" 2>"$GF_TMP/restore.log" || codigo=$?
   contagens="$(psql_descartavel "$GF_DESCARTAVEL" gestor -c "$CONTAGENS_SQL" || echo "erro")"
   derrubar_descartavel "$GF_DESCARTAVEL"
   GF_DESCARTAVEL=""
@@ -89,7 +106,7 @@ dump_truncado_falha() {
 restore_completo_preserva_auditoria() {
   local esperado obtido
   esperado="0 $(contagens_fonte)"
-  restaurar_e_contar
+  restaurar_e_contar || return 1
   obtido="$RESULTADO"
   [ "$obtido" = "$esperado" ] || { echo "  esperado [$esperado] obtido [$obtido]"; return 1; }
 }
@@ -97,16 +114,24 @@ restore_completo_preserva_auditoria() {
 duas_fases_sem_disable_triggers_nao_e_fiel() {
   local esperado obtido
   esperado="0 $(contagens_fonte)"
-  restaurar_e_contar --duas-fases --sem-disable-triggers
+  restaurar_e_contar --duas-fases --sem-disable-triggers || return 1
   obtido="$RESULTADO"
-  echo "  fonte [$esperado] restaurado [$obtido]"
-  [ "$obtido" != "$esperado" ]
+  echo "  fonte [$esperado] restaurado [$obtido] log [$(tr '\n' ' ' <"$GF_TMP/restore.log")]"
+  # A infidelidade tem que vir da etapa de dados: o esquema restaurou e as tabelas existem.
+  if grep -q "etapa=esquema" "$GF_TMP/restore.log"; then return 1; fi
+  [[ "$obtido" != *erro* ]] || return 1
+  if [[ "$obtido" == 0\ * ]]; then
+    # Saiu com 0: só vale se alguma contagem divergir.
+    [ "$obtido" != "$esperado" ]
+  else
+    grep -q "etapa=dados" "$GF_TMP/restore.log"
+  fi
 }
 
 duas_fases_com_disable_triggers_e_fiel() {
   local esperado obtido
   esperado="0 $(contagens_fonte)"
-  restaurar_e_contar --duas-fases
+  restaurar_e_contar --duas-fases || return 1
   obtido="$RESULTADO"
   [ "$obtido" = "$esperado" ] || { echo "  esperado [$esperado] obtido [$obtido]"; return 1; }
 }
