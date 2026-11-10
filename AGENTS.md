@@ -27,4 +27,4 @@ Skills de cada papel: [`docs/desenvolvimento/papeis-e-skills.md`](docs/desenvolv
 
 ## Passagem de trabalho
 
-Revisões e relatórios de teste no navegador vão para `.revisoes/<branch>.md` (fora do git), no formato de [`docs/desenvolvimento/modelo-de-revisao.md`](docs/desenvolvimento/modelo-de-revisao.md). Processo completo: [`docs/desenvolvimento/dois-agentes.md`](docs/desenvolvimento/dois-agentes.md).
+O QA entrega revisões e relatórios de teste no navegador no texto da resposta, no formato de [`docs/desenvolvimento/modelo-de-revisao.md`](docs/desenvolvimento/modelo-de-revisao.md), sem gravar arquivo nem usar gh. O Dev salva o texto em `.revisoes/<branch>.md` (fora do git), publica no PR com `gh pr comment` e responde aos achados ali. Processo completo: [`docs/desenvolvimento/dois-agentes.md`](docs/desenvolvimento/dois-agentes.md).

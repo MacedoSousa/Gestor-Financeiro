@@ -16,11 +16,15 @@ No VS Code/Antigravity, `Terminal → Run Task` mostra as tarefas de `.vscode/ta
 
 Os nomes de menu e de pasta abaixo são da versão em que este guia foi escrito; confira na sua.
 
-1. **Regras do workspace:** o Antigravity lê `.agent/rules/` e `.agent/workflows/` deste repositório. A regra `00-gestor-financeiro.md` manda ler o `CLAUDE.md` antes de tudo. Não copie as regras para lá.
+1. **Regras do workspace:** o Antigravity lê `.agent/rules/` e `.agent/workflows/` deste repositório. A regra `00-gestor-financeiro.md` manda ler o `CLAUDE.md` antes de tudo. Não copie as regras para lá. Nesta versão, as regras e os workflows não carregaram automaticamente; por isso o prompt do CEO manda o QA lê-los pelo caminho do arquivo.
 2. **Execução no terminal:** deixe a política em "pedir revisão" (não automática). Se usar lista de bloqueio, inclua: `psql`, `rm -rf`, `docker compose down -v`, `git push --force`, `git push -f`, `git commit --no-verify`. É a mesma lista de `deny` do `.claude/settings.json`.
 3. **Arquivos sensíveis:** o Antigravity não lê o `.claude/settings.json`. Exclua do acesso do agente `infra/secrets/`, `.env`, `.env.*`, `backups/` e `infra/data/` pela configuração dele. O arquivo `.aiexclude` na raiz lista os mesmos caminhos para ferramentas Gemini que o leem. Na dúvida, mantenha segredos e backups fora da pasta do workspace.
 4. **Modelo:** para revisão, use um modelo Gemini. Revisar com Claude dentro do Antigravity tira o ganho de ter outro modelo olhando.
 5. **Vários agentes do Antigravity em paralelo:** um por worktree ou branch, nunca no branch do Claude.
+
+## Passagem de trabalho
+
+O QA entrega a revisão no texto da resposta, no formato de [`modelo-de-revisao.md`](modelo-de-revisao.md), sem gravar arquivo nem usar gh (o ambiente do Antigravity não tem gh nem Docker). A pessoa cola o texto no Claude Code, e o Dev salva em `.revisoes/<branch>.md`, publica no PR com `gh pr comment` e responde aos achados (skill `revisao-cruzada`).
 
 ## Fluxo de um bloco
 

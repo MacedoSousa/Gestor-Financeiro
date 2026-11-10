@@ -11,4 +11,4 @@ description: Revisa os textos de interface do branch (rótulos, botões, erros, 
    - **Números e datas:** `R$ 1.234,56`, `DD/MM`, "≈" para estimado, mês por extenso onde a spec pede.
    - **Consistência:** o mesmo conceito com o mesmo nome em todas as telas (ex.: sempre "vencimento", nunca "data limite" numa e "vencimento" noutra).
    - **Nada pessoal em erro** (regra 5): nenhum CPF, nome ou valor dentro de mensagem de erro.
-4. Escreva a seção "Textos" em `.revisoes/<branch>.md` com o texto atual, o proposto e o motivo. Divergência da spec é **Importante**; texto que expõe dado pessoal é **Bloqueia**.
+4. Entregue a revisão no texto da sua resposta, no formato de `docs/desenvolvimento/modelo-de-revisao.md`. Não grave arquivo e não use gh: o Dev salva e publica no PR. Os achados vão na seção "Textos" do texto entregue, com o texto atual, o proposto e o motivo. Divergência da spec é **Importante**; texto que expõe dado pessoal é **Bloqueia**.
