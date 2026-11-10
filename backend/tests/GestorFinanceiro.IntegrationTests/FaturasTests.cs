@@ -214,6 +214,21 @@ public class FaturasTests(PostgresFixture pg)
     }
 
     [Fact]
+    public async Task Lancamento_anterior_ao_saldo_inicial_fica_fora_do_devido_e_do_total()
+    {
+        await using var c = await IniciarAsync();
+        var cartao = await CriarCartaoAsync(c.Cliente);
+        var mercado = await CategoriaAsync(c.Cliente, "Mercado");
+        await LancarAsync(c.Cliente, cartao, 100_000, "2026-10-15", parcelas: 10);
+        // A API recusa data anterior ao saldo inicial; semeia direto, como nos outros testes de integração.
+        await ExecutarAsync(c.Banco,
+            "INSERT INTO lancamentos.transacoes (id, casal_id, conta_id, categoria_id, data, valor_centavos, natureza, descricao_cifrada, origem, id_externo, fatura_vencimento) VALUES " +
+            $"('{Guid.NewGuid()}', '{c.Casal}', '{cartao}', '{mercado}', '2026-08-20', -50000, 'DESPESA', '\\x01', 'MANUAL', '{Guid.NewGuid()}', '2026-11-10')");
+
+        AssertFechada(await c.DoCartaoAsync(cartao), total: 10_000, restante: 10_000, atraso: 0);
+    }
+
+    [Fact]
     public async Task Faturas_ignoram_outro_casal()
     {
         await using var c = await IniciarAsync();
