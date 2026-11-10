@@ -270,6 +270,66 @@ public class RegrasDoPainelTests
     }
 
     [Fact]
+    public void Vencida_fica_no_topo_fora_do_corte_de_5()
+    {
+        var contas = new Dictionary<Guid, ContaResumo>();
+        var faturas = new List<FaturasDoCartao>();
+        void Add(string apelido, int dia, FaturaVencida? vencida = null)
+        {
+            var c = Conta(apelido, "CARTAO");
+            contas[c.Id] = c;
+            var venc = new DateOnly(2026, 11, dia);
+            faturas.Add(new FaturasDoCartao(c.Id,
+                new FaturaFechadaAPagar(venc, venc.AddDays(-9), 1_000, 1_000, 0),
+                new FaturaAbertaAteHoje(venc.AddMonths(1), venc.AddMonths(1).AddDays(-9), 2_000),
+                vencida));
+        }
+        Add("A", 20);
+        Add("B", 21);
+        Add("C", 22, new FaturaVencida(new DateOnly(2026, 10, 22), new DateOnly(2026, 10, 13), 7_000));
+        Add("D", 23, new FaturaVencida(new DateOnly(2026, 10, 3), new DateOnly(2026, 9, 24), 4_000));
+
+        var r = RegrasDoPainel.Vencimentos(faturas, contas, Hoje);
+
+        Assert.Equal(7, r.Count);
+        Assert.Equal([("D", "VENCIDA"), ("C", "VENCIDA")], r.Take(2).Select(v => (v.Apelido, v.Estado)));
+        Assert.Equal(new DateOnly(2026, 10, 3), r[0].Vencimento);
+        Assert.Equal(4_000, r[0].ValorCentavos);
+        Assert.Equal(0, r[0].AtrasoCentavos);
+        Assert.Equal(7_000, r[1].ValorCentavos);
+        Assert.Equal(5, r.Skip(2).Count(v => v.Estado != "VENCIDA"));
+        Assert.Equal(["A", "B", "C", "D", "A"], r.Skip(2).Select(v => v.Apelido));
+    }
+
+    [Fact]
+    public void Ainda_da_para_gastar_soma_as_faturas_vencidas()
+    {
+        var (visa, _) = Cartao("Visa", new DateOnly(2026, 11, 1), new DateOnly(2026, 11, 10));
+        var (master, _) = Cartao("Master", new DateOnly(2026, 11, 1), new DateOnly(2026, 11, 10));
+        var (elo, _) = Cartao("Elo", new DateOnly(2026, 11, 1), new DateOnly(2026, 11, 10));
+        var faturas = new[]
+        {
+            visa[0] with { Vencida = new FaturaVencida(new DateOnly(2026, 10, 10), new DateOnly(2026, 10, 1), 5_000) },
+            master[0] with { Vencida = new FaturaVencida(new DateOnly(2026, 11, 3), new DateOnly(2026, 10, 25), 12_345) },
+            elo[0],
+        };
+
+        Assert.Equal(17_345, RegrasDoPainel.TotalVencido(faturas));
+        Assert.Null(RegrasDoPainel.TotalVencido([elo[0]]));
+        Assert.Null(RegrasDoPainel.TotalVencido([]));
+
+        var comTeto = RegrasDoPainel.AindaDaParaGastar(new FatiaDto(400_000, 83_600, null), Hoje, 17_345);
+        var semTeto = RegrasDoPainel.AindaDaParaGastar(new FatiaDto(null, 0, null), Hoje, 5_000);
+        var passou = RegrasDoPainel.AindaDaParaGastar(new FatiaDto(100_000, 100_500, null), Hoje, 5_000);
+        var nada = RegrasDoPainel.AindaDaParaGastar(new FatiaDto(400_000, 83_600, null), Hoje, null);
+
+        Assert.Equal(17_345, comTeto.FaturaVencidaCentavos);
+        Assert.Equal(5_000, semTeto.FaturaVencidaCentavos);
+        Assert.Equal(5_000, passou.FaturaVencidaCentavos);
+        Assert.Null(nada.FaturaVencidaCentavos);
+    }
+
+    [Fact]
     public void Metas_corta_em_3_e_mantem_a_ordem()
     {
         var r = RegrasDoPainel.Metas([Meta("D"), Meta("A"), Meta("C"), Meta("B")]);

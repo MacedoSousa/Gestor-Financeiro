@@ -749,6 +749,8 @@ export interface components {
             percentualUsado: null | number | string;
             /** Format: date */
             fimDoMes: string;
+            /** Format: int64 */
+            faturaVencidaCentavos?: null | number | string;
         };
         AporteDaMetaDto: {
             /** Format: uuid */

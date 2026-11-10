@@ -43,6 +43,9 @@ describe("aparenciaDaFatura", () => {
   it("fechada é normal", () => {
     expect(aparenciaDaFatura("FECHADA")).toEqual({ rotulo: "Fechada", tom: "normal" });
   });
+  it("vencida é alerta", () => {
+    expect(aparenciaDaFatura("VENCIDA")).toEqual({ rotulo: "Vencida", tom: "alerta" });
+  });
 });
 
 describe("aparenciaDaMeta", () => {

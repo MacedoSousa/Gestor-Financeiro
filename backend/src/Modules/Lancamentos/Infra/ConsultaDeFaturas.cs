@@ -58,10 +58,19 @@ internal sealed class ConsultaDeFaturas(LancamentosDbContext db, IConsultaDeCont
             var totalParaAtraso = totalFechada;
             if (conta.SaldoInicialEm > fechAnterior) totalParaAtraso += Math.Max(0, -conta.SaldoInicialCentavos);
             var atraso = Math.Min(restante, Math.Max(0, restante - Math.Max(0, totalParaAtraso)));
+
+            // Passado o vencimento da fechada, todo o restante está vencido; antes dele, só o atraso (da anterior para trás).
+            FaturaVencida? vencida = null;
+            if (hoje > fechada.Vencimento && restante > 0)
+                vencida = new FaturaVencida(fechada.Vencimento, fechada.Fechamento, restante);
+            else if (atraso > 0)
+                vencida = new FaturaVencida(vencAnterior, fechAnterior, atraso);
+
             resultado.Add(new FaturasDoCartao(
                 conta.Id,
                 new FaturaFechadaAPagar(fechada.Vencimento, fechada.Fechamento, totalFechada, restante, atraso),
-                new FaturaAbertaAteHoje(aberta.Vencimento, aberta.Fechamento, totalAberta)));
+                new FaturaAbertaAteHoje(aberta.Vencimento, aberta.Fechamento, totalAberta),
+                vencida));
         }
 
         return resultado;

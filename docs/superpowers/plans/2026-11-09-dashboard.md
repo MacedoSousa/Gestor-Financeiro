@@ -121,7 +121,7 @@ Casal Ana e Bruno; Ana logada.
 
 | Item | Valor |
 | --- | --- |
-| Ainda dá para gastar | teto 270.000, usado 60.000 (Mercado 41.200 com a p2 de 15/11, que é de novembro; Restaurantes 18.800), restante 210.000, 26 dias, por dia 8.000, percentual 22, situação `COM_TETO` |
+| Ainda dá para gastar | teto 270.000, usado 60.000 (Mercado 41.200 com a p2 de 15/11, que é de novembro; Restaurantes 18.800), restante 210.000, 26 dias, por dia 8.000, percentual 22, situação `COM_TETO`; fatura vencida 5.000 (a de 10/10) |
 | Saldo das contas | 1.388.800 = Conjunta 1.368.800 + Carteira 20.000; outras 0 |
 | Aporte planejado | 680.000 (Casa 500.000, Carro 180.000); já aportado 500.000 |
 | Patrimônio | 9.855.000; variação −50.000 (fim de outubro 9.905.000); percentual −0,5 |
@@ -129,9 +129,18 @@ Casal Ana e Bruno; Ana logada.
 | Patrimônio em 12 meses | dez/2025 a ago/2026 nulos; set 4.015.000 (sem a Poupança, que começa em 15/10); out 9.905.000; nov 9.855.000; intervalo `dez/2025 → nov/2026` |
 | Metas | Casa 18% (5.500.000 de 30.000.000), Carro 37% (3.000.000 de 8.000.000). Situação e "chega em" iguais aos do `GET /metas` (à mão: Casa 2030-12, Carro 2029-02) |
 | Orçamento | Restaurantes 18.800/60.000 31%, Mercado 41.200/160.000 25%, Lazer 0/50.000 0%; outras 0 |
-| Vencimentos | Itaú Visa 10/11 `COM_ATRASO`, valor 15.000, atraso 5.000, fechada em 01/11; Itaú Visa 10/12 `ABERTA` 18.800, fecha em 01/12 |
+| Vencimentos | Itaú Visa 10/10 `VENCIDA`, valor 5.000, fechada em 01/10 (no topo); Itaú Visa 10/11 `COM_ATRASO`, valor 15.000, atraso 5.000, fechada em 01/11; Itaú Visa 10/12 `ABERTA` 18.800, fecha em 01/12 |
 | Últimos | as duas pernas de 04/11 (−500.000 e +500.000), 03/11 −18.800, 01/11 −31.200, 25/10 +900.000. A p2 de 15/11 não aparece |
 | Apelido | `Ana` |
+
+**Esperado em 11/11** (o dia seguinte ao vencimento de 10/11, sem novos lançamentos; acrescentado depois da entrega):
+
+| Item | Valor |
+| --- | --- |
+| Ainda dá para gastar | restante 210.000, 20 dias, por dia 10.500, percentual 22, `COM_TETO`; fatura vencida 15.000 |
+| Saldo, aporte, patrimônio | iguais aos de 05/11 (1.388.800; 680.000 e 500.000 já aportado; 9.855.000 e −50.000) |
+| Aviso | nenhum (o fechamento de 01/11 foi há 10 dias) |
+| Vencimentos | Itaú Visa 10/11 `VENCIDA`, valor 15.000 (os 10.000 da p1 mais os 5.000 de 10/10), fechada em 01/11, no topo; Itaú Visa 10/12 `ABERTA` 18.800. A fatura de 10/11 não aparece mais como `COM_ATRASO` |
 
 ---
 
