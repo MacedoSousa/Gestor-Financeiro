@@ -3,10 +3,11 @@
 # Backup diário: dump → verificação num descartável → pacote tar cifrado com age.
 # Uso: backup.sh [--data AAAA-MM-DD]     (--data existe para os testes; padrão: hoje em São Paulo)
 #
-# Ambiente (todos opcionais):
+# Ambiente (só GF_TMP é obrigatório):
 #   GF_RAIZ        raiz do repositório (padrão: dois níveis acima deste script)
 #   PG_CONTAINER   container do Postgres (padrão: docker compose ... ps -q postgres)
-#   GF_TMP         onde fica o que existe em claro (produção: RuntimeDirectory do systemd)
+#   GF_TMP         obrigatório, absoluto: onde fica o que existe em claro (produção:
+#                  RuntimeDirectory do systemd). Sem fallback para /tmp.
 #   GF_BACKUP_*    lidos de $GF_RAIZ/infra/.env por ler_env; o ambiente tem precedência
 #
 # Gera $GF_BACKUP_DIR/diario/gestor-<data>.tar.age e $GF_BACKUP_DIR/cadeia/cadeia-<data>.txt;
@@ -42,6 +43,9 @@ GF_BACKUP_DIR="$(ler_env GF_BACKUP_DIR /var/backups/gestor)"
 # corrente, como root em produção.
 [[ "$GF_BACKUP_DIR" == /* ]] || falhar "GF_BACKUP_DIR precisa ser caminho absoluto"
 export GF_BACKUP_DIR
+# O dump, os segredos e o tar em claro só existem em GF_TMP (RuntimeDirectory em produção).
+# Sem ele não há fallback: /tmp pode ser disco e sobreviver a uma queda.
+[[ "${GF_TMP:-}" == /* ]] || falhar "GF_TMP obrigatorio"
 destinatarios="$(ler_env GF_BACKUP_DESTINATARIOS /etc/gestor-backup/destinatarios.txt)"
 
 # ---------------------------------------------------------------- pré-condições
@@ -103,8 +107,7 @@ limpar() {
 }
 trap limpar EXIT
 
-base_tmp="${GF_TMP:-${TMPDIR:-/tmp}}"
-trabalho="$(mktemp -d "$base_tmp/gf-backup.XXXXXXXX")"
+trabalho="$(mktemp -d "$GF_TMP/gf-backup.XXXXXXXX")"
 conteudo="$trabalho/pacote"
 emitido="$trabalho/emitido"
 mkdir "$conteudo" "$conteudo/secrets" "$conteudo/chaves" "$emitido"

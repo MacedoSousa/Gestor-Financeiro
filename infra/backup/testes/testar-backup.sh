@@ -308,6 +308,32 @@ tar_falha_no_meio() {
   falha_no_meio tar 'printf "tar parcial"; exit 2' "$T/b-tar-falha"
 }
 
+# GF_TMP é obrigatório: sem ele, vazio ou relativo, o backup sai antes do dump, e nada vai
+# para TMPDIR ou /tmp. Uso: rodar_sem_gf_tmp <dir> <modo: ausente|vazio|relativo>.
+rodar_sem_gf_tmp() {
+  local dir="$1" modo="$2" tmpdir="$T/tmpdir-$2" cwd="$T/cwd-tmp-$2" codigo=0
+  local -a gf_tmp=()
+  rm -rf "$tmpdir" "$cwd"; mkdir "$tmpdir" "$cwd"
+  case "$modo" in
+    ausente)  gf_tmp=(-u GF_TMP) ;;
+    vazio)    gf_tmp=(GF_TMP=) ;;
+    relativo) gf_tmp=(GF_TMP=tmp-relativo) ;;
+  esac
+  ( cd "$cwd" && env "${gf_tmp[@]}" TMPDIR="$tmpdir" GF_BACKUP_DIR="$dir" GF_BACKUP_DESTINATARIOS="$DESTINATARIOS" \
+      PG_CONTAINER="$FONTE_CONTAINER" "$RAIZ_FALSA/infra/backup/backup.sh" --data 2026-11-10 2>"$T/stderr" ) || codigo=$?
+  [ "$codigo" -ne 0 ] || { echo "  saiu com 0 ($modo)"; return 1; }
+  grep -qx "FALHA GF_TMP obrigatorio" "$T/stderr" || { mostrar_stderr; return 1; }
+  ! grep -q "dump:" "$T/stderr" || { echo "  fez o dump ($modo)"; return 1; }
+  [ -z "$(ls -A "$tmpdir")" ] && [ -z "$(ls -A "$cwd")" ] && [ ! -e "$dir" ] \
+    || { echo "  criou arquivo ($modo)"; return 1; }
+}
+
+gf_tmp_obrigatorio() {
+  rodar_sem_gf_tmp "$T/b-tmp-ausente" ausente \
+    && rodar_sem_gf_tmp "$T/b-tmp-vazio" vazio \
+    && rodar_sem_gf_tmp "$T/b-tmp-relativo" relativo
+}
+
 # GF_BACKUP_DIR vazio no ambiente (tem precedência sobre o .env) ou relativo no .env: sai
 # antes de criar qualquer coisa. Roda de dentro de uma pasta vazia para ver se algo nasce ali.
 backup_dir_vazio_no_ambiente_recusa() {
@@ -454,6 +480,7 @@ caso mesmo_dia_substitui
 caso cadeia_dentro_e_fora
 caso codigo_do_enviar_e_o_do_backup
 caso le_so_chaves_do_env
+caso gf_tmp_obrigatorio
 caso age_falha_no_meio
 caso tar_falha_no_meio
 caso backup_dir_vazio_no_ambiente_recusa
