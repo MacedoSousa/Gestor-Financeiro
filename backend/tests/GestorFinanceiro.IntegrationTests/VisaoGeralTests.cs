@@ -208,12 +208,11 @@ public class VisaoGeralTests(PostgresFixture pg)
         Assert.Equal("2026-10-10", vencida.GetProperty("vencimento").GetString());
         Assert.Equal("2026-10-01", vencida.GetProperty("fechamento").GetString());
         Assert.Equal(5_000, vencida.GetProperty("valorCentavos").GetInt64());
-        Assert.Equal(0, vencida.GetProperty("atrasoCentavos").GetInt64());
         var venc = todos.Skip(1).ToList();
         Assert.Equal("2026-11-10", venc[0].GetProperty("vencimento").GetString());
-        Assert.Equal("COM_ATRASO", venc[0].GetProperty("estado").GetString());
-        Assert.Equal(15_000, venc[0].GetProperty("valorCentavos").GetInt64());
-        Assert.Equal(5_000, venc[0].GetProperty("atrasoCentavos").GetInt64());
+        Assert.Equal("FECHADA", venc[0].GetProperty("estado").GetString());
+        Assert.Equal(10_000, venc[0].GetProperty("valorCentavos").GetInt64());
+        Assert.False(venc[0].TryGetProperty("atrasoCentavos", out _));
         Assert.Equal("2026-11-01", venc[0].GetProperty("fechamento").GetString());
         Assert.Equal("Itaú Visa", venc[0].GetProperty("apelido").GetString());
         Assert.Equal("2026-12-10", venc[1].GetProperty("vencimento").GetString());
@@ -233,7 +232,7 @@ public class VisaoGeralTests(PostgresFixture pg)
         var (c, _) = await IniciarComAsync();
         await using var _c = c;
         var h = c.Cliente;
-        await CenarioDeNovembroAsync(h);
+        var cenario = await CenarioDeNovembroAsync(h);
         _relogio.Agora = Dia(11);
 
         var v = await ObterAsync(h);
@@ -260,13 +259,19 @@ public class VisaoGeralTests(PostgresFixture pg)
         Assert.Equal(2, venc.Count);
         Assert.Equal("VENCIDA", venc[0].GetProperty("estado").GetString());
         Assert.Equal("Itaú Visa", venc[0].GetProperty("apelido").GetString());
-        Assert.Equal("2026-11-10", venc[0].GetProperty("vencimento").GetString());
-        Assert.Equal("2026-11-01", venc[0].GetProperty("fechamento").GetString());
+        Assert.Equal("2026-10-10", venc[0].GetProperty("vencimento").GetString());
+        Assert.Equal("2026-10-01", venc[0].GetProperty("fechamento").GetString());
         Assert.Equal(15_000, venc[0].GetProperty("valorCentavos").GetInt64());
-        Assert.Equal(0, venc[0].GetProperty("atrasoCentavos").GetInt64());
         Assert.Equal("ABERTA", venc[1].GetProperty("estado").GetString());
         Assert.Equal("2026-12-10", venc[1].GetProperty("vencimento").GetString());
         Assert.Equal(18_800, venc[1].GetProperty("valorCentavos").GetInt64());
+
+        // Pagar 50,00 quita a de 10/10; o que sobra vencido é da de 10/11.
+        await PagarAsync(h, cenario.Conjunta, cenario.Visa, 5_000, "2026-11-11");
+        var depois = Dados(await ObterAsync(h), "vencimentos")[0];
+        Assert.Equal("VENCIDA", depois.GetProperty("estado").GetString());
+        Assert.Equal("2026-11-10", depois.GetProperty("vencimento").GetString());
+        Assert.Equal(10_000, depois.GetProperty("valorCentavos").GetInt64());
     }
 
     [Fact]

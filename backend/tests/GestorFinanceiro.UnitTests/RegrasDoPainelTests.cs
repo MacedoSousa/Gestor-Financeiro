@@ -260,11 +260,10 @@ public class RegrasDoPainelTests
 
         Assert.Equal(5, r.Count);
         Assert.Equal(
-            [("Master", "FECHADA"), ("Amex", "FECHADA"), ("Visa", "COM_ATRASO"), ("Elo", "FECHADA"), ("Amex", "ABERTA")],
+            [("Master", "FECHADA"), ("Amex", "FECHADA"), ("Visa", "FECHADA"), ("Elo", "FECHADA"), ("Amex", "ABERTA")],
             r.Select(v => (v.Apelido, v.Estado)));
         var visa = r[2];
-        Assert.Equal(15_000, visa.ValorCentavos);
-        Assert.Equal(5_000, visa.AtrasoCentavos);
+        Assert.Equal(10_000, visa.ValorCentavos);
         Assert.Equal(new DateOnly(2026, 11, 1), visa.Fechamento);
         Assert.DoesNotContain(r, v => v.Apelido is "Velho" or "Quitado");
     }
@@ -295,10 +294,26 @@ public class RegrasDoPainelTests
         Assert.Equal([("D", "VENCIDA"), ("C", "VENCIDA")], r.Take(2).Select(v => (v.Apelido, v.Estado)));
         Assert.Equal(new DateOnly(2026, 10, 3), r[0].Vencimento);
         Assert.Equal(4_000, r[0].ValorCentavos);
-        Assert.Equal(0, r[0].AtrasoCentavos);
         Assert.Equal(7_000, r[1].ValorCentavos);
         Assert.Equal(5, r.Skip(2).Count(v => v.Estado != "VENCIDA"));
         Assert.Equal(["A", "B", "C", "D", "A"], r.Skip(2).Select(v => v.Apelido));
+    }
+
+    [Fact]
+    public void Fechada_com_atraso_mostra_so_o_valor_dela()
+    {
+        var c = Conta("Visa", "CARTAO");
+        var contas = new Dictionary<Guid, ContaResumo> { [c.Id] = c };
+        FaturasDoCartao Com(long restante, long atraso) => new(c.Id,
+            new FaturaFechadaAPagar(new DateOnly(2026, 11, 10), new DateOnly(2026, 11, 1), 10_000, restante, atraso),
+            new FaturaAbertaAteHoje(new DateOnly(2026, 12, 10), new DateOnly(2026, 12, 1), 0),
+            atraso > 0 ? new FaturaVencida(new DateOnly(2026, 10, 10), new DateOnly(2026, 10, 1), atraso) : null);
+
+        var comAtraso = RegrasDoPainel.Vencimentos([Com(15_000, 5_000)], contas, Hoje);
+        var soAtraso = RegrasDoPainel.Vencimentos([Com(5_000, 5_000)], contas, Hoje);
+
+        Assert.Equal([("VENCIDA", 5_000L), ("FECHADA", 10_000L)], comAtraso.Select(v => (v.Estado, v.ValorCentavos)));
+        Assert.Equal([("VENCIDA", 5_000L)], soAtraso.Select(v => (v.Estado, v.ValorCentavos)));
     }
 
     [Fact]

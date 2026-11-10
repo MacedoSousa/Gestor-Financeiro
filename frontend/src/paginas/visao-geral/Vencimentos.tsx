@@ -11,7 +11,6 @@ export function Vencimentos({ dados }: { dados: Vencimento[] }) {
     <ul className="lista-painel">
       {dados.map((v) => {
         const a = aparenciaDaFatura(v.estado);
-        const atraso = n(v.atrasoCentavos);
         if (v.estado === "VENCIDA")
           return (
             <li key={`${v.contaId}-vencida`}>
@@ -20,7 +19,7 @@ export function Vencimentos({ dados }: { dados: Vencimento[] }) {
               </div>
               <div className="linha-painel cartao-nota">
                 <span className={`tom-${a.tom}`}>
-                  Vencida em {diaEMes(v.vencimento)} · <span className="num">{formatarReais(n(v.valorCentavos))}</span>
+                  Vencida desde {diaEMes(v.vencimento)} · <span className="num">{formatarReais(n(v.valorCentavos))}</span>
                 </span>
               </div>
             </li>
@@ -35,11 +34,6 @@ export function Vencimentos({ dados }: { dados: Vencimento[] }) {
             </div>
             <div className="linha-painel cartao-nota">
               <span>{v.estado === "ABERTA" ? `${a.rotulo} · fecha em ${diaEMes(v.fechamento)}` : `${a.rotulo} em ${diaEMes(v.fechamento)}`}</span>
-              {atraso > 0 && (
-                <span className="tom-alerta">
-                  inclui <span className="num">{formatarReais(atraso)}</span> em atraso
-                </span>
-              )}
             </div>
           </li>
         );

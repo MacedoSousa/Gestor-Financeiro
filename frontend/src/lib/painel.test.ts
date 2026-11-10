@@ -31,10 +31,6 @@ describe("resumoDoGrafico", () => {
 });
 
 describe("aparenciaDaFatura", () => {
-  it("atraso é alerta", () => {
-    expect(aparenciaDaFatura("COM_ATRASO").tom).toBe("alerta");
-    expect(aparenciaDaFatura("COM_ATRASO").rotulo).toBe("Fechada");
-  });
   it("aberta começa com Aberta", () => {
     const a = aparenciaDaFatura("ABERTA");
     expect(a.rotulo).toBe("Aberta");

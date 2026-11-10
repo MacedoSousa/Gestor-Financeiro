@@ -125,8 +125,8 @@ public sealed record FaturaFechadaAPagar(DateOnly Vencimento, DateOnly Fechament
 public sealed record FaturaAbertaAteHoje(DateOnly Vencimento, DateOnly Fechamento, long TotalAteHojeCentavos);
 
 /// <summary>
-/// Fatura vencida e não paga: depois do vencimento da fechada, é ela com todo o restante; antes disso, é a anterior com o atraso.
-/// <c>Vencimento</c> é o da fatura vencida mais recente (o atraso pode vir de faturas mais antigas).
+/// O que está vencido e não pago: depois do vencimento da fechada, todo o restante; antes dele, o atraso.
+/// <c>Vencimento</c> e <c>Fechamento</c> são os da fatura mais antiga ainda em aberto (pagamento quita a mais antiga primeiro).
 /// </summary>
 public sealed record FaturaVencida(DateOnly Vencimento, DateOnly Fechamento, long RestanteCentavos);
 

@@ -4968,8 +4968,7 @@
           "vencimento",
           "fechamento",
           "estado",
-          "valorCentavos",
-          "atrasoCentavos"
+          "valorCentavos"
         ],
         "type": "object",
         "properties": {
@@ -4992,14 +4991,6 @@
             "type": "string"
           },
           "valorCentavos": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
-            "format": "int64"
-          },
-          "atrasoCentavos": {
             "pattern": "^-?(?:0|[1-9]\\d*)$",
             "type": [
               "integer",

@@ -93,9 +93,9 @@ Por cartão (inclusive arquivado), com F = última fatura fechada e A = fatura a
 - **Devido até F** = saldo inicial do cartão + Σ despesas e receitas com `fatura_vencimento ≤ vencimento de F` (qualquer data) + Σ transferências (pagamentos e o que mais entrar ou sair por transferência) com `data ≤ hoje`.
 - **Restante a pagar** = `máx(0, −devido)`.
 - **Em atraso** = `restante − total de F`, quando > 0, nunca acima do restante. Se o saldo inicial do cartão (dívida) foi tomado depois do fechamento da fatura anterior a F (durante o período de F ou depois), ele conta como parte de F nesse cálculo (não é atraso); se foi tomado até esse fechamento, é dívida antiga e conta como atraso. O total de F exibido continua sendo só a soma dos lançamentos.
-- F aparece se `vencimento ≥ hoje` e `restante > 0`, com "Fechada em DD/MM". Com atraso, a linha diz "inclui R$ X em atraso" em tom de alerta.
+- F aparece se `vencimento ≥ hoje` e `restante − atraso > 0`, com "Fechada em DD/MM" e só o valor dela (`restante − atraso`); o atraso fica na linha da vencida. (Antes de 10/11, F mostrava o restante com "inclui R$ X em atraso".)
 - A aparece se o total até hoje (lançamentos com `fatura_vencimento` = vencimento de A e `data ≤ hoje`) for > 0, com "Aberta · fecha em DD/MM".
-- **Vencida** (decidido depois da entrega, em 10/11): o que está vencido e não pago. Passado o vencimento de F, é F com todo o restante; antes dele, é a fatura anterior a F com o atraso (a data é a do vencimento mais recente; o atraso pode vir de faturas mais antigas). Aparece no topo da lista como "Vencida em DD/MM · R$ X", em tom de alerta, até o restante chegar a zero. Antes do vencimento de F, a linha de F continua dizendo "inclui R$ X em atraso".
+- **Vencida** (decidido depois da entrega, em 10/11): o que está vencido e não pago. Passado o vencimento de F, é todo o restante; antes dele, é o atraso. A data é o vencimento mais antigo ainda em aberto: o pagamento quita a fatura mais antiga primeiro, então o valor vencido é coberto pelas faturas mais recentes (até a última vencida), voltando no tempo até somar o valor; a última alcançada é a mais antiga em aberto. A dívida do saldo inicial pertence à fatura do período em que foi tomada (ou a F, pela regra do atraso acima). Aparece no topo da lista como "Vencida desde DD/MM · R$ X", em tom de alerta, até o restante chegar a zero.
 - Lista: as vencidas primeiro, todas, fora do corte; depois as demais por vencimento crescente, até 5. Vazio: "Nenhuma fatura a vencer".
 
 ### Últimos lançamentos
@@ -154,7 +154,7 @@ VisaoGeralDto(
 SecaoDto<T>(T? Dados, string? Erro)   // exatamente um dos dois
 ```
 
-Os DTOs internos de cada seção carregam valores em centavos e estados (`SEM_TETO`, `PASSOU`, `COM_ATRASO`…), nunca texto pronto, exceto o aviso de fatura. O nome concreto de cada `SecaoDto<T>` no OpenAPI é fixado no plano. Sem sessão: `401`; erro do endpoint inteiro: Problem Details.
+Os DTOs internos de cada seção carregam valores em centavos e estados (`SEM_TETO`, `PASSOU`, `VENCIDA`…), nunca texto pronto, exceto o aviso de fatura. O nome concreto de cada `SecaoDto<T>` no OpenAPI é fixado no plano. Sem sessão: `401`; erro do endpoint inteiro: Problem Details.
 
 ## Tela
 

@@ -138,16 +138,16 @@ internal static class RegrasDoPainel
             if (!contas.TryGetValue(f.ContaId, out var conta)) continue;
 
             if (f.Vencida is { RestanteCentavos: > 0 } v)
-                vencidas.Add(new(f.ContaId, conta.Apelido, v.Vencimento, v.Fechamento, "VENCIDA", v.RestanteCentavos, 0));
+                vencidas.Add(new(f.ContaId, conta.Apelido, v.Vencimento, v.Fechamento, "VENCIDA", v.RestanteCentavos));
 
-            if (f.Fechada.Vencimento >= hoje && f.Fechada.RestanteCentavos > 0)
-                linhas.Add(new(f.ContaId, conta.Apelido, f.Fechada.Vencimento, f.Fechada.Fechamento,
-                    f.Fechada.AtrasoCentavos > 0 ? "COM_ATRASO" : "FECHADA",
-                    f.Fechada.RestanteCentavos, f.Fechada.AtrasoCentavos > 0 ? f.Fechada.AtrasoCentavos : 0));
+            // O atraso já está na linha da vencida; a fechada mostra só o que é dela.
+            var daFechada = f.Fechada.RestanteCentavos - f.Fechada.AtrasoCentavos;
+            if (f.Fechada.Vencimento >= hoje && daFechada > 0)
+                linhas.Add(new(f.ContaId, conta.Apelido, f.Fechada.Vencimento, f.Fechada.Fechamento, "FECHADA", daFechada));
 
             if (f.Aberta.TotalAteHojeCentavos > 0)
                 linhas.Add(new(f.ContaId, conta.Apelido, f.Aberta.Vencimento, f.Aberta.Fechamento, "ABERTA",
-                    f.Aberta.TotalAteHojeCentavos, 0));
+                    f.Aberta.TotalAteHojeCentavos));
         }
 
         // As vencidas vêm no topo e todas aparecem; o corte de 5 vale só para as que ainda vão vencer.

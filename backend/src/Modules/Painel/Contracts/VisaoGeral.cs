@@ -43,10 +43,11 @@ public sealed record CategoriaDoPainelDto(
 
 public sealed record OrcamentoDoPainelDto(IReadOnlyList<CategoriaDoPainelDto> Categorias, int OutrasCategorias);
 
-/// <param name="Estado">VENCIDA, FECHADA, COM_ATRASO ou ABERTA. Na VENCIDA, o valor é o restante vencido e o atraso é zero.</param>
+/// <param name="Estado">VENCIDA, FECHADA ou ABERTA.</param>
+/// <param name="Vencimento">Na VENCIDA, o vencimento mais antigo ainda em aberto.</param>
+/// <param name="ValorCentavos">VENCIDA: tudo o que está vencido. FECHADA: só o valor dela, sem o atraso. ABERTA: total até hoje.</param>
 public sealed record VencimentoDto(
-    Guid ContaId, string Apelido, DateOnly Vencimento, DateOnly Fechamento, string Estado,
-    long ValorCentavos, long AtrasoCentavos);
+    Guid ContaId, string Apelido, DateOnly Vencimento, DateOnly Fechamento, string Estado, long ValorCentavos);
 
 public sealed record VisaoGeralDto(
     string Mes, DateOnly Hoje, int DiaDoMes, int DiasNoMes, string Apelido,

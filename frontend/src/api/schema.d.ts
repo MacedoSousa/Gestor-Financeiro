@@ -1391,8 +1391,6 @@ export interface components {
             estado: string;
             /** Format: int64 */
             valorCentavos: number | string;
-            /** Format: int64 */
-            atrasoCentavos: number | string;
         };
         VisaoGeralDto: {
             mes: string;

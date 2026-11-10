@@ -168,6 +168,45 @@ public class FaturasTests(PostgresFixture pg)
     }
 
     [Fact]
+    public async Task Vencida_desde_o_vencimento_mais_antigo_em_aberto()
+    {
+        await using var c = await IniciarAsync();
+        var cartao = await CriarCartaoAsync(c.Cliente, saldoEm: "2026-07-01");
+        var corrente = await CriarCorrenteAsync(c.Cliente);
+        await LancarAsync(c.Cliente, cartao, 3_000, "2026-07-15");
+        await LancarAsync(c.Cliente, cartao, 4_000, "2026-08-15");
+        await LancarAsync(c.Cliente, cartao, 5_000, "2026-09-15");
+        await LancarAsync(c.Cliente, cartao, 10_000, "2026-10-15");
+
+        var f = await c.DoCartaoAsync(cartao);
+        AssertFechada(f, total: 10_000, restante: 22_000, atraso: 12_000);
+        Assert.Equal(new FaturaVencida(new DateOnly(2026, 8, 10), new DateOnly(2026, 8, 1), 12_000), f.Vencida);
+
+        // O pagamento quita a fatura mais antiga primeiro.
+        await PagarAsync(c.Cliente, corrente, cartao, 3_000, "2026-11-03");
+        Assert.Equal(new FaturaVencida(new DateOnly(2026, 9, 10), new DateOnly(2026, 9, 1), 9_000), (await c.DoCartaoAsync(cartao)).Vencida);
+
+        await PagarAsync(c.Cliente, corrente, cartao, 6_000, "2026-11-03");
+        Assert.Equal(new FaturaVencida(new DateOnly(2026, 10, 10), new DateOnly(2026, 10, 1), 3_000), (await c.DoCartaoAsync(cartao)).Vencida);
+
+        await PagarAsync(c.Cliente, corrente, cartao, 3_000, "2026-11-03");
+        Assert.Null((await c.DoCartaoAsync(cartao)).Vencida);
+    }
+
+    [Fact]
+    public async Task Saldo_inicial_antigo_vence_na_fatura_do_seu_periodo()
+    {
+        await using var c = await IniciarAsync();
+        var cartao = await CriarCartaoAsync(c.Cliente, saldo: -20_000, saldoEm: "2026-07-15");
+        await LancarAsync(c.Cliente, cartao, 5_000, "2026-09-15");
+
+        var f = await c.DoCartaoAsync(cartao);
+
+        AssertFechada(f, total: 0, restante: 25_000, atraso: 25_000);
+        Assert.Equal(new FaturaVencida(new DateOnly(2026, 8, 10), new DateOnly(2026, 8, 1), 25_000), f.Vencida);
+    }
+
+    [Fact]
     public async Task Pagamento_parcial_abate_o_restante()
     {
         await using var c = await IniciarAsync();
