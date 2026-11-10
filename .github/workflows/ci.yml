@@ -13,6 +13,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Shellcheck dos scripts
+        run: shellcheck -x scripts/*.sh scripts/guardas/*.sh .githooks/pre-commit .claude/hooks/*.sh
       - name: Testes das guardas
         run: scripts/guardas/testes.sh
       - name: Guardas no repositório inteiro
