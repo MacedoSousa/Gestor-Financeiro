@@ -749,6 +749,8 @@ export interface components {
             percentualUsado: null | number | string;
             /** Format: date */
             fimDoMes: string;
+            /** Format: int64 */
+            faturaVencidaCentavos?: null | number | string;
         };
         AporteDaMetaDto: {
             /** Format: uuid */
@@ -1389,8 +1391,6 @@ export interface components {
             estado: string;
             /** Format: int64 */
             valorCentavos: number | string;
-            /** Format: int64 */
-            atrasoCentavos: number | string;
         };
         VisaoGeralDto: {
             mes: string;

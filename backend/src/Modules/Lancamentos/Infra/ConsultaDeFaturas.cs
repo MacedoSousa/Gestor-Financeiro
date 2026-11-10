@@ -35,6 +35,7 @@ internal sealed class ConsultaDeFaturas(LancamentosDbContext db, IConsultaDeCont
 
             var devido = conta.SaldoInicialCentavos;
             long totalFechada = 0, totalAberta = 0;
+            var dividaPorFatura = new Dictionary<DateOnly, long>();
             foreach (var g in grupos)
             {
                 if (g.Transferencia)
@@ -45,6 +46,7 @@ internal sealed class ConsultaDeFaturas(LancamentosDbContext db, IConsultaDeCont
 
                 if (g.FaturaVencimento is not { } venc) continue;
                 if (venc <= fechada.Vencimento) devido += g.Soma;
+                dividaPorFatura[venc] = dividaPorFatura.GetValueOrDefault(venc) - g.Soma;
                 if (venc == fechada.Vencimento) totalFechada -= g.Soma;
                 if (venc == aberta.Vencimento && g.AteHoje) totalAberta -= g.Soma;
             }
@@ -58,12 +60,50 @@ internal sealed class ConsultaDeFaturas(LancamentosDbContext db, IConsultaDeCont
             var totalParaAtraso = totalFechada;
             if (conta.SaldoInicialEm > fechAnterior) totalParaAtraso += Math.Max(0, -conta.SaldoInicialCentavos);
             var atraso = Math.Min(restante, Math.Max(0, restante - Math.Max(0, totalParaAtraso)));
+
+            // Saldo inicial devedor: é da fatura do período em que foi tomado, ou da fechada se veio depois do fechamento anterior.
+            if (conta.SaldoInicialCentavos < 0)
+            {
+                var vencDoSaldo = conta.SaldoInicialEm > fechAnterior
+                    ? fechada.Vencimento
+                    : contas.VencimentoDaFatura(conta, conta.SaldoInicialEm)!.Value;
+                dividaPorFatura[vencDoSaldo] = dividaPorFatura.GetValueOrDefault(vencDoSaldo) - conta.SaldoInicialCentavos;
+            }
+
+            // Passado o vencimento da fechada, todo o restante está vencido; antes dele, só o atraso (da anterior para trás).
+            var depoisDoVencimento = hoje > fechada.Vencimento;
+            var vencido = depoisDoVencimento ? restante : atraso;
+            FaturaVencida? vencida = null;
+            if (vencido > 0)
+            {
+                var desde = MaisAntigaEmAberto(dividaPorFatura, depoisDoVencimento ? fechada.Vencimento : vencAnterior, vencido);
+                vencida = new FaturaVencida(desde, contas.FechamentoDaFatura(conta, desde)!.Value, vencido);
+            }
+
             resultado.Add(new FaturasDoCartao(
                 conta.Id,
                 new FaturaFechadaAPagar(fechada.Vencimento, fechada.Fechamento, totalFechada, restante, atraso),
-                new FaturaAbertaAteHoje(aberta.Vencimento, aberta.Fechamento, totalAberta)));
+                new FaturaAbertaAteHoje(aberta.Vencimento, aberta.Fechamento, totalAberta),
+                vencida));
         }
 
         return resultado;
+    }
+
+    /// <summary>
+    /// Vencimento mais antigo ainda em aberto. Pagamento quita a fatura mais antiga primeiro, então o que está vencido
+    /// é coberto pelas faturas mais recentes até a última vencida, voltando no tempo até somar o valor vencido.
+    /// </summary>
+    private static DateOnly MaisAntigaEmAberto(Dictionary<DateOnly, long> dividaPorFatura, DateOnly ultimaVencida, long vencido)
+    {
+        var desde = ultimaVencida;
+        long acumulado = 0;
+        foreach (var (vencimento, divida) in dividaPorFatura.Where(d => d.Key <= ultimaVencida && d.Value > 0).OrderByDescending(d => d.Key))
+        {
+            desde = vencimento;
+            acumulado += divida;
+            if (acumulado >= vencido) break;
+        }
+        return desde;
     }
 }

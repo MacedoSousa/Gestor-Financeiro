@@ -21,7 +21,7 @@ export function resumoDoGrafico(pontos: Ponto[]): string | null {
 }
 
 export function aparenciaDaFatura(estado: string): { rotulo: string; tom: "alerta" | "normal" } {
-  if (estado === "COM_ATRASO") return { rotulo: "Fechada", tom: "alerta" };
+  if (estado === "VENCIDA") return { rotulo: "Vencida", tom: "alerta" };
   if (estado === "ABERTA") return { rotulo: "Aberta", tom: "normal" };
   return { rotulo: "Fechada", tom: "normal" };
 }

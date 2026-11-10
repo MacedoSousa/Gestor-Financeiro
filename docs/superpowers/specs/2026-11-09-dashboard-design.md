@@ -48,7 +48,7 @@ Hoje no fuso de Brasília; M = mês corrente; `fimDoMes(X)` = último dia de X.
 
 | Cartão | Valor | Nota |
 | --- | --- | --- |
-| Ainda dá para gastar | `restante = teto − usado` da fatia `TetoDeGastos` do orçamento de M (só categorias sem papel) | `≈ R$ X por dia até DD/MM` com `X = floor(restante / dias)`, `dias` = de hoje até `fimDoMes(M)`, inclusive (dia 5 de 30 → 26); e `N% do teto usado` com `N = floor(usado × 100 / teto)` |
+| Ainda dá para gastar | `restante = teto − usado` da fatia `TetoDeGastos` do orçamento de M (só categorias sem papel) | `≈ R$ X por dia até DD/MM` com `X = floor(restante / dias)`, `dias` = de hoje até `fimDoMes(M)`, inclusive (dia 5 de 30 → 26); e `N% do teto usado` com `N = floor(usado × 100 / teto)`. Com fatura vencida (soma de todos os cartões), mais uma linha em alerta: `Há fatura vencida: R$ X` |
 | Saldo das contas | Σ saldos de hoje das contas `CORRENTE` e `DINHEIRO` não arquivadas | apelido e saldo por conta: até 3 contas, todas; com 4 ou mais, as 2 de maior saldo e "+N contas" |
 | Aporte planejado | Σ `AportePlanejadoCentavos` das metas | `{meta} R$ X · …` e `já aportado R$ Y` (Σ `AporteDoMesCentavos` das metas) |
 | Patrimônio do casal | Σ saldos de hoje de todas as contas | `▲/▼ R$ X no mês (Y%)`, X = hoje − `fimDoMes(M−1)`, Y com 1 casa sobre `fimDoMes(M−1)`; e "Não inclui dívidas fora do cartão (empréstimo, consórcio)" |
@@ -93,9 +93,10 @@ Por cartão (inclusive arquivado), com F = última fatura fechada e A = fatura a
 - **Devido até F** = saldo inicial do cartão + Σ despesas e receitas com `fatura_vencimento ≤ vencimento de F` (qualquer data) + Σ transferências (pagamentos e o que mais entrar ou sair por transferência) com `data ≤ hoje`.
 - **Restante a pagar** = `máx(0, −devido)`.
 - **Em atraso** = `restante − total de F`, quando > 0, nunca acima do restante. Se o saldo inicial do cartão (dívida) foi tomado depois do fechamento da fatura anterior a F (durante o período de F ou depois), ele conta como parte de F nesse cálculo (não é atraso); se foi tomado até esse fechamento, é dívida antiga e conta como atraso. O total de F exibido continua sendo só a soma dos lançamentos.
-- F aparece se `vencimento ≥ hoje` e `restante > 0`, com "Fechada em DD/MM". Com atraso, a linha diz "inclui R$ X em atraso" em tom de alerta.
+- F aparece se `vencimento ≥ hoje` e `restante − atraso > 0`, com "Fechada em DD/MM" e só o valor dela (`restante − atraso`); o atraso fica na linha da vencida. (Antes de 10/11, F mostrava o restante com "inclui R$ X em atraso".)
 - A aparece se o total até hoje (lançamentos com `fatura_vencimento` = vencimento de A e `data ≤ hoje`) for > 0, com "Aberta · fecha em DD/MM".
-- Lista por vencimento crescente, até 5. Vazio: "Nenhuma fatura a vencer".
+- **Vencida** (decidido depois da entrega, em 10/11): o que está vencido e não pago. Passado o vencimento de F, é todo o restante; antes dele, é o atraso. A data é o vencimento mais antigo ainda em aberto: o pagamento quita a fatura mais antiga primeiro, então o valor vencido é coberto pelas faturas mais recentes (até a última vencida), voltando no tempo até somar o valor; a última alcançada é a mais antiga em aberto. A dívida do saldo inicial pertence à fatura do período em que foi tomada (ou a F, pela regra do atraso acima). Aparece no topo da lista como "Vencida desde DD/MM · R$ X", em tom de alerta, até o restante chegar a zero.
+- Lista: as vencidas primeiro, todas, fora do corte; depois as demais por vencimento crescente, até 5. Vazio: "Nenhuma fatura a vencer".
 
 ### Últimos lançamentos
 
@@ -153,7 +154,7 @@ VisaoGeralDto(
 SecaoDto<T>(T? Dados, string? Erro)   // exatamente um dos dois
 ```
 
-Os DTOs internos de cada seção carregam valores em centavos e estados (`SEM_TETO`, `PASSOU`, `COM_ATRASO`…), nunca texto pronto, exceto o aviso de fatura. O nome concreto de cada `SecaoDto<T>` no OpenAPI é fixado no plano. Sem sessão: `401`; erro do endpoint inteiro: Problem Details.
+Os DTOs internos de cada seção carregam valores em centavos e estados (`SEM_TETO`, `PASSOU`, `VENCIDA`…), nunca texto pronto, exceto o aviso de fatura. O nome concreto de cada `SecaoDto<T>` no OpenAPI é fixado no plano. Sem sessão: `401`; erro do endpoint inteiro: Problem Details.
 
 ## Tela
 

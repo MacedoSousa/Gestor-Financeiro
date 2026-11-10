@@ -6,9 +6,10 @@ namespace GestorFinanceiro.Modules.Painel.Contracts;
 public sealed record SecaoDto<T>(T? Dados, string? Erro);
 
 /// <param name="Situacao">COM_TETO, ESGOTADO, PASSOU ou SEM_TETO.</param>
+/// <param name="FaturaVencidaCentavos">Soma das faturas vencidas e não pagas; nulo quando não há nenhuma.</param>
 public sealed record AindaDaParaGastarDto(
     string Situacao, long? TetoCentavos, long UsadoCentavos, long? RestanteCentavos,
-    long? PorDiaCentavos, int? PercentualUsado, DateOnly FimDoMes);
+    long? PorDiaCentavos, int? PercentualUsado, DateOnly FimDoMes, long? FaturaVencidaCentavos = null);
 
 public sealed record ContaNoSaldoDto(Guid ContaId, string Apelido, long SaldoCentavos);
 
@@ -42,10 +43,11 @@ public sealed record CategoriaDoPainelDto(
 
 public sealed record OrcamentoDoPainelDto(IReadOnlyList<CategoriaDoPainelDto> Categorias, int OutrasCategorias);
 
-/// <param name="Estado">FECHADA, COM_ATRASO ou ABERTA.</param>
+/// <param name="Estado">VENCIDA, FECHADA ou ABERTA.</param>
+/// <param name="Vencimento">Na VENCIDA, o vencimento mais antigo ainda em aberto.</param>
+/// <param name="ValorCentavos">VENCIDA: tudo o que está vencido. FECHADA: só o valor dela, sem o atraso. ABERTA: total até hoje.</param>
 public sealed record VencimentoDto(
-    Guid ContaId, string Apelido, DateOnly Vencimento, DateOnly Fechamento, string Estado,
-    long ValorCentavos, long AtrasoCentavos);
+    Guid ContaId, string Apelido, DateOnly Vencimento, DateOnly Fechamento, string Estado, long ValorCentavos);
 
 public sealed record VisaoGeralDto(
     string Mes, DateOnly Hoje, int DiaDoMes, int DiasNoMes, string Apelido,

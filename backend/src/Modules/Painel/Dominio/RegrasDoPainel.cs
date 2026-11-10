@@ -12,7 +12,17 @@ internal static class RegrasDoPainel
 {
     private static readonly string[] Meses = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
 
-    public static AindaDaParaGastarDto AindaDaParaGastar(FatiaDto tetoDeGastos, DateOnly hoje)
+    public static AindaDaParaGastarDto AindaDaParaGastar(FatiaDto tetoDeGastos, DateOnly hoje, long? faturaVencidaCentavos = null) =>
+        AindaDaParaGastarSemFatura(tetoDeGastos, hoje) with { FaturaVencidaCentavos = faturaVencidaCentavos };
+
+    /// <summary>Soma do que está vencido e não pago em todos os cartões; nulo quando não há nada.</summary>
+    public static long? TotalVencido(IReadOnlyList<FaturasDoCartao> faturas)
+    {
+        var total = faturas.Sum(f => f.Vencida?.RestanteCentavos ?? 0);
+        return total > 0 ? total : null;
+    }
+
+    private static AindaDaParaGastarDto AindaDaParaGastarSemFatura(FatiaDto tetoDeGastos, DateOnly hoje)
     {
         var fimDoMes = new DateOnly(hoje.Year, hoje.Month, DateTime.DaysInMonth(hoje.Year, hoje.Month));
         var usado = tetoDeGastos.UsadoCentavos;
@@ -121,28 +131,34 @@ internal static class RegrasDoPainel
     public static IReadOnlyList<VencimentoDto> Vencimentos(
         IReadOnlyList<FaturasDoCartao> faturas, IReadOnlyDictionary<Guid, ContaResumo> contas, DateOnly hoje)
     {
+        var vencidas = new List<VencimentoDto>();
         var linhas = new List<VencimentoDto>();
         foreach (var f in faturas)
         {
             if (!contas.TryGetValue(f.ContaId, out var conta)) continue;
 
-            if (f.Fechada.Vencimento >= hoje && f.Fechada.RestanteCentavos > 0)
-                linhas.Add(new(f.ContaId, conta.Apelido, f.Fechada.Vencimento, f.Fechada.Fechamento,
-                    f.Fechada.AtrasoCentavos > 0 ? "COM_ATRASO" : "FECHADA",
-                    f.Fechada.RestanteCentavos, f.Fechada.AtrasoCentavos > 0 ? f.Fechada.AtrasoCentavos : 0));
+            if (f.Vencida is { RestanteCentavos: > 0 } v)
+                vencidas.Add(new(f.ContaId, conta.Apelido, v.Vencimento, v.Fechamento, "VENCIDA", v.RestanteCentavos));
+
+            // O atraso já está na linha da vencida; a fechada mostra só o que é dela.
+            var daFechada = f.Fechada.RestanteCentavos - f.Fechada.AtrasoCentavos;
+            if (f.Fechada.Vencimento >= hoje && daFechada > 0)
+                linhas.Add(new(f.ContaId, conta.Apelido, f.Fechada.Vencimento, f.Fechada.Fechamento, "FECHADA", daFechada));
 
             if (f.Aberta.TotalAteHojeCentavos > 0)
                 linhas.Add(new(f.ContaId, conta.Apelido, f.Aberta.Vencimento, f.Aberta.Fechamento, "ABERTA",
-                    f.Aberta.TotalAteHojeCentavos, 0));
+                    f.Aberta.TotalAteHojeCentavos));
         }
 
-        return linhas
+        // As vencidas vêm no topo e todas aparecem; o corte de 5 vale só para as que ainda vão vencer.
+        return Ordenar(vencidas).Concat(Ordenar(linhas).Take(5)).ToList();
+    }
+
+    private static IEnumerable<VencimentoDto> Ordenar(IEnumerable<VencimentoDto> linhas) =>
+        linhas
             .OrderBy(v => v.Vencimento)
             .ThenBy(v => v.Fechamento)
-            .ThenBy(v => v.Apelido, StringComparer.OrdinalIgnoreCase)
-            .Take(5)
-            .ToList();
-    }
+            .ThenBy(v => v.Apelido, StringComparer.OrdinalIgnoreCase);
 
     private static string DiaMes(DateOnly d) => d.ToString("dd/MM", CultureInfo.InvariantCulture);
 

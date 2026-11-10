@@ -124,7 +124,14 @@ public sealed record FaturaFechadaAPagar(DateOnly Vencimento, DateOnly Fechament
 /// <summary>Fatura aberta de um cartão: só o que tem data até hoje.</summary>
 public sealed record FaturaAbertaAteHoje(DateOnly Vencimento, DateOnly Fechamento, long TotalAteHojeCentavos);
 
-public sealed record FaturasDoCartao(Guid ContaId, FaturaFechadaAPagar Fechada, FaturaAbertaAteHoje Aberta);
+/// <summary>
+/// O que está vencido e não pago: depois do vencimento da fechada, todo o restante; antes dele, o atraso.
+/// <c>Vencimento</c> e <c>Fechamento</c> são os da fatura mais antiga ainda em aberto (pagamento quita a mais antiga primeiro).
+/// </summary>
+public sealed record FaturaVencida(DateOnly Vencimento, DateOnly Fechamento, long RestanteCentavos);
+
+/// <param name="Vencida">Nula quando não há nada vencido a pagar.</param>
+public sealed record FaturasDoCartao(Guid ContaId, FaturaFechadaAPagar Fechada, FaturaAbertaAteHoje Aberta, FaturaVencida? Vencida = null);
 
 /// <summary>Faturas por cartão, para outros módulos (o Painel). Respeita os filtros SoftDelete e Casal.</summary>
 public interface IConsultaDeFaturas

@@ -1,11 +1,13 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router";
 import { n } from "../../api/formulario";
-import type { Secao, VisaoGeral } from "../../api/painel";
+import type { AindaDaParaGastar, Secao, VisaoGeral } from "../../api/painel";
 import { formatarReais, formatarReaisInteiros } from "../../lib/dinheiro";
 import { ErroDeSecao } from "./Secao";
 
 type Props = { visao: VisaoGeral; tentando: boolean; aoTentarDeNovo: () => void };
+
+type Conteudo = { valor: ReactNode; nota: ReactNode; tom?: "alerta" | "positivo"; alerta?: ReactNode };
 
 const diaEMes = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
 const percentual = (v: number) => new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 }).format(v);
@@ -23,7 +25,7 @@ function Cartao<T>({
   destaque?: boolean;
   tentando: boolean;
   aoTentarDeNovo: () => void;
-  children: (dados: T) => { valor: ReactNode; nota: ReactNode; tom?: "alerta" | "positivo" };
+  children: (dados: T) => Conteudo;
 }) {
   return (
     <div className={`cartao${destaque ? " destaque" : ""}`}>
@@ -32,11 +34,12 @@ function Cartao<T>({
         <ErroDeSecao tentando={tentando} aoTentarDeNovo={aoTentarDeNovo} />
       ) : (
         (() => {
-          const { valor, nota, tom } = children(secao.dados);
+          const { valor, nota, tom, alerta } = children(secao.dados);
           return (
             <>
               <div className={`cartao-valor num${tom ? ` tom-${tom}` : ""}`}>{valor}</div>
               <div className="cartao-nota">{nota}</div>
+              {alerta && <div className="cartao-nota tom-alerta">{alerta}</div>}
             </>
           );
         })()
@@ -45,35 +48,48 @@ function Cartao<T>({
   );
 }
 
+/** Conteúdo do cartão "Ainda dá para gastar"; a fatura vencida entra como alerta à parte, em qualquer situação. */
+function conteudoDoGastar(d: AindaDaParaGastar): Conteudo {
+  const restante = d.restanteCentavos == null ? null : n(d.restanteCentavos);
+  if (d.situacao === "SEM_TETO")
+    return {
+      valor: "—",
+      nota: (
+        <>
+          Sem teto de gastos neste mês. <Link to="/orcamento">Definir tetos</Link>
+        </>
+      ),
+    };
+  if (d.situacao === "PASSOU")
+    return { valor: formatarReais(restante ?? 0), nota: `Passou ${formatarReais(Math.abs(restante ?? 0))} do teto`, tom: "alerta" };
+  if (d.situacao === "ESGOTADO") return { valor: formatarReais(0), nota: "Teto atingido" };
+  return {
+    valor: formatarReais(restante ?? 0),
+    nota: (
+      <>
+        {d.porDiaCentavos != null && (
+          <>
+            ≈ <span className="num">{formatarReaisInteiros(n(d.porDiaCentavos))}</span> por dia até {diaEMes(d.fimDoMes)}
+          </>
+        )}
+        {d.percentualUsado != null && <> · {n(d.percentualUsado)}% do teto usado</>}
+      </>
+    ),
+  };
+}
+
 export function CartoesDoTopo({ visao, tentando, aoTentarDeNovo }: Props) {
   const base = { tentando, aoTentarDeNovo };
   return (
     <section className="grade-kpi" aria-label="Resumo do mês">
       <Cartao rotulo="Ainda dá para gastar" destaque secao={visao.aindaDaParaGastar} {...base}>
         {(d) => {
-          const restante = d.restanteCentavos == null ? null : n(d.restanteCentavos);
-          if (d.situacao === "SEM_TETO")
-            return {
-              valor: "—",
-              nota: (
-                <>
-                  Sem teto de gastos neste mês. <Link to="/orcamento">Definir tetos</Link>
-                </>
-              ),
-            };
-          if (d.situacao === "PASSOU")
-            return { valor: formatarReais(restante ?? 0), nota: `Passou ${formatarReais(Math.abs(restante ?? 0))} do teto`, tom: "alerta" };
-          if (d.situacao === "ESGOTADO") return { valor: formatarReais(0), nota: "Teto atingido" };
+          const vencida = d.faturaVencidaCentavos == null ? 0 : n(d.faturaVencidaCentavos);
           return {
-            valor: formatarReais(restante ?? 0),
-            nota: (
+            ...conteudoDoGastar(d),
+            alerta: vencida > 0 && (
               <>
-                {d.porDiaCentavos != null && (
-                  <>
-                    ≈ <span className="num">{formatarReaisInteiros(n(d.porDiaCentavos))}</span> por dia até {diaEMes(d.fimDoMes)}
-                  </>
-                )}
-                {d.percentualUsado != null && <> · {n(d.percentualUsado)}% do teto usado</>}
+                Há fatura vencida: <span className="num">{formatarReais(vencida)}</span>
               </>
             ),
           };

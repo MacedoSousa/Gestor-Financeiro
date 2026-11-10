@@ -50,8 +50,10 @@ internal sealed partial class MontagemDoPainel(
         var lOrcamento = await LerAsync(() => orcamento.DoMesAsync(mes, ct));
         var lPatrimonio = await LerAsync(() => saldos.PatrimonioPorMesAsync(primeiroMes, 12, ct));
 
+        // Se as faturas falharem, o cartão sai sem o alerta de vencida; a seção Vencimentos é que mostra (e registra) o erro.
+        var vencido = lFaturas.TipoDoErro is null ? RegrasDoPainel.TotalVencido(lFaturas.Valor!) : null;
         var secaoGastar = Secao("AindaDaParaGastar", correlacao, lOrcamento,
-            o => RegrasDoPainel.AindaDaParaGastar(o.Fatias.TetoDeGastos, hoje));
+            o => RegrasDoPainel.AindaDaParaGastar(o.Fatias.TetoDeGastos, hoje, vencido));
 
         var secaoSaldo = await SecaoAsync("SaldoDasContas", correlacao, async () =>
         {

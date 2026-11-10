@@ -31,10 +31,6 @@ describe("resumoDoGrafico", () => {
 });
 
 describe("aparenciaDaFatura", () => {
-  it("atraso é alerta", () => {
-    expect(aparenciaDaFatura("COM_ATRASO").tom).toBe("alerta");
-    expect(aparenciaDaFatura("COM_ATRASO").rotulo).toBe("Fechada");
-  });
   it("aberta começa com Aberta", () => {
     const a = aparenciaDaFatura("ABERTA");
     expect(a.rotulo).toBe("Aberta");
@@ -42,6 +38,9 @@ describe("aparenciaDaFatura", () => {
   });
   it("fechada é normal", () => {
     expect(aparenciaDaFatura("FECHADA")).toEqual({ rotulo: "Fechada", tom: "normal" });
+  });
+  it("vencida é alerta", () => {
+    expect(aparenciaDaFatura("VENCIDA")).toEqual({ rotulo: "Vencida", tom: "alerta" });
   });
 });
 
