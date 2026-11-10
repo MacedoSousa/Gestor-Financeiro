@@ -226,4 +226,26 @@ public class PatrimonioTests(PostgresFixture pg)
         Assert.Equal("1000000", Mes(p, "2026-10"));
         Assert.Equal("1000000", Mes(p, "2026-11"));
     }
+
+    [Fact]
+    public async Task Limites_do_saldo_inicial_e_do_ponto_do_mes()
+    {
+        await using var c = await IniciarAsync(pg);
+        var conta = await CriarContaAsync(c.Cliente,
+            new { tipo = "CORRENTE", apelido = "Nova", saldoInicialCentavos = 1_000_000L, saldoInicialEm = "2026-10-15" });
+        var mercado = await CategoriaAsync(c.Cliente, "Mercado");
+        await LancarAsync(c.Cliente, conta, 2_000, "2026-10-15");
+        await LancarAsync(c.Cliente, conta, 3_000, "2026-10-31");
+        await LancarAsync(c.Cliente, conta, 4_000, "2026-11-05");
+        // A API recusa data anterior ao saldo inicial; semeia direto, como em FaturasTests.
+        await ExecutarAsync(c.Banco,
+            "INSERT INTO lancamentos.transacoes (id, casal_id, conta_id, categoria_id, data, valor_centavos, natureza, descricao_cifrada, origem, id_externo) VALUES " +
+            $"('{Guid.NewGuid()}', '{c.Casal}', '{conta}', '{mercado}', '2026-10-14', -5000, 'DESPESA', '\\x01', 'MANUAL', '{Guid.NewGuid()}')");
+
+        var p = await c.PatrimonioAsync();
+
+        Assert.Equal("nulo", Mes(p, "2026-09"));
+        Assert.Equal("995000", Mes(p, "2026-10"));
+        Assert.Equal("991000", Mes(p, "2026-11"));
+    }
 }
