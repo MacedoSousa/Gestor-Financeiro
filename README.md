@@ -26,6 +26,8 @@ backend/
 db/migrations/              SQL versionado (Vxxxx__descricao.sql)
 contracts/                  openapi.json gerado no build da API
 frontend/                   SPA React
+scripts/                    verificar.sh e guardas (pre-commit, CI)
+.agent/                     regras e workflows do Antigravity (apontam para o CLAUDE.md)
 infra/                      docker-compose, Caddy, scripts do Postgres
 docs/                       SPEC, ADRs, telas de referência (design/), specs e planos (superpowers/)
 ```
@@ -54,7 +56,13 @@ npm --prefix frontend ci && npm --prefix frontend run dev
 
 Primeiro uso: abra `/cadastro`, preencham juntos com o código de instalação e **imprimam o código de recuperação** que aparece no fim (ele só aparece uma vez). Depois, cada um faz o primeiro acesso com CPF + senha e registra a passkey e o TOTP.
 
-Testes: `dotnet test backend/GestorFinanceiro.slnx` (unitários, arquitetura e integração; a integração precisa do Docker) e `npm --prefix frontend run check` (tipos, ESLint, Vitest e build).
+Uma vez por clone: `scripts/instalar-hooks.sh` (liga o `pre-commit` com as guardas do projeto).
+
+Testes: `scripts/verificar.sh` roda as guardas e os testes da parte que mudou. Separados: `dotnet test backend/GestorFinanceiro.slnx` (unitários, arquitetura e integração; a integração precisa do Docker) e `npm --prefix frontend run check` (tipos, ESLint, Vitest e build).
+
+## Desenvolvimento com dois agentes
+
+O Claude Code implementa e o Antigravity revisa e testa no navegador, com as mesmas regras (`CLAUDE.md`) e as mesmas guardas (`pre-commit` e CI). Papéis e fluxo: [`AGENTS.md`](AGENTS.md) e [`docs/desenvolvimento/dois-agentes.md`](docs/desenvolvimento/dois-agentes.md) (ADR-012).
 
 ## Sempre ligado (servidor de casa)
 

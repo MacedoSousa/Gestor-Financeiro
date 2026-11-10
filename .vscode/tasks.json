@@ -1,0 +1,11 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    { "label": "Verificar", "type": "shell", "command": "scripts/verificar.sh", "group": { "kind": "test", "isDefault": true }, "problemMatcher": [] },
+    { "label": "Verificar tudo", "type": "shell", "command": "scripts/verificar.sh --tudo", "group": "test", "problemMatcher": [] },
+    { "label": "Guardas", "type": "shell", "command": "scripts/guardas/verificar-repositorio.sh && scripts/guardas/testes.sh", "group": "test", "problemMatcher": [] },
+    { "label": "Testes do backend", "type": "shell", "command": "dotnet test backend/GestorFinanceiro.slnx", "group": "test", "problemMatcher": "$msCompile" },
+    { "label": "Check do front", "type": "shell", "command": "npm --prefix frontend run check", "group": "test", "problemMatcher": [] },
+    { "label": "Instalar hooks do git", "type": "shell", "command": "scripts/instalar-hooks.sh", "problemMatcher": [] }
+  ]
+}

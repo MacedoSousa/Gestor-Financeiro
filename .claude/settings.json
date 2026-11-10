@@ -9,7 +9,10 @@
       "Bash(npm --prefix frontend run:*)",
       "Bash(git status)",
       "Bash(git diff:*)",
-      "Bash(git log:*)"
+      "Bash(git log:*)",
+      "Bash(scripts/verificar.sh:*)",
+      "Bash(scripts/guardas/verificar-repositorio.sh:*)",
+      "Bash(scripts/guardas/testes.sh:*)"
     ],
     "deny": [
       "Read(./.env)",
@@ -23,7 +26,9 @@
       "Bash(git push -f:*)",
       "Bash(psql:*)",
       "Bash(docker compose down -v:*)",
-      "Bash(rm -rf:*)"
+      "Bash(rm -rf:*)",
+      "Bash(git commit --no-verify:*)",
+      "Bash(git commit -n:*)"
     ]
   },
   "hooks": {
