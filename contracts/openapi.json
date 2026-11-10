@@ -156,6 +156,30 @@
         }
       }
     },
+    "/api/v1/visao-geral": {
+      "get": {
+        "tags": [
+          "Painel"
+        ],
+        "summary": "Visão geral do mês corrente (Brasília). Cada seção vem com dados ou com erro, independentes entre si.",
+        "operationId": "ObterVisaoGeral",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VisaoGeralDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
     "/api/v1/casal": {
       "get": {
         "tags": [
@@ -2203,6 +2227,128 @@
   },
   "components": {
     "schemas": {
+      "AindaDaParaGastarDto": {
+        "required": [
+          "situacao",
+          "tetoCentavos",
+          "usadoCentavos",
+          "restanteCentavos",
+          "porDiaCentavos",
+          "percentualUsado",
+          "fimDoMes"
+        ],
+        "type": "object",
+        "properties": {
+          "situacao": {
+            "type": "string"
+          },
+          "tetoCentavos": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "usadoCentavos": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "restanteCentavos": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "porDiaCentavos": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "percentualUsado": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "fimDoMes": {
+            "type": "string",
+            "format": "date"
+          }
+        }
+      },
+      "AporteDaMetaDto": {
+        "required": [
+          "metaId",
+          "nome",
+          "aportePlanejadoCentavos"
+        ],
+        "type": "object",
+        "properties": {
+          "metaId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "nome": {
+            "type": "string"
+          },
+          "aportePlanejadoCentavos": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          }
+        }
+      },
+      "AportePlanejadoDto": {
+        "required": [
+          "totalCentavos",
+          "jaAportadoCentavos",
+          "metas"
+        ],
+        "type": "object",
+        "properties": {
+          "totalCentavos": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "jaAportadoCentavos": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "metas": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AporteDaMetaDto"
+            }
+          }
+        }
+      },
       "AssercaoDePasskeyDto": {
         "required": [
           "clientDataJSON",
@@ -2251,6 +2397,22 @@
             "items": {
               "type": "string"
             }
+          }
+        }
+      },
+      "AvisoDeFaturaDto": {
+        "required": [
+          "contaId",
+          "texto"
+        ],
+        "type": "object",
+        "properties": {
+          "contaId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "texto": {
+            "type": "string"
           }
         }
       },
@@ -2329,6 +2491,53 @@
           },
           "arquivada": {
             "type": "boolean"
+          }
+        }
+      },
+      "CategoriaDoPainelDto": {
+        "required": [
+          "categoriaId",
+          "nome",
+          "tetoCentavos",
+          "usadoCentavos",
+          "percentualUsado",
+          "estado"
+        ],
+        "type": "object",
+        "properties": {
+          "categoriaId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "nome": {
+            "type": "string"
+          },
+          "tetoCentavos": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "usadoCentavos": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "percentualUsado": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "estado": {
+            "type": "string"
           }
         }
       },
@@ -2697,6 +2906,31 @@
           },
           "arquivada": {
             "type": "boolean"
+          }
+        }
+      },
+      "ContaNoSaldoDto": {
+        "required": [
+          "contaId",
+          "apelido",
+          "saldoCentavos"
+        ],
+        "type": "object",
+        "properties": {
+          "contaId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "apelido": {
+            "type": "string"
+          },
+          "saldoCentavos": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
           }
         }
       },
@@ -3198,6 +3432,60 @@
           }
         }
       },
+      "MetaDoPainelDto": {
+        "required": [
+          "id",
+          "nome",
+          "progressoPercentual",
+          "guardadoCentavos",
+          "valorAlvoCentavos",
+          "situacao",
+          "chegaEm"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "nome": {
+            "type": "string"
+          },
+          "progressoPercentual": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "guardadoCentavos": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "valorAlvoCentavos": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "situacao": {
+            "type": "string"
+          },
+          "chegaEm": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
       "MetaDto": {
         "required": [
           "id",
@@ -3283,6 +3571,29 @@
           },
           "projecao": {
             "$ref": "#/components/schemas/ProjecaoDto"
+          }
+        }
+      },
+      "MetasDoPainelDto": {
+        "required": [
+          "metas",
+          "total"
+        ],
+        "type": "object",
+        "properties": {
+          "metas": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MetaDoPainelDto"
+            }
+          },
+          "total": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
           }
         }
       },
@@ -3771,6 +4082,29 @@
           }
         }
       },
+      "OrcamentoDoPainelDto": {
+        "required": [
+          "categorias",
+          "outrasCategorias"
+        ],
+        "type": "object",
+        "properties": {
+          "categorias": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CategoriaDoPainelDto"
+            }
+          },
+          "outrasCategorias": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        }
+      },
       "PainelDeMetasDto": {
         "required": [
           "mes",
@@ -3816,6 +4150,60 @@
           }
         }
       },
+      "PatrimonioDto": {
+        "required": [
+          "totalCentavos",
+          "variacaoCentavos",
+          "variacaoPercentual"
+        ],
+        "type": "object",
+        "properties": {
+          "totalCentavos": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "variacaoCentavos": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "variacaoPercentual": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "format": "double"
+          }
+        }
+      },
+      "PatrimonioEm12MesesDto": {
+        "required": [
+          "intervalo",
+          "pontos"
+        ],
+        "type": "object",
+        "properties": {
+          "intervalo": {
+            "type": "string"
+          },
+          "pontos": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PontoDoPatrimonioDto"
+            }
+          }
+        }
+      },
       "PedidoCriadoDto": {
         "required": [
           "codigo"
@@ -3845,6 +4233,31 @@
           "expiraEm": {
             "type": "string",
             "format": "date-time"
+          }
+        }
+      },
+      "PontoDoPatrimonioDto": {
+        "required": [
+          "mes",
+          "rotulo",
+          "totalCentavos"
+        ],
+        "type": "object",
+        "properties": {
+          "mes": {
+            "type": "string"
+          },
+          "rotulo": {
+            "type": "string"
+          },
+          "totalCentavos": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
           }
         }
       },
@@ -4081,6 +4494,38 @@
           }
         }
       },
+      "SaldoDasContasDto": {
+        "required": [
+          "totalCentavos",
+          "contas",
+          "outrasContas"
+        ],
+        "type": "object",
+        "properties": {
+          "totalCentavos": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "contas": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ContaNoSaldoDto"
+            }
+          },
+          "outrasContas": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        }
+      },
       "SaudeDto": {
         "required": [
           "status",
@@ -4094,6 +4539,253 @@
           "horario": {
             "type": "string",
             "format": "date-time"
+          }
+        }
+      },
+      "SecaoDtoOfAindaDaParaGastarDto": {
+        "required": [
+          "dados",
+          "erro"
+        ],
+        "type": "object",
+        "properties": {
+          "dados": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AindaDaParaGastarDto"
+              }
+            ]
+          },
+          "erro": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "SecaoDtoOfAportePlanejadoDto": {
+        "required": [
+          "dados",
+          "erro"
+        ],
+        "type": "object",
+        "properties": {
+          "dados": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AportePlanejadoDto"
+              }
+            ]
+          },
+          "erro": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "SecaoDtoOfIReadOnlyListOfAvisoDeFaturaDto": {
+        "required": [
+          "dados",
+          "erro"
+        ],
+        "type": "object",
+        "properties": {
+          "dados": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/AvisoDeFaturaDto"
+            }
+          },
+          "erro": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "SecaoDtoOfIReadOnlyListOfLancamentoDto": {
+        "required": [
+          "dados",
+          "erro"
+        ],
+        "type": "object",
+        "properties": {
+          "dados": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/LancamentoDto"
+            }
+          },
+          "erro": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "SecaoDtoOfIReadOnlyListOfVencimentoDto": {
+        "required": [
+          "dados",
+          "erro"
+        ],
+        "type": "object",
+        "properties": {
+          "dados": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/VencimentoDto"
+            }
+          },
+          "erro": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "SecaoDtoOfMetasDoPainelDto": {
+        "required": [
+          "dados",
+          "erro"
+        ],
+        "type": "object",
+        "properties": {
+          "dados": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MetasDoPainelDto"
+              }
+            ]
+          },
+          "erro": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "SecaoDtoOfOrcamentoDoPainelDto": {
+        "required": [
+          "dados",
+          "erro"
+        ],
+        "type": "object",
+        "properties": {
+          "dados": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/OrcamentoDoPainelDto"
+              }
+            ]
+          },
+          "erro": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "SecaoDtoOfPatrimonioDto": {
+        "required": [
+          "dados",
+          "erro"
+        ],
+        "type": "object",
+        "properties": {
+          "dados": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PatrimonioDto"
+              }
+            ]
+          },
+          "erro": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "SecaoDtoOfPatrimonioEm12MesesDto": {
+        "required": [
+          "dados",
+          "erro"
+        ],
+        "type": "object",
+        "properties": {
+          "dados": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PatrimonioEm12MesesDto"
+              }
+            ]
+          },
+          "erro": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "SecaoDtoOfSaldoDasContasDto": {
+        "required": [
+          "dados",
+          "erro"
+        ],
+        "type": "object",
+        "properties": {
+          "dados": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SaldoDasContasDto"
+              }
+            ]
+          },
+          "erro": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -4259,6 +4951,132 @@
             "format": "int64"
           }
         }
+      },
+      "VencimentoDto": {
+        "required": [
+          "contaId",
+          "apelido",
+          "vencimento",
+          "fechamento",
+          "estado",
+          "valorCentavos",
+          "atrasoCentavos"
+        ],
+        "type": "object",
+        "properties": {
+          "contaId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "apelido": {
+            "type": "string"
+          },
+          "vencimento": {
+            "type": "string",
+            "format": "date"
+          },
+          "fechamento": {
+            "type": "string",
+            "format": "date"
+          },
+          "estado": {
+            "type": "string"
+          },
+          "valorCentavos": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "atrasoCentavos": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          }
+        }
+      },
+      "VisaoGeralDto": {
+        "required": [
+          "mes",
+          "hoje",
+          "diaDoMes",
+          "diasNoMes",
+          "apelido",
+          "aindaDaParaGastar",
+          "saldoDasContas",
+          "aportePlanejado",
+          "patrimonio",
+          "avisosDeFatura",
+          "patrimonioEm12Meses",
+          "metas",
+          "orcamento",
+          "vencimentos",
+          "ultimosLancamentos"
+        ],
+        "type": "object",
+        "properties": {
+          "mes": {
+            "type": "string"
+          },
+          "hoje": {
+            "type": "string",
+            "format": "date"
+          },
+          "diaDoMes": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "diasNoMes": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "apelido": {
+            "type": "string"
+          },
+          "aindaDaParaGastar": {
+            "$ref": "#/components/schemas/SecaoDtoOfAindaDaParaGastarDto"
+          },
+          "saldoDasContas": {
+            "$ref": "#/components/schemas/SecaoDtoOfSaldoDasContasDto"
+          },
+          "aportePlanejado": {
+            "$ref": "#/components/schemas/SecaoDtoOfAportePlanejadoDto"
+          },
+          "patrimonio": {
+            "$ref": "#/components/schemas/SecaoDtoOfPatrimonioDto"
+          },
+          "avisosDeFatura": {
+            "$ref": "#/components/schemas/SecaoDtoOfIReadOnlyListOfAvisoDeFaturaDto"
+          },
+          "patrimonioEm12Meses": {
+            "$ref": "#/components/schemas/SecaoDtoOfPatrimonioEm12MesesDto"
+          },
+          "metas": {
+            "$ref": "#/components/schemas/SecaoDtoOfMetasDoPainelDto"
+          },
+          "orcamento": {
+            "$ref": "#/components/schemas/SecaoDtoOfOrcamentoDoPainelDto"
+          },
+          "vencimentos": {
+            "$ref": "#/components/schemas/SecaoDtoOfIReadOnlyListOfVencimentoDto"
+          },
+          "ultimosLancamentos": {
+            "$ref": "#/components/schemas/SecaoDtoOfIReadOnlyListOfLancamentoDto"
+          }
+        }
       }
     }
   },
@@ -4271,6 +5089,9 @@
     },
     {
       "name": "Lancamentos"
+    },
+    {
+      "name": "Painel"
     },
     {
       "name": "Autenticacao"

@@ -72,6 +72,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/visao-geral": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Visão geral do mês corrente (Brasília). Cada seção vem com dados ou com erro, independentes entre si. */
+        get: operations["ObterVisaoGeral"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/casal": {
         parameters: {
             query?: never;
@@ -718,6 +735,35 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        AindaDaParaGastarDto: {
+            situacao: string;
+            /** Format: int64 */
+            tetoCentavos: null | number | string;
+            /** Format: int64 */
+            usadoCentavos: number | string;
+            /** Format: int64 */
+            restanteCentavos: null | number | string;
+            /** Format: int64 */
+            porDiaCentavos: null | number | string;
+            /** Format: int32 */
+            percentualUsado: null | number | string;
+            /** Format: date */
+            fimDoMes: string;
+        };
+        AporteDaMetaDto: {
+            /** Format: uuid */
+            metaId: string;
+            nome: string;
+            /** Format: int64 */
+            aportePlanejadoCentavos: number | string;
+        };
+        AportePlanejadoDto: {
+            /** Format: int64 */
+            totalCentavos: number | string;
+            /** Format: int64 */
+            jaAportadoCentavos: number | string;
+            metas: components["schemas"]["AporteDaMetaDto"][];
+        };
         AssercaoDePasskeyDto: {
             clientDataJSON: string;
             authenticatorData: string;
@@ -728,6 +774,11 @@ export interface components {
             clientDataJSON: string;
             attestationObject: string;
             transports: null | string[];
+        };
+        AvisoDeFaturaDto: {
+            /** Format: uuid */
+            contaId: string;
+            texto: string;
         };
         CadastroDoCasalDto: {
             codigoInstalacao: string;
@@ -750,6 +801,18 @@ export interface components {
             id: string;
             nome: string;
             arquivada: boolean;
+        };
+        CategoriaDoPainelDto: {
+            /** Format: uuid */
+            categoriaId: string;
+            nome: string;
+            /** Format: int64 */
+            tetoCentavos: number | string;
+            /** Format: int64 */
+            usadoCentavos: number | string;
+            /** Format: int32 */
+            percentualUsado: number | string;
+            estado: string;
         };
         CategoriaDto: {
             /** Format: uuid */
@@ -836,6 +899,13 @@ export interface components {
             /** Format: int64 */
             limiteCentavos: null | number | string;
             arquivada: boolean;
+        };
+        ContaNoSaldoDto: {
+            /** Format: uuid */
+            contaId: string;
+            apelido: string;
+            /** Format: int64 */
+            saldoCentavos: number | string;
         };
         CopiaDeTetosDto: {
             /** Format: int32 */
@@ -962,6 +1032,19 @@ export interface components {
             apelido: string;
             ehVoce: boolean;
         };
+        MetaDoPainelDto: {
+            /** Format: uuid */
+            id: string;
+            nome: string;
+            /** Format: int32 */
+            progressoPercentual: number | string;
+            /** Format: int64 */
+            guardadoCentavos: number | string;
+            /** Format: int64 */
+            valorAlvoCentavos: number | string;
+            situacao: string;
+            chegaEm: null | string;
+        };
         MetaDto: {
             /** Format: uuid */
             id: string;
@@ -981,6 +1064,11 @@ export interface components {
             /** Format: int64 */
             aporteDoMesCentavos: number | string;
             projecao: components["schemas"]["ProjecaoDto"];
+        };
+        MetasDoPainelDto: {
+            metas: components["schemas"]["MetaDoPainelDto"][];
+            /** Format: int32 */
+            total: number | string;
         };
         NovaCategoriaDto: {
             nome: string;
@@ -1099,6 +1187,11 @@ export interface components {
             categorias: components["schemas"]["TetoDaCategoriaDto"][];
             mesParaCopiar: null | string;
         };
+        OrcamentoDoPainelDto: {
+            categorias: components["schemas"]["CategoriaDoPainelDto"][];
+            /** Format: int32 */
+            outrasCategorias: number | string;
+        };
         PainelDeMetasDto: {
             mes: string;
             metas: components["schemas"]["MetaDto"][];
@@ -1109,6 +1202,18 @@ export interface components {
             /** Format: int32 */
             alg: number | string;
         };
+        PatrimonioDto: {
+            /** Format: int64 */
+            totalCentavos: number | string;
+            /** Format: int64 */
+            variacaoCentavos: null | number | string;
+            /** Format: double */
+            variacaoPercentual: null | number | string;
+        };
+        PatrimonioEm12MesesDto: {
+            intervalo: string;
+            pontos: components["schemas"]["PontoDoPatrimonioDto"][];
+        };
         PedidoCriadoDto: {
             codigo: string;
         };
@@ -1118,6 +1223,12 @@ export interface components {
             codigo: string;
             /** Format: date-time */
             expiraEm: string;
+        };
+        PontoDoPatrimonioDto: {
+            mes: string;
+            rotulo: string;
+            /** Format: int64 */
+            totalCentavos: null | number | string;
         };
         PrimeiroAcessoDto: {
             cpf: string;
@@ -1172,10 +1283,57 @@ export interface components {
             faturaAberta: null | components["schemas"]["FaturaDto"];
             faturaFechada: null | components["schemas"]["FaturaDto"];
         };
+        SaldoDasContasDto: {
+            /** Format: int64 */
+            totalCentavos: number | string;
+            contas: components["schemas"]["ContaNoSaldoDto"][];
+            /** Format: int32 */
+            outrasContas: number | string;
+        };
         SaudeDto: {
             status: string;
             /** Format: date-time */
             horario: string;
+        };
+        SecaoDtoOfAindaDaParaGastarDto: {
+            dados: null | components["schemas"]["AindaDaParaGastarDto"];
+            erro: null | string;
+        };
+        SecaoDtoOfAportePlanejadoDto: {
+            dados: null | components["schemas"]["AportePlanejadoDto"];
+            erro: null | string;
+        };
+        SecaoDtoOfIReadOnlyListOfAvisoDeFaturaDto: {
+            dados: null | components["schemas"]["AvisoDeFaturaDto"][];
+            erro: null | string;
+        };
+        SecaoDtoOfIReadOnlyListOfLancamentoDto: {
+            dados: null | components["schemas"]["LancamentoDto"][];
+            erro: null | string;
+        };
+        SecaoDtoOfIReadOnlyListOfVencimentoDto: {
+            dados: null | components["schemas"]["VencimentoDto"][];
+            erro: null | string;
+        };
+        SecaoDtoOfMetasDoPainelDto: {
+            dados: null | components["schemas"]["MetasDoPainelDto"];
+            erro: null | string;
+        };
+        SecaoDtoOfOrcamentoDoPainelDto: {
+            dados: null | components["schemas"]["OrcamentoDoPainelDto"];
+            erro: null | string;
+        };
+        SecaoDtoOfPatrimonioDto: {
+            dados: null | components["schemas"]["PatrimonioDto"];
+            erro: null | string;
+        };
+        SecaoDtoOfPatrimonioEm12MesesDto: {
+            dados: null | components["schemas"]["PatrimonioEm12MesesDto"];
+            erro: null | string;
+        };
+        SecaoDtoOfSaldoDasContasDto: {
+            dados: null | components["schemas"]["SaldoDasContasDto"];
+            erro: null | string;
         };
         SelecaoDeAutenticadorDto: {
             residentKey: string;
@@ -1219,6 +1377,40 @@ export interface components {
         ValorDoMesDto: {
             /** Format: int64 */
             valorCentavos: null | number | string;
+        };
+        VencimentoDto: {
+            /** Format: uuid */
+            contaId: string;
+            apelido: string;
+            /** Format: date */
+            vencimento: string;
+            /** Format: date */
+            fechamento: string;
+            estado: string;
+            /** Format: int64 */
+            valorCentavos: number | string;
+            /** Format: int64 */
+            atrasoCentavos: number | string;
+        };
+        VisaoGeralDto: {
+            mes: string;
+            /** Format: date */
+            hoje: string;
+            /** Format: int32 */
+            diaDoMes: number | string;
+            /** Format: int32 */
+            diasNoMes: number | string;
+            apelido: string;
+            aindaDaParaGastar: components["schemas"]["SecaoDtoOfAindaDaParaGastarDto"];
+            saldoDasContas: components["schemas"]["SecaoDtoOfSaldoDasContasDto"];
+            aportePlanejado: components["schemas"]["SecaoDtoOfAportePlanejadoDto"];
+            patrimonio: components["schemas"]["SecaoDtoOfPatrimonioDto"];
+            avisosDeFatura: components["schemas"]["SecaoDtoOfIReadOnlyListOfAvisoDeFaturaDto"];
+            patrimonioEm12Meses: components["schemas"]["SecaoDtoOfPatrimonioEm12MesesDto"];
+            metas: components["schemas"]["SecaoDtoOfMetasDoPainelDto"];
+            orcamento: components["schemas"]["SecaoDtoOfOrcamentoDoPainelDto"];
+            vencimentos: components["schemas"]["SecaoDtoOfIReadOnlyListOfVencimentoDto"];
+            ultimosLancamentos: components["schemas"]["SecaoDtoOfIReadOnlyListOfLancamentoDto"];
         };
     };
     responses: never;
@@ -1348,6 +1540,33 @@ export interface operations {
                 content: {
                     "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
+            };
+        };
+    };
+    ObterVisaoGeral: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VisaoGeralDto"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
