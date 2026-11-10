@@ -43,7 +43,7 @@ Quem manda cada passo: o CEO, por ordens de serviço (`despacho.md`). Papéis e 
 - **Commit:** em português, `Área: o que mudou` (ex.: `Boletos: validação da linha digitável`), uma mudança com seu teste por commit.
 - **Migração:** skill `nova-migracao`; o `pre-commit` recusa o que fugir dela.
 - **Contrato:** mudou endpoint → `contracts/openapi.json` e `frontend/src/api/schema.d.ts` no mesmo commit.
-- **Pronto:** só com a saída verde de `scripts/verificar.sh` colada. "AVISO: ... NÃO testado" significa que aquela parte não foi verificada.
+- **Pronto:** só com a saída verde de `scripts/verificar.sh` colada. "AVISO: ... NÃO testado" significa que aquela parte não foi verificada. PR só com 'Verificação: tudo verde.' (sem avisos); 'verde COM AVISOS' não vale para PR.
 - **Dados:** sempre sintéticos, inclusive em capturas de tela e na revisão.
 
 ## Quando um agente discorda do outro

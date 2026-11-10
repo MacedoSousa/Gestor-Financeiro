@@ -15,7 +15,10 @@ fi
 [ -z "$mudou" ] && { echo "Nada mudou; nada a verificar."; exit 0; }
 
 falhou=0
+avisos=0
 relatorio=""
+
+avisar() { echo "AVISO: $*" >&2; avisos=1; }
 
 rodar() {
   local saida
@@ -30,9 +33,15 @@ rodar scripts/guardas/verificar-repositorio.sh
 
 if printf '%s\n' "$mudou" | grep -qE '^(backend|db)/'; then
   if command -v dotnet >/dev/null 2>&1; then
-    rodar dotnet test backend/GestorFinanceiro.slnx --nologo -v q
+    if docker info >/dev/null 2>&1; then
+      rodar dotnet test backend/GestorFinanceiro.slnx --nologo -v q
+    else
+      rodar dotnet test backend/tests/GestorFinanceiro.UnitTests --nologo -v q
+      rodar dotnet test backend/tests/GestorFinanceiro.ArchitectureTests --nologo -v q
+      avisar "Docker indisponível; testes de integração NÃO testados."
+    fi
   else
-    echo "AVISO: dotnet não encontrado; backend NÃO testado (instale o .NET SDK 10)." >&2
+    avisar "dotnet não encontrado; backend NÃO testado (instale o .NET SDK 10)."
   fi
 fi
 
@@ -40,7 +49,7 @@ if printf '%s\n' "$mudou" | grep -qE '^(frontend|contracts)/'; then
   if [ -d frontend/node_modules ]; then
     rodar npm --prefix frontend run check --silent
   else
-    echo "AVISO: frontend/node_modules ausente; front NÃO testado (rode npm --prefix frontend ci)." >&2
+    avisar "frontend/node_modules ausente; front NÃO testado (rode npm --prefix frontend ci)."
   fi
 fi
 
@@ -53,4 +62,8 @@ if [ "$falhou" -ne 0 ]; then
   printf '%s' "$relatorio" >&2
   exit 1
 fi
-echo "Verificação: tudo verde."
+if [ "$avisos" -ne 0 ]; then
+  echo "Verificação: verde COM AVISOS (não vale para PR)."
+else
+  echo "Verificação: tudo verde."
+fi
