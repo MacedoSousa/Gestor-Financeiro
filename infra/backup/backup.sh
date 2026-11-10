@@ -189,10 +189,19 @@ fi
 # ---------------------------------------------------------------- 8/9. rotação e envio
 # A rotação só chega aqui com o pacote do dia gravado. Se ela falhar, o envio ainda roda
 # (o pacote novo precisa sair da máquina), mas o backup termina com erro.
+# Interface da Task 3: rotacionar.sh <pasta> <quantos>. Diários: 7; semanais (domingo): 4.
 codigo_rotacao=0
 if [ -x "$DIR_SCRIPTS/rotacionar.sh" ]; then
-  "$DIR_SCRIPTS/rotacionar.sh" || codigo_rotacao=$?
-  [ "$codigo_rotacao" -eq 0 ] || log "rotacao codigo=$codigo_rotacao"
+  rotacoes=("$diario 7")
+  [ "$tipo" != semanal ] || rotacoes+=("$semanal 4")
+  for rotacao in "${rotacoes[@]}"; do
+    codigo=0
+    "$DIR_SCRIPTS/rotacionar.sh" "${rotacao% *}" "${rotacao##* }" || codigo=$?
+    if [ "$codigo" -ne 0 ]; then
+      log "rotacao pasta=$(basename "${rotacao% *}") codigo=$codigo"
+      codigo_rotacao=$codigo
+    fi
+  done
 else
   log "rotacionar.sh ausente, rotacao pulada"
 fi

@@ -58,10 +58,14 @@ montar_raiz_falsa() {
   local b="$RAIZ_FALSA/infra/backup"
   mkdir -p "$b" "$RAIZ_FALSA/infra/secrets" "$RAIZ_FALSA/infra/data/chaves" "$RAIZ_FALSA/db"
   cp "$TESTES_DIR/../backup.sh" "$TESTES_DIR/../lib.sh" "$TESTES_DIR/../verificar-dump.sh" "$b/"
+  # Interface da Task 3: rotacionar.sh <pasta absoluta que existe> <inteiro >= 1>.
   cat >"$b/rotacionar.sh" <<EOF
 #!/usr/bin/env bash
+printf '%s\n' "\$*" >>"$MARCAS/rotacionar.chamadas"
+[ "\$#" -eq 2 ] && [[ "\$1" == /* ]] && [ -d "\$1" ] && [[ "\$2" =~ ^[1-9][0-9]*\$ ]] \
+  || { echo "rotacionar falso: argumentos invalidos [\$*]" >&2; exit 1; }
 touch "$MARCAS/rotacionar"
-rm -f "\$GF_BACKUP_DIR/diario/sentinela"
+rm -f "\$1/sentinela"
 EOF
   cat >"$b/enviar.sh" <<EOF
 #!/usr/bin/env bash
@@ -153,7 +157,9 @@ gera_pacote_decifravel() {
   [ -z "$(ls -A "$dir/semanal" 2>/dev/null)" ] || return 1
   [ "$(cat "$MARCAS/enviar.args")" = "$dir/diario/gestor-2026-11-10.tar.age"$'\n'diario$'\n'"$dir/cadeia/cadeia-2026-11-10.txt" ] \
     || { echo "  args do enviar [$(tr '\n' ' ' <"$MARCAS/enviar.args")]"; return 1; }
-  [ -f "$MARCAS/rotacionar" ]
+  # Dia de semana: só a rotação dos diários.
+  [ "$(cat "$MARCAS/rotacionar.chamadas" 2>/dev/null)" = "$dir/diario 7" ] \
+    || { echo "  chamadas do rotacionar [$(tr '\n' ';' <"$MARCAS/rotacionar.chamadas" 2>/dev/null)]"; return 1; }
 }
 
 nada_em_claro_sobra() {
@@ -204,6 +210,10 @@ domingo_vai_para_semanal() {
   [ "$(stat -c %i "$dir/semanal/gestor-2026-11-08.tar.age")" = "$(stat -c %i "$dir/diario/gestor-2026-11-08.tar.age")" ] \
     || return 1
   [ "$(sed -n 2p "$MARCAS/enviar.args")" = semanal ] || return 1
+  # Domingo: diários (7) e semanais (4).
+  [ "$(cat "$MARCAS/rotacionar.chamadas" 2>/dev/null)" = "$dir/diario 7"$'\n'"$dir/semanal 4" ] \
+    || { echo "  chamadas do rotacionar [$(tr '\n' ';' <"$MARCAS/rotacionar.chamadas" 2>/dev/null)]"; return 1; }
+  rm -f "$MARCAS/rotacionar.chamadas"
   # Rodar de novo no domingo: o link passa a apontar para o pacote novo.
   rodar_backup "$dir" --data 2026-11-08 || { mostrar_stderr; return 1; }
   [ "$(stat -c %i "$dir/semanal/gestor-2026-11-08.tar.age")" = "$(stat -c %i "$dir/diario/gestor-2026-11-08.tar.age")" ] \
