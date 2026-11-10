@@ -21,3 +21,10 @@ public sealed record OrcamentoDoMesDto(
 public sealed record ValorDoMesDto([property: Required] long? ValorCentavos);
 
 public sealed record CopiaDeTetosDto(int Copiados, string? Origem);
+
+/// <summary>Consulta para outros módulos: o mesmo orçamento do mês que o GET /api/v1/orcamento, para o casal da sessão.</summary>
+public interface IConsultaDoOrcamento
+{
+    /// <exception cref="InvalidOperationException">Sem casal na sessão ou mês fora do intervalo aceito.</exception>
+    Task<OrcamentoDoMesDto> DoMesAsync(DateOnly mes, CancellationToken ct = default);
+}

@@ -55,3 +55,10 @@ public sealed record PainelDeMetasDto(
     string Mes,
     IReadOnlyList<MetaDto> Metas,
     IReadOnlyList<ContaDeInvestimentoDto> Contas);
+
+/// <summary>Consulta para outros módulos: o mesmo painel que o GET /api/v1/metas, para o casal da sessão.</summary>
+public interface IConsultaDeMetas
+{
+    /// <exception cref="InvalidOperationException">Sem casal na sessão.</exception>
+    Task<PainelDeMetasDto> PainelAsync(CancellationToken ct = default);
+}
