@@ -34,7 +34,7 @@ Um casal (dois CPFs, uma conta conjunta Itaú) vê num só lugar contas, cartõe
 | Fase | Entrega | Pronto quando | Situação |
 | --- | --- | --- | --- |
 | 0 · Fundação | Repo, CI, migração V0001, cofre, soft delete, auditoria, casca do front | CI verde; `DELETE` falha no banco; cadeia confere | Concluída (PR #1, #2) |
-| 1 · Controle manual | Cadastro, login (passkey/TOTP), contas, lançamentos, orçamento, metas, dashboard | Um mês fechado à mão | Em andamento: dashboard (`fase-1/dashboard`); depois, um mês real conferido contra o extrato do Itaú |
+| 1 · Controle manual | Cadastro, login (passkey/TOTP), contas, lançamentos, orçamento, metas, dashboard | Um mês fechado à mão | Código concluído (PR #10); fecha depois de um mês real conferido contra o extrato do Itaú |
 | 2 · Open Finance | Meu Pluggy, webhook, sync diário, conciliação em 3 níveis | Conta conjunta sem duplicatas | — |
 | 3 · WhatsApp | Gateway (chip dedicado), parser pt-BR, comprovantes na GPU | Bot responde o saldo da categoria | — |
 | 4 · Assistente | FinanceEngine completo (CDI/IR/IOF via BCB SGS), Gemini, relatório dia 1 | Todo número do texto confere | — |
@@ -51,6 +51,7 @@ Um casal (dois CPFs, uma conta conjunta Itaú) vê num só lugar contas, cartõe
 | #6 | Ferramentas do front | Barra lateral vira topo abaixo de 900 px, ESLint e Vitest no `npm run check` | — |
 | #7 | Orçamento | Tetos por categoria e mês, cópia do mês anterior, receita prevista, divisão da renda, conta Investimento, estorno, papel das categorias | V0005–V0008 |
 | #9 | Metas | Metas ligadas às contas de poupança e investimento, projeção "chega em" e aporte necessário pelo FinanceEngine (projeto `Financas`), simulador de aporte, conciliação de saldo com Rendimentos, papel `RENDIMENTOS` | V0009, V0010 |
+| #10 | Dashboard | Visão geral com dados reais pelo módulo `Painel` (só lê contratos): ainda dá para gastar, saldo das contas, aporte planejado, patrimônio e seus 12 meses, metas, orçamento do mês, faturas a vencer com restante e atraso, últimos lançamentos | — |
 
 Specs e planos de cada bloco: `docs/superpowers/specs/` e `docs/superpowers/plans/`.
 
@@ -64,12 +65,15 @@ Specs e planos de cada bloco: `docs/superpowers/specs/` e `docs/superpowers/plan
 - **Aporte do mês da meta** segue a regra do Investir, conta por conta: entrada vinda de conta de outro tipo. Movimento entre poupança e investimento (mesmo entre metas), resgate e rendimento não contam.
 - **"Chega em"** conta o aporte de fim do mês corrente como o 1º: com `n` aportes, chega em `M + (n − 1)`. No mês corrente entra só `máx(0, planejado − aporte do mês)`. Meses até a data desejada = `D − M + 1`; a data só "já passou" quando `D < M`.
 - **Conciliação de saldo** (poupança e investimento): a diferença positiva entre o saldo do banco e o do sistema vira uma receita "Rendimentos" (categoria com papel `RENDIMENTOS`) com data de hoje; zero ou negativa não lança nada. Se o saldo mudou desde que a tela abriu, `409`. Receitas em poupança e investimento ficam fora da receita prevista do orçamento.
+- **Ainda dá para gastar** = teto de gastos − usado do mês (só categorias sem papel); por dia = restante ÷ dias de hoje até o fim do mês, inclusive, truncado em reais. Restante zero é "Teto atingido"; negativo, "Passou R$ X do teto".
+- **Patrimônio do casal** = soma dos saldos de todas as contas, inclusive arquivadas; o cartão entra com o próprio saldo (negativo pelo que está em aberto) e parcelas futuras não entram. No histórico, uma conta só conta a partir do mês do saldo inicial. Não inclui dívidas fora do cartão (empréstimo, consórcio).
+- **Fatura a pagar** é calculada pela fatura do lançamento, não pela data: devido até a última fechada = saldo inicial + lançamentos com fatura até o vencimento dela + pagamentos até hoje; restante = máx(0, −devido); o que passa do total da fechada é atraso.
 - **Teto zero** significa "não gastar nada" e é diferente de "sem teto" (sem linha). A cópia do mês anterior só preenche categorias sem linha, a partir do último mês que tem algum teto.
 
 ## Próximas tarefas
 
 - [x] Metas (casa, carro) ligadas às contas de investimento, com projeção pelo FinanceEngine
-- [ ] Dashboard da Visão geral com dados reais (spec: `docs/superpowers/specs/2026-11-09-dashboard-design.md`)
+- [x] Dashboard da Visão geral com dados reais (spec: `docs/superpowers/specs/2026-11-09-dashboard-design.md`)
 - [ ] Fechar a Fase 1: o casal usa o sistema num mês real e confere o fechamento contra o extrato do Itaú. O PR do dashboard marca a fase como "Código concluído", não "Concluída"
 - [ ] Bloco próprio de dívidas (contrato, juros, saldo devedor, parcelas); até lá, a fatia Dívidas vem da categoria com papel `DIVIDAS` e o patrimônio do casal "Não inclui dívidas fora do cartão (empréstimo, consórcio)"
 - [ ] Antes de abrir a 443: revisar sessões ativas de cada cônjuge (ADR-011)
