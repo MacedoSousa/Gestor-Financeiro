@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+# pre-commit: as mesmas regras para Claude Code, Antigravity e pessoas.
+# Instale uma vez com: scripts/instalar-hooks.sh   (aponta core.hooksPath para .githooks)
+# Confere só o que está no stage. Pular com --no-verify não adianta: o CI roda as mesmas guardas.
+set -uo pipefail
+
+raiz="$(git rev-parse --show-toplevel)"
+# shellcheck source=scripts/guardas/regras.sh
+source "$raiz/scripts/guardas/regras.sh"
+
+falhou=0
+
+while IFS=$'\t' read -r estado caminho destino; do
+  [ -z "$estado" ] && continue
+  # Renomeado/copiado: vale o caminho novo.
+  [ -n "${destino:-}" ] && caminho="$destino"
+
+  if eh_caminho_de_segredo "$caminho"; then
+    echo "Bloqueado: $caminho guarda segredo e não entra no git." >&2
+    falhou=1
+    continue
+  fi
+
+  case "$caminho" in
+    db/migrations/*.sql)
+      if [ "${estado:0:1}" != "A" ]; then
+        echo "Bloqueado: $caminho já foi commitada e não pode mudar ($estado). Crie uma migração nova." >&2
+        falhou=1
+        continue
+      fi
+      pasta="$(mktemp -d)"
+      copia="$pasta/$(basename "$caminho")"
+      git show ":$caminho" > "$copia"
+      checar_nome_de_migracao "$caminho" || falhou=1
+      checar_conteudo_de_migracao "$copia" || falhou=1
+      rm -rf "$pasta"
+      ;;
+  esac
+
+  if [ "${estado:0:1}" != "D" ] && eh_codigo_vigiado "$caminho"; then
+    git show ":$caminho" | checar_delete_fisico "$caminho" || falhou=1
+  fi
+done < <(git diff --cached --name-status -M)
+
+# A sequência considera o que vai ficar no repositório depois do commit.
+mapfile -t migracoes < <(git ls-files --cached 'db/migrations/*.sql')
+if [ "${#migracoes[@]}" -gt 0 ]; then
+  checar_sequencia_de_migracoes "${migracoes[@]}" || falhou=1
+fi
+
+if [ "$falhou" -ne 0 ]; then
+  echo "" >&2
+  echo "Commit recusado pelas guardas do projeto (CLAUDE.md). Corrija e tente de novo." >&2
+  exit 1
+fi
+exit 0

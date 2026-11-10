@@ -29,6 +29,7 @@ backups/
 .idea/
 .vscode/*
 !.vscode/extensions.json
+!.vscode/tasks.json
 .DS_Store
 Thumbs.db
 
@@ -37,3 +38,6 @@ Thumbs.db
 
 # Playwright MCP (capturas locais)
 .playwright-mcp/
+
+# Revisões e relatórios entre agentes (locais; ADR-012)
+.revisoes/

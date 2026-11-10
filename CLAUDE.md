@@ -10,7 +10,9 @@ Sistema financeiro pessoal de um casal, rodando num PC de casa. Dados reais de b
 - Front (tipos + lint + testes + build): `npm --prefix frontend run check`
 - Só os testes do front (Vitest): `npm --prefix frontend test`
 - Regerar cliente da API depois de mudar endpoint: `dotnet build backend/src/Host/GestorFinanceiro.Api && npm --prefix frontend run gen:api`
-- Nova migração: criar `db/migrations/V{próximo número com 4 dígitos}__descricao.sql`; nunca editar uma migração já commitada.
+- Nova migração: criar `db/migrations/V{próximo número com 4 dígitos}__descricao.sql`; nunca editar uma migração já commitada (skill `nova-migracao`).
+- Guardas e testes da parte que mudou (o que o hook `Stop` roda): `scripts/verificar.sh` (`--tudo` antes de PR)
+- Só as guardas: `scripts/guardas/verificar-repositorio.sh`; testes delas: `scripts/guardas/testes.sh`
 
 ## Regras que não se negociam
 
@@ -30,9 +32,12 @@ Sistema financeiro pessoal de um casal, rodando num PC de casa. Dados reais de b
 - Comece por um teste que falha. Ao terminar, mostre o comando de teste e a saída.
 - Mudança em mais de um módulo: proponha o plano antes (plan mode).
 - Dados de teste são sempre sintéticos. CPFs de teste: use geradores válidos, nunca um CPF real.
-- Antes de concluir, rode o teste de arquitetura; o hook `Stop` roda de novo e bloqueia se falhar.
+- Antes de concluir, rode o teste de arquitetura; o hook `Stop` roda `scripts/verificar.sh` e bloqueia se falhar.
+- Estas regras valem para todo agente, não só para o Claude. Papéis (ADR-012, `AGENTS.md`): o CEO (claude.ai) decide e escreve specs; o Claude Code implementa; o Antigravity faz QA e documentação. Siga a ordem de serviço do CEO; o que questiona a spec sobe para ele. Melhoria visual: skill `melhorar-tela`. Ao terminar uma tarefa, use a skill `revisao-cruzada`; nunca `git commit --no-verify`.
 
 ## Onde está cada coisa
 
 - Visão da arquitetura e fases: `docs/SPEC.md`; decisões: `docs/adr/`
 - Regras específicas: `.claude/rules/backend.md` e `.claude/rules/frontend.md` (carregam só nos arquivos certos)
+- Guardas (DELETE físico, segredos, migrações): `scripts/guardas/regras.sh`, usadas pelos hooks do Claude, pelo `.githooks/pre-commit` e pelo CI
+- Trabalho com o Antigravity: `docs/desenvolvimento/dois-agentes.md`; revisões em `.revisoes/<branch>.md`

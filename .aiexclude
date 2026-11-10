@@ -1,0 +1,10 @@
+# Arquivos que nenhum assistente de IA deve ler (mesma lista do deny do .claude/settings.json).
+infra/secrets/
+.env
+.env.*
+!.env.example
+backups/
+infra/data/
+*.key
+*.pem
+*.dump

@@ -77,4 +77,4 @@ Specs e planos de cada bloco: `docs/superpowers/specs/` e `docs/superpowers/plan
 - [ ] Fechar a Fase 1: o casal usa o sistema num mês real e confere o fechamento contra o extrato do Itaú. O PR do dashboard marca a fase como "Código concluído", não "Concluída"
 - [ ] Bloco próprio de dívidas (contrato, juros, saldo devedor, parcelas); até lá, a fatia Dívidas vem da categoria com papel `DIVIDAS` e o patrimônio do casal "Não inclui dívidas fora do cartão (empréstimo, consórcio)"
 - [ ] Antes de abrir a 443: revisar sessões ativas de cada cônjuge (ADR-011)
-- [ ] Teste de arquitetura de unicidade analisando o comando SQL inteiro, não linha a linha
+- [ ] Teste de arquitetura de unicidade analisando o comando SQL inteiro, não linha a linha (a guarda de shell do CI, `scripts/guardas/regras.sh`, já analisa o comando inteiro desde o ADR-012; falta o teste em C#)
