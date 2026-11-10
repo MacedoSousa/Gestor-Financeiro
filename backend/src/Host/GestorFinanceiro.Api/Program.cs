@@ -8,6 +8,7 @@ using GestorFinanceiro.Modules.Identidade;
 using GestorFinanceiro.Modules.Identidade.Contracts;
 using GestorFinanceiro.Modules.Integracoes;
 using GestorFinanceiro.Modules.Investimentos;
+using GestorFinanceiro.Modules.Painel;
 using GestorFinanceiro.Modules.Lancamentos;
 using GestorFinanceiro.Modules.Orcamento;
 using GestorFinanceiro.SharedKernel.Aplicacao;
@@ -99,7 +100,8 @@ builder.Services
     .AddInvestimentos(conexao)
     .AddIntegracoes(conexao)
     .AddAssistente(conexao)
-    .AddAuditoria(conexao);
+    .AddAuditoria(conexao)
+    .AddPainel();
 
 builder.Services.Configure<ForwardedHeadersOptions>(o =>
 {
@@ -139,6 +141,7 @@ api.MapIdentidade()
    .MapInvestimentos()
    .MapIntegracoes()
    .MapAssistente()
-   .MapAuditoria();
+   .MapAuditoria()
+   .MapPainel();
 
 app.Run();

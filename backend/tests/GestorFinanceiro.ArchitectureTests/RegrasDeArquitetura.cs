@@ -9,6 +9,7 @@ using GestorFinanceiro.Modules.Integracoes;
 using GestorFinanceiro.Modules.Investimentos;
 using GestorFinanceiro.Modules.Lancamentos;
 using GestorFinanceiro.Modules.Orcamento;
+using GestorFinanceiro.Modules.Painel;
 using NetArchTest.Rules;
 
 namespace GestorFinanceiro.ArchitectureTests;
@@ -29,6 +30,7 @@ public class RegrasDeArquitetura
         typeof(IntegracoesModule).Assembly.GetName().Name!,
         typeof(AssistenteModule).Assembly.GetName().Name!,
         typeof(AuditoriaModule).Assembly.GetName().Name!,
+        typeof(PainelModule).Assembly.GetName().Name!,
     ];
 
     public static TheoryData<string> Modulos => new(NomesDosModulos);
@@ -93,6 +95,37 @@ public class RegrasDeArquitetura
 
         var ofensores = string.Join(", ", resultado.FailingTypes?.Select(t => t.FullName) ?? []);
         Assert.True(resultado.IsSuccessful, $"{moduloA} depende de algo de {moduloB} fora de Contracts: {ofensores}");
+    }
+
+    [Fact]
+    public void Painel_nao_referencia_EF_Npgsql_nem_DbContext()
+    {
+        var achados = AcessoADados(typeof(PainelModule).Assembly);
+
+        Assert.True(achados.Count == 0, $"Painel acessa dados: {string.Join(", ", achados)}. O Painel só lê Contracts.");
+    }
+
+    [Fact]
+    public void Verificador_de_acesso_a_dados_acusa_Lancamentos()
+    {
+        Assert.NotEmpty(AcessoADados(typeof(LancamentosModule).Assembly));
+    }
+
+    private static List<string> AcessoADados(Assembly a)
+    {
+        var referencias = a.GetReferencedAssemblies()
+            .Select(r => r.Name!)
+            .Where(n => n.StartsWith("Microsoft.EntityFrameworkCore", StringComparison.Ordinal)
+                     || n.StartsWith("Npgsql", StringComparison.Ordinal));
+
+        var contextos = a.GetTypes().Where(t =>
+        {
+            for (var b = t.BaseType; b is not null; b = b.BaseType)
+                if (b.FullName == "Microsoft.EntityFrameworkCore.DbContext") return true;
+            return false;
+        }).Select(t => t.FullName!);
+
+        return referencias.Concat(contextos).ToList();
     }
 
     [Fact]
