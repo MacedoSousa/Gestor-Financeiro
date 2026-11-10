@@ -38,6 +38,9 @@ done
 GF_RAIZ="${GF_RAIZ:-$(cd "$DIR_SCRIPTS/../.." && pwd)}"
 export GF_RAIZ
 GF_BACKUP_DIR="$(ler_env GF_BACKUP_DIR /var/backups/gestor)"
+# Vazio no ambiente (que tem precedência sobre o .env) ou relativo gravaria em / ou na pasta
+# corrente, como root em produção.
+[[ "$GF_BACKUP_DIR" == /* ]] || falhar "GF_BACKUP_DIR precisa ser caminho absoluto"
 export GF_BACKUP_DIR
 destinatarios="$(ler_env GF_BACKUP_DESTINATARIOS /etc/gestor-backup/destinatarios.txt)"
 

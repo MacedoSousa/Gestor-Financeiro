@@ -273,6 +273,30 @@ EOF
   ! grep -q "segredo-teste" "$T/stderr"
 }
 
+# GF_BACKUP_DIR vazio no ambiente (tem precedência sobre o .env) ou relativo no .env: sai
+# antes de criar qualquer coisa. Roda de dentro de uma pasta vazia para ver se algo nasce ali.
+backup_dir_vazio_no_ambiente_recusa() {
+  local cwd="$T/cwd-vazio" codigo=0
+  rm -rf "$cwd"; mkdir "$cwd"
+  ( cd "$cwd" && GF_BACKUP_DIR="" GF_BACKUP_DESTINATARIOS="$DESTINATARIOS" PG_CONTAINER="$FONTE_CONTAINER" \
+      GF_TMP="$TMP_RUN" "$RAIZ_FALSA/infra/backup/backup.sh" --data 2026-11-10 2>"$T/stderr" ) || codigo=$?
+  [ "$codigo" -ne 0 ] || return 1
+  grep -qx "FALHA GF_BACKUP_DIR precisa ser caminho absoluto" "$T/stderr" || { mostrar_stderr; return 1; }
+  [ -z "$(ls -A "$cwd")" ] && [ -z "$(ls -A "$TMP_RUN")" ] && [ ! -e /diario ]
+}
+
+backup_dir_relativo_no_env_recusa() {
+  local cwd="$T/cwd-relativo" codigo=0
+  rm -rf "$cwd"; mkdir "$cwd"
+  printf 'DUCKDNS_TOKEN=segredo-teste\nGF_BACKUP_DIR=backups/gestor\n' >"$RAIZ_FALSA/infra/.env"
+  ( cd "$cwd" && env -u GF_BACKUP_DIR GF_BACKUP_DESTINATARIOS="$DESTINATARIOS" PG_CONTAINER="$FONTE_CONTAINER" \
+      GF_TMP="$TMP_RUN" "$RAIZ_FALSA/infra/backup/backup.sh" --data 2026-11-10 2>"$T/stderr" ) || codigo=$?
+  printf 'DUCKDNS_TOKEN=segredo-teste\n' >"$RAIZ_FALSA/infra/.env"
+  [ "$codigo" -ne 0 ] || return 1
+  grep -qx "FALHA GF_BACKUP_DIR precisa ser caminho absoluto" "$T/stderr" || { mostrar_stderr; return 1; }
+  [ -z "$(ls -A "$cwd")" ] && [ -z "$(ls -A "$TMP_RUN")" ]
+}
+
 # Duas execuções ao mesmo tempo. Um age falso segura a primeira com o .parcial já escrito
 # até a segunda terminar; sem isso a segunda quase sempre chegaria antes de existir .parcial.
 duas_execucoes_ao_mesmo_tempo() {
@@ -395,6 +419,8 @@ caso mesmo_dia_substitui
 caso cadeia_dentro_e_fora
 caso codigo_do_enviar_e_o_do_backup
 caso le_so_chaves_do_env
+caso backup_dir_vazio_no_ambiente_recusa
+caso backup_dir_relativo_no_env_recusa
 caso duas_execucoes_ao_mesmo_tempo
 caso ancora_ok_com_eventos_novos
 caso ancora_quebrada_falha
