@@ -97,6 +97,21 @@ jobs:
 
       - run: npm run check
 
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Ferramentas
+        run: sudo apt-get update && sudo apt-get install -y age shellcheck rclone
+
+      # find em vez de infra/backup/**/*.sh: sem globstar, ** não pega infra/backup/*.sh.
+      - name: shellcheck
+        run: find infra/backup -name '*.sh' -print0 | xargs -0 shellcheck -x
+
+      - name: Testes do backup (Postgres descartável em docker)
+        run: infra/backup/testes/rodar-todos.sh
+
   segredos:
     runs-on: ubuntu-latest
     steps:
