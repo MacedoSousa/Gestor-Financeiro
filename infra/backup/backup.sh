@@ -82,6 +82,15 @@ cadeia_final="$dir_cadeia/cadeia-$data.txt"
 cadeia_parcial="$dir_cadeia/.cadeia-$data.parcial"
 link_parcial="$semanal/.gestor-$data.parcial"
 
+trap 'exit 130' INT TERM
+mkdir -p "$diario" "$semanal" "$dir_cadeia"
+
+# Dois backups ao mesmo tempo (timer + manual) escreveriam o mesmo .parcial. A trava vem
+# antes do trap de limpeza: quem não obtém a trava sai sem apagar nada, porque os .parcial
+# deste dia são da execução que está com ela.
+exec 9>"$GF_BACKUP_DIR/.backup.trava"
+flock -n 9 || falhar "outro backup em andamento"
+
 # Só o que este script criou é apagado: o diretório de trabalho (dentro de GF_TMP) e os
 # .parcial deste dia. Nunca o GF_TMP inteiro, que em produção é do systemd.
 trabalho=""
@@ -90,19 +99,12 @@ limpar() {
   rm -f "$parcial" "$cadeia_parcial" "$link_parcial"
 }
 trap limpar EXIT
-trap 'exit 130' INT TERM
 
 base_tmp="${GF_TMP:-${TMPDIR:-/tmp}}"
 trabalho="$(mktemp -d "$base_tmp/gf-backup.XXXXXXXX")"
 conteudo="$trabalho/pacote"
 emitido="$trabalho/emitido"
 mkdir "$conteudo" "$conteudo/secrets" "$conteudo/chaves" "$emitido"
-
-mkdir -p "$diario" "$semanal" "$dir_cadeia"
-
-# Dois backups ao mesmo tempo (timer + manual) escreveriam o mesmo .parcial.
-exec 9>"$GF_BACKUP_DIR/.backup.trava"
-flock -n 9 || falhar "outro backup em andamento"
 
 log "backup: data=$data"
 

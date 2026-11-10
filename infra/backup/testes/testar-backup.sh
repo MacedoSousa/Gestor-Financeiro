@@ -263,6 +263,41 @@ EOF
   ! grep -q "segredo-teste" "$T/stderr"
 }
 
+# Duas execuções ao mesmo tempo. Um age falso segura a primeira com o .parcial já escrito
+# até a segunda terminar; sem isso a segunda quase sempre chegaria antes de existir .parcial.
+duas_execucoes_ao_mesmo_tempo() {
+  local dir="$T/b-concorrente" shims="$T/shims-age" age_real pid codigo1=0 codigo2=0 i
+  age_real="$(command -v age)"
+  mkdir -p "$shims"
+  cat >"$shims/age" <<EOF
+#!/usr/bin/env bash
+"$age_real" "\$@" || exit \$?
+touch "$MARCAS/age.escreveu"
+for _ in \$(seq 1 600); do [ -e "$MARCAS/age.liberar" ] && exit 0; sleep 0.1; done
+exit 1
+EOF
+  chmod 700 "$shims/age"
+  mkdir -p "$T/tmp-run-2"
+  PATH="$shims:$PATH" GF_BACKUP_DIR="$dir" GF_BACKUP_DESTINATARIOS="$DESTINATARIOS" PG_CONTAINER="$FONTE_CONTAINER" \
+    GF_TMP="$TMP_RUN" "$RAIZ_FALSA/infra/backup/backup.sh" --data 2026-11-10 2>"$T/stderr-1" &
+  pid=$!
+  for i in $(seq 1 600); do [ -e "$MARCAS/age.escreveu" ] && break; sleep 0.1; done
+  [ -e "$MARCAS/age.escreveu" ] || { echo "  primeira execução não chegou ao age"; touch "$MARCAS/age.liberar"; wait "$pid" || true; return 1; }
+  [ -e "$dir/diario/.gestor-2026-11-10.parcial" ] || { echo "  sem .parcial durante o age"; touch "$MARCAS/age.liberar"; wait "$pid" || true; return 1; }
+  GF_BACKUP_DIR="$dir" GF_BACKUP_DESTINATARIOS="$DESTINATARIOS" PG_CONTAINER="$FONTE_CONTAINER" \
+    GF_TMP="$T/tmp-run-2" "$RAIZ_FALSA/infra/backup/backup.sh" --data 2026-11-10 2>"$T/stderr" || codigo2=$?
+  local parcial_sobreviveu=0
+  [ -e "$dir/diario/.gestor-2026-11-10.parcial" ] && parcial_sobreviveu=1
+  touch "$MARCAS/age.liberar"
+  wait "$pid" || codigo1=$?
+  [ "$codigo2" -ne 0 ] && grep -q "^FALHA outro backup em andamento" "$T/stderr" \
+    || { echo "  segunda execução: código $codigo2"; mostrar_stderr; return 1; }
+  [ -z "$(ls -A "$T/tmp-run-2")" ] || { echo "  segunda execução criou arquivo em GF_TMP"; return 1; }
+  [ "$parcial_sobreviveu" -eq 1 ] || { echo "  segunda execução apagou o .parcial da primeira"; return 1; }
+  [ "$codigo1" -eq 0 ] || { echo "  primeira execução: código $codigo1"; sed 's/^/  | /' "$T/stderr-1"; return 1; }
+  abrir_pacote "$dir/diario/gestor-2026-11-10.tar.age" "$T/aberto" && [ -s "$T/aberto/gestor.dump" ]
+}
+
 ancora_ok_com_eventos_novos() {
   local dir="$T/b-ancora-ok"
   rodar_backup "$dir" --data 2026-11-09 || { mostrar_stderr; return 1; }
@@ -350,6 +385,7 @@ caso mesmo_dia_substitui
 caso cadeia_dentro_e_fora
 caso codigo_do_enviar_e_o_do_backup
 caso le_so_chaves_do_env
+caso duas_execucoes_ao_mesmo_tempo
 caso ancora_ok_com_eventos_novos
 caso ancora_quebrada_falha
 caso dump_reprovado_nao_gera_pacote
