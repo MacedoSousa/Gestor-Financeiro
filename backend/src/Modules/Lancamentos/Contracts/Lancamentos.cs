@@ -114,3 +114,21 @@ public sealed record ConciliacaoPedidoDto(long? SaldoInformadoCentavos, long? Sa
 /// <param name="DiferencaCentavos">Informado menos o saldo de hoje.</param>
 /// <param name="Lancamento">A receita lançada; nula em CONFERE e MENOR.</param>
 public sealed record ConciliacaoDto(string Resultado, long DiferencaCentavos, LancamentoDto? Lancamento);
+
+/// <summary>Última fatura fechada de um cartão, ainda por pagar ou não.</summary>
+/// <param name="TotalCentavos">O que a própria fatura soma (positivo quando há gasto).</param>
+/// <param name="RestanteCentavos">O que falta pagar até esta fatura, já com pagamentos e dívidas anteriores; nunca negativo.</param>
+/// <param name="AtrasoCentavos">A parte do restante que vem de faturas anteriores a esta; nunca negativo.</param>
+public sealed record FaturaFechadaAPagar(DateOnly Vencimento, DateOnly Fechamento, long TotalCentavos, long RestanteCentavos, long AtrasoCentavos);
+
+/// <summary>Fatura aberta de um cartão: só o que tem data até hoje.</summary>
+public sealed record FaturaAbertaAteHoje(DateOnly Vencimento, DateOnly Fechamento, long TotalAteHojeCentavos);
+
+public sealed record FaturasDoCartao(Guid ContaId, FaturaFechadaAPagar Fechada, FaturaAbertaAteHoje Aberta);
+
+/// <summary>Faturas por cartão, para outros módulos (o Painel). Respeita os filtros SoftDelete e Casal.</summary>
+public interface IConsultaDeFaturas
+{
+    /// <summary>Todos os cartões do casal, inclusive arquivados e sem restante; quem decide o que mostrar é o chamador.</summary>
+    Task<IReadOnlyList<FaturasDoCartao>> AVencerAsync(CancellationToken ct = default);
+}

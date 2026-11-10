@@ -14,15 +14,11 @@ internal sealed class ConsultaDeSaldos(LancamentosDbContext db, IConsultaDeConta
         var data = em ?? Brasilia.Hoje(relogio);
         var lista = await contas.ListarAsync(ct);
 
-        // Fatura aberta = a que contém a data; fechada = a imediatamente anterior (a do mês anterior ao fechamento da aberta).
         var periodos = new Dictionary<Guid, (FaturaDto Aberta, FaturaDto Fechada)>();
         foreach (var conta in lista)
         {
-            if (contas.VencimentoDaFatura(conta, data) is not { } vencAberta) continue;
-            var fechAberta = contas.FechamentoDaFatura(conta, vencAberta)!.Value;
-            var vencFechada = contas.VencimentoDaFatura(conta, fechAberta.AddMonths(-1))!.Value;
-            var fechFechada = contas.FechamentoDaFatura(conta, vencFechada)!.Value;
-            periodos[conta.Id] = (new FaturaDto(vencAberta, fechAberta, 0), new FaturaDto(vencFechada, fechFechada, 0));
+            if (PeriodosDeFatura.De(contas, conta, data) is not var (aberta, fechada)) continue;
+            periodos[conta.Id] = (new FaturaDto(aberta.Vencimento, aberta.Fechamento, 0), new FaturaDto(fechada.Vencimento, fechada.Fechamento, 0));
         }
 
         var vencimentos = periodos.Values.SelectMany(p => new[] { p.Aberta.Vencimento, p.Fechada.Vencimento }).Distinct().ToArray();
