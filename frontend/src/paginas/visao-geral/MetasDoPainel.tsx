@@ -1,10 +1,15 @@
+import { Link } from "react-router";
 import { n } from "../../api/formulario";
 import type { MetasDoPainel as Dados } from "../../api/painel";
 import { formatarReaisInteiros } from "../../lib/dinheiro";
 import { aparenciaDaMeta } from "../../lib/painel";
 
 export function MetasDoPainel({ dados }: { dados: Dados }) {
-  if (dados.metas.length === 0) return <p className="cartao-nota">Nenhuma meta ainda</p>;
+  if (dados.metas.length === 0) return (
+      <p className="cartao-nota">
+        Nenhuma meta ainda. <Link to="/metas">Criar meta</Link>
+      </p>
+    );
   return (
     <ul className="lista-painel">
       {dados.metas.map((m) => {

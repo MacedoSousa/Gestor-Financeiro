@@ -1,9 +1,14 @@
+import { Link } from "react-router";
 import { n } from "../../api/formulario";
 import type { OrcamentoDoPainel as Dados } from "../../api/painel";
 import { formatarReaisInteiros } from "../../lib/dinheiro";
 
 export function OrcamentoDoPainel({ dados }: { dados: Dados }) {
-  if (dados.categorias.length === 0) return <p className="cartao-nota">Sem tetos neste mês</p>;
+  if (dados.categorias.length === 0) return (
+      <p className="cartao-nota">
+        Sem tetos neste mês. <Link to="/orcamento">Definir tetos</Link>
+      </p>
+    );
   const outras = n(dados.outrasCategorias);
   return (
     <ul className="lista-painel">
@@ -28,7 +33,7 @@ export function OrcamentoDoPainel({ dados }: { dados: Dados }) {
           </li>
         );
       })}
-      {outras > 0 && <li className="cartao-nota">e mais {outras} {outras === 1 ? "categoria" : "categorias"}</li>}
+      {outras > 0 && <li className="cartao-nota">+{outras} {outras === 1 ? "categoria" : "categorias"}</li>}
     </ul>
   );
 }

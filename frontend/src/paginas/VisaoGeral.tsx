@@ -119,7 +119,7 @@ export function VisaoGeral() {
               {(d) => <Vencimentos dados={d} />}
             </Secao>
             <Secao titulo="Últimos lançamentos" secao={v.ultimosLancamentos} {...base} acao={<Link to="/lancamentos">Ver todos</Link>}>
-              {(d) => <UltimosLancamentos dados={d} />}
+              {(d) => <UltimosLancamentos dados={d} hoje={v.hoje} />}
             </Secao>
           </div>
         </>

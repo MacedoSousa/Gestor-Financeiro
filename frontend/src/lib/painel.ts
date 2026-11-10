@@ -21,8 +21,8 @@ export function resumoDoGrafico(pontos: Ponto[]): string | null {
 }
 
 export function aparenciaDaFatura(estado: string): { rotulo: string; tom: "alerta" | "normal" } {
-  if (estado === "COM_ATRASO") return { rotulo: "Em atraso", tom: "alerta" };
-  if (estado === "ABERTA") return { rotulo: "Aberta, ainda recebe compras", tom: "normal" };
+  if (estado === "COM_ATRASO") return { rotulo: "Fechada", tom: "alerta" };
+  if (estado === "ABERTA") return { rotulo: "Aberta", tom: "normal" };
   return { rotulo: "Fechada", tom: "normal" };
 }
 
@@ -31,3 +31,14 @@ export function aparenciaDaMeta(situacao: string, chegaEm?: string | null): { te
   if (situacao === "NAO_CHEGA") return { texto: "Não chega em 100 anos com o aporte planejado", tom: "alerta" };
   return { texto: chegaEm ? `previsão ${mesCurto(chegaEm)}` : "sem previsão", tom: "normal" };
 }
+
+/** "Hoje", "Ontem" ou "DD/MM", só comparando a data do lançamento com o `hoje` da resposta. */
+export function diaDoLancamento(data: string, hoje: string): string {
+  if (data === hoje) return "Hoje";
+  const [a, m, d] = hoje.split("-").map(Number);
+  const ontem = new Date(Date.UTC(a ?? 2000, (m ?? 1) - 1, (d ?? 1) - 1)).toISOString().slice(0, 10);
+  return data === ontem ? "Ontem" : `${data.slice(8, 10)}/${data.slice(5, 7)}`;
+}
+
+const ORIGENS: Record<string, string> = { MANUAL: "Manual", OPEN_FINANCE: "Open Finance", WHATSAPP: "WhatsApp" };
+export const rotuloDaOrigem = (origem: string): string => ORIGENS[origem] ?? origem;

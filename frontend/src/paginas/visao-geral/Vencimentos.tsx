@@ -21,10 +21,7 @@ export function Vencimentos({ dados }: { dados: Vencimento[] }) {
               <span className="num">{formatarReais(n(v.valorCentavos))}</span>
             </div>
             <div className="linha-painel cartao-nota">
-              <span className={a.tom === "alerta" ? "tom-alerta" : ""}>
-                {a.rotulo}
-                {v.estado === "ABERTA" ? `, fecha em ${diaEMes(v.fechamento)}` : `, fechou em ${diaEMes(v.fechamento)}`}
-              </span>
+              <span>{v.estado === "ABERTA" ? `${a.rotulo} · fecha em ${diaEMes(v.fechamento)}` : `${a.rotulo} em ${diaEMes(v.fechamento)}`}</span>
               {atraso > 0 && (
                 <span className="tom-alerta">
                   inclui <span className="num">{formatarReais(atraso)}</span> em atraso

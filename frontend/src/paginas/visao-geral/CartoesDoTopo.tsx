@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { Link } from "react-router";
 import { n } from "../../api/formulario";
 import type { Secao, VisaoGeral } from "../../api/painel";
 import { formatarReais, formatarReaisInteiros } from "../../lib/dinheiro";
@@ -51,7 +52,15 @@ export function CartoesDoTopo({ visao, tentando, aoTentarDeNovo }: Props) {
       <Cartao rotulo="Ainda dá para gastar" destaque secao={visao.aindaDaParaGastar} {...base}>
         {(d) => {
           const restante = d.restanteCentavos == null ? null : n(d.restanteCentavos);
-          if (d.situacao === "SEM_TETO") return { valor: "—", nota: "Sem teto de gastos neste mês" };
+          if (d.situacao === "SEM_TETO")
+            return {
+              valor: "—",
+              nota: (
+                <>
+                  Sem teto de gastos neste mês. <Link to="/orcamento">Definir tetos</Link>
+                </>
+              ),
+            };
           if (d.situacao === "PASSOU")
             return { valor: formatarReais(restante ?? 0), nota: `Passou ${formatarReais(Math.abs(restante ?? 0))} do teto`, tom: "alerta" };
           if (d.situacao === "ESGOTADO") return { valor: formatarReais(0), nota: "Teto atingido" };
@@ -61,7 +70,7 @@ export function CartoesDoTopo({ visao, tentando, aoTentarDeNovo }: Props) {
               <>
                 {d.porDiaCentavos != null && (
                   <>
-                    <span className="num">{formatarReaisInteiros(n(d.porDiaCentavos))}</span> por dia até {diaEMes(d.fimDoMes)}
+                    ≈ <span className="num">{formatarReaisInteiros(n(d.porDiaCentavos))}</span> por dia até {diaEMes(d.fimDoMes)}
                   </>
                 )}
                 {d.percentualUsado != null && <> · {n(d.percentualUsado)}% do teto usado</>}
@@ -84,7 +93,7 @@ export function CartoesDoTopo({ visao, tentando, aoTentarDeNovo }: Props) {
                     {c.apelido} <span className="num">{formatarReais(n(c.saldoCentavos))}</span>
                   </li>
                 ))}
-                {n(d.outrasContas) > 0 && <li>e mais {n(d.outrasContas)} {n(d.outrasContas) === 1 ? "conta" : "contas"}</li>}
+                {n(d.outrasContas) > 0 && <li>+{n(d.outrasContas)} {n(d.outrasContas) === 1 ? "conta" : "contas"}</li>}
               </ul>
             ),
         })}
@@ -93,12 +102,24 @@ export function CartoesDoTopo({ visao, tentando, aoTentarDeNovo }: Props) {
       <Cartao rotulo="Aporte planejado" secao={visao.aportePlanejado} {...base}>
         {(d) =>
           d.metas.length === 0
-            ? { valor: formatarReais(0), nota: "Nenhuma meta" }
+            ? {
+                valor: formatarReais(0),
+                nota: (
+                  <>
+                    Nenhuma meta. <Link to="/metas">Criar meta</Link>
+                  </>
+                ),
+              }
             : {
                 valor: formatarReais(n(d.totalCentavos)),
                 nota: (
                   <>
-                    Já aportado no mês: <span className="num">{formatarReais(n(d.jaAportadoCentavos))}</span>
+                    {d.metas.map((m) => (
+                      <span key={m.metaId}>
+                        {m.nome} <span className="num">{formatarReais(n(m.aportePlanejadoCentavos))}</span> ·{" "}
+                      </span>
+                    ))}
+                    já aportado <span className="num">{formatarReais(n(d.jaAportadoCentavos))}</span>
                   </>
                 ),
               }
@@ -108,26 +129,17 @@ export function CartoesDoTopo({ visao, tentando, aoTentarDeNovo }: Props) {
       <Cartao rotulo="Patrimônio do casal" secao={visao.patrimonio} {...base}>
         {(d) => {
           const variacao = d.variacaoCentavos == null ? null : n(d.variacaoCentavos);
+          const pct = d.variacaoPercentual == null ? null : Math.abs(n(d.variacaoPercentual));
           return {
             valor: formatarReais(n(d.totalCentavos)),
             nota: (
               <>
-                {variacao === null ? (
-                  "Sem mês anterior para comparar. "
-                ) : (
+                {variacao !== null && (
                   <span className={variacao < 0 ? "tom-alerta" : variacao > 0 ? "tom-positivo" : ""}>
-                    <span className="num">
-                      {variacao > 0 ? "+" : variacao < 0 ? "−" : ""}
-                      {formatarReais(Math.abs(variacao))}
-                    </span>
-                    {d.variacaoPercentual != null && (
-                      <span className="num">
-                        {" "}
-                        ({n(d.variacaoPercentual) > 0 ? "+" : n(d.variacaoPercentual) < 0 ? "−" : ""}
-                        {percentual(Math.abs(n(d.variacaoPercentual)))}%)
-                      </span>
-                    )}{" "}
-                    sobre o mês anterior.{" "}
+                    <span aria-hidden="true">{variacao < 0 ? "▼" : "▲"}</span>
+                    <span className="sr-only">{variacao < 0 ? "Queda de " : "Alta de "}</span> <span className="num">{formatarReais(Math.abs(variacao))}</span> no mês
+                    {pct !== null && <span className="num"> ({percentual(pct)}%)</span>}
+                    <br />
                   </span>
                 )}
                 Não inclui dívidas fora do cartão (empréstimo, consórcio)

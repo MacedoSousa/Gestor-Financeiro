@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { aparenciaDaFatura, aparenciaDaMeta, resumoDoGrafico, saudacao } from "./painel";
+import { aparenciaDaFatura, aparenciaDaMeta, diaDoLancamento, rotuloDaOrigem, resumoDoGrafico, saudacao } from "./painel";
 
 describe("saudacao", () => {
   it.each([
@@ -33,10 +33,11 @@ describe("resumoDoGrafico", () => {
 describe("aparenciaDaFatura", () => {
   it("atraso é alerta", () => {
     expect(aparenciaDaFatura("COM_ATRASO").tom).toBe("alerta");
+    expect(aparenciaDaFatura("COM_ATRASO").rotulo).toBe("Fechada");
   });
   it("aberta começa com Aberta", () => {
     const a = aparenciaDaFatura("ABERTA");
-    expect(a.rotulo.startsWith("Aberta")).toBe(true);
+    expect(a.rotulo).toBe("Aberta");
     expect(a.tom).toBe("normal");
   });
   it("fechada é normal", () => {
@@ -54,4 +55,27 @@ describe("aparenciaDaMeta", () => {
   it("não chega", () => {
     expect(aparenciaDaMeta("NAO_CHEGA", null)).toEqual({ texto: "Não chega em 100 anos com o aporte planejado", tom: "alerta" });
   });
+});
+
+describe("diaDoLancamento", () => {
+  it.each([
+    ["2026-11-05", "Hoje"],
+    ["2026-11-04", "Ontem"],
+    ["2026-11-03", "03/11"],
+    ["2026-11-06", "06/11"],
+  ])("%s com hoje 05/11 → %s", (data, esperado) => {
+    expect(diaDoLancamento(data, "2026-11-05")).toBe(esperado);
+  });
+  it("ontem atravessa o mês e o ano", () => {
+    expect(diaDoLancamento("2026-12-31", "2027-01-01")).toBe("Ontem");
+  });
+});
+
+describe("rotuloDaOrigem", () => {
+  it.each([
+    ["MANUAL", "Manual"],
+    ["OPEN_FINANCE", "Open Finance"],
+    ["WHATSAPP", "WhatsApp"],
+    ["OUTRA", "OUTRA"],
+  ])("%s → %s", (o, e) => expect(rotuloDaOrigem(o)).toBe(e));
 });
