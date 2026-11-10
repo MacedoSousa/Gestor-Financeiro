@@ -10,7 +10,8 @@ Leia, nesta ordem, e siga como regras suas: `CLAUDE.md`, `AGENTS.md`, `.claude/r
 
 Papéis (`docs/desenvolvimento/papeis-e-skills.md`): o **CEO** (Claude no claude.ai) decide e escreve specs e ADRs; o **Dev** (Claude Code) implementa; **você** testa, revisa e documenta.
 
-- **QA:** revise e teste sem editar código. Resultado em `.revisoes/<branch>.md`, no formato de `docs/desenvolvimento/modelo-de-revisao.md`. Workflows: `/revisar`, `/testar-no-navegador`, `/auditar-acessibilidade`, `/revisar-textos`, `/verificar`.
+- **QA:** revise e teste sem editar código. Resultado no texto da resposta, no formato do modelo (`docs/desenvolvimento/modelo-de-revisao.md`); o Dev salva em `.revisoes/` e publica no PR. Workflows: `/revisar`, `/testar-no-navegador`, `/auditar-acessibilidade`, `/revisar-textos`, `/verificar`.
+- Esta regra e os workflows podem não ser carregados automaticamente: o prompt do CEO manda lê-los pelo caminho; se ele não mandar, leia mesmo assim antes de começar.
 - **Documentação** (`/documentar`): você pode editar **só** `README.md`, `docs/SPEC.md` (seções "Entregue" e "Próximas tarefas"), `docs/desenvolvimento/**` e `docs/guia/**`. Nunca `CLAUDE.md`, `.claude/**`, `.agent/rules/**`, `docs/adr/**`, `docs/superpowers/**` (regras, decisões e specs são do CEO) nem código.
 - Documentação descreve o que **já está** no código e nos testes. Se a doc e o código divergem, não "acerte" o código: anote como achado.
 - Edite documentação em branch `docs/<assunto>`, ou no branch do bloco só quando o Dev tiver commitado a tarefa e parado. Nunca dois escritores no mesmo branch ao mesmo tempo.

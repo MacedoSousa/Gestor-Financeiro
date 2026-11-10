@@ -11,5 +11,5 @@ description: Revisão cruzada do branch atual contra as regras do projeto, sem e
    - **Contrato:** mudou endpoint → `contracts/openapi.json` e `frontend/src/api/schema.d.ts` no mesmo commit.
    - **Spec:** o código faz o que a spec diz, nem mais nem menos.
 4. Rode `scripts/verificar.sh` e guarde a saída.
-5. Escreva `.revisoes/<branch>.md` no formato de `docs/desenvolvimento/modelo-de-revisao.md`. Classifique cada achado como **Bloqueia**, **Importante** ou **Sugestão**. Não edite nenhum outro arquivo.
-6. Termine dizendo quantos achados de cada tipo há e onde está o arquivo.
+5. Entregue a revisão no texto da sua resposta, no formato de `docs/desenvolvimento/modelo-de-revisao.md`. Não grave arquivo e não use gh: o Dev salva e publica no PR. Classifique cada achado como **Bloqueia**, **Importante** ou **Sugestão**. Não edite nenhum arquivo.
+6. Termine dizendo quantos achados de cada tipo há.

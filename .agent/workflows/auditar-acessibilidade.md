@@ -12,4 +12,4 @@ description: Auditoria WCAG 2.2 AA das telas mudadas no branch, sem editar códi
    - **Números:** valores com a classe `num`; o leitor de tela lê o valor real, sem contagem animada; mudanças importantes anunciadas (`role="status"`/`alert`) (4.1.3).
    - **Zoom e largura:** 200% de zoom e 800 px sem perder conteúdo nem rolar para o lado (1.4.4, 1.4.10).
    - **Alvos:** botões e links com pelo menos 24×24 px (2.5.8).
-4. Escreva a seção "Acessibilidade" em `.revisoes/<branch>.md` (mesma tabela do modelo, com a coluna Referência = critério WCAG). Falha de teclado, foco ou contraste é **Bloqueia**.
+4. Entregue a revisão no texto da sua resposta, no formato de `docs/desenvolvimento/modelo-de-revisao.md`. Não grave arquivo e não use gh: o Dev salva e publica no PR. Os achados vão na seção "Acessibilidade" do texto entregue (mesma tabela do modelo, com a coluna Referência = critério WCAG). Falha de teclado, foco ou contraste é **Bloqueia**.

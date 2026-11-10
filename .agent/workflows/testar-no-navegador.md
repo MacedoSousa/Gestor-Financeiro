@@ -9,4 +9,4 @@ description: Testa as telas do branch no navegador e compara com docs/design/tel
    - percorra os fluxos do plano do bloco, incluindo erro (campo inválido, 409, sessão expirada);
    - confira acessibilidade: navegação só por teclado, foco visível, `label` em todo campo, contraste 4.5:1, valores com a classe `num`.
 4. Tire capturas só com dados sintéticos e guarde-as fora do git.
-5. Anote os achados em `.revisoes/<branch>.md`, seção "Navegador", no formato do modelo. Não edite código.
+5. Entregue a revisão no texto da sua resposta, no formato de `docs/desenvolvimento/modelo-de-revisao.md`. Não grave arquivo e não use gh: o Dev salva e publica no PR. Os achados vão na seção "Navegador" do texto entregue. Não edite código.
