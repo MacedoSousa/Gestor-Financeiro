@@ -3,10 +3,11 @@
 # Backup diário: dump → verificação num descartável → pacote tar cifrado com age.
 # Uso: backup.sh [--data AAAA-MM-DD]     (--data existe para os testes; padrão: hoje em São Paulo)
 #
-# Ambiente (todos opcionais):
+# Ambiente (só GF_TMP é obrigatório):
 #   GF_RAIZ        raiz do repositório (padrão: dois níveis acima deste script)
 #   PG_CONTAINER   container do Postgres (padrão: docker compose ... ps -q postgres)
-#   GF_TMP         onde fica o que existe em claro (produção: RuntimeDirectory do systemd)
+#   GF_TMP         obrigatório, absoluto: onde fica o que existe em claro (produção:
+#                  RuntimeDirectory do systemd). Sem fallback para /tmp.
 #   GF_BACKUP_*    lidos de $GF_RAIZ/infra/.env por ler_env; o ambiente tem precedência
 #
 # Gera $GF_BACKUP_DIR/diario/gestor-<data>.tar.age e $GF_BACKUP_DIR/cadeia/cadeia-<data>.txt;
@@ -38,7 +39,13 @@ done
 GF_RAIZ="${GF_RAIZ:-$(cd "$DIR_SCRIPTS/../.." && pwd)}"
 export GF_RAIZ
 GF_BACKUP_DIR="$(ler_env GF_BACKUP_DIR /var/backups/gestor)"
+# Vazio no ambiente (que tem precedência sobre o .env) ou relativo gravaria em / ou na pasta
+# corrente, como root em produção.
+[[ "$GF_BACKUP_DIR" == /* ]] || falhar "GF_BACKUP_DIR precisa ser caminho absoluto"
 export GF_BACKUP_DIR
+# O dump, os segredos e o tar em claro só existem em GF_TMP (RuntimeDirectory em produção).
+# Sem ele não há fallback: /tmp pode ser disco e sobreviver a uma queda.
+[[ "${GF_TMP:-}" == /* ]] || falhar "GF_TMP obrigatorio"
 destinatarios="$(ler_env GF_BACKUP_DESTINATARIOS /etc/gestor-backup/destinatarios.txt)"
 
 # ---------------------------------------------------------------- pré-condições
@@ -82,6 +89,15 @@ cadeia_final="$dir_cadeia/cadeia-$data.txt"
 cadeia_parcial="$dir_cadeia/.cadeia-$data.parcial"
 link_parcial="$semanal/.gestor-$data.parcial"
 
+trap 'exit 130' INT TERM
+mkdir -p "$diario" "$semanal" "$dir_cadeia"
+
+# Dois backups ao mesmo tempo (timer + manual) escreveriam o mesmo .parcial. A trava vem
+# antes do trap de limpeza: quem não obtém a trava sai sem apagar nada, porque os .parcial
+# deste dia são da execução que está com ela.
+exec 9>"$GF_BACKUP_DIR/.backup.trava"
+flock -n 9 || falhar "outro backup em andamento"
+
 # Só o que este script criou é apagado: o diretório de trabalho (dentro de GF_TMP) e os
 # .parcial deste dia. Nunca o GF_TMP inteiro, que em produção é do systemd.
 trabalho=""
@@ -90,19 +106,11 @@ limpar() {
   rm -f "$parcial" "$cadeia_parcial" "$link_parcial"
 }
 trap limpar EXIT
-trap 'exit 130' INT TERM
 
-base_tmp="${GF_TMP:-${TMPDIR:-/tmp}}"
-trabalho="$(mktemp -d "$base_tmp/gf-backup.XXXXXXXX")"
+trabalho="$(mktemp -d "$GF_TMP/gf-backup.XXXXXXXX")"
 conteudo="$trabalho/pacote"
 emitido="$trabalho/emitido"
 mkdir "$conteudo" "$conteudo/secrets" "$conteudo/chaves" "$emitido"
-
-mkdir -p "$diario" "$semanal" "$dir_cadeia"
-
-# Dois backups ao mesmo tempo (timer + manual) escreveriam o mesmo .parcial.
-exec 9>"$GF_BACKUP_DIR/.backup.trava"
-flock -n 9 || falhar "outro backup em andamento"
 
 log "backup: data=$data"
 
@@ -152,15 +160,19 @@ membros+=(chaves/dek.servico)
   echo "ultima_migracao=$ultima_migracao"
   echo "eventos_total=$eventos_total"
   echo "eventos_max_seq=$eventos_max_seq"
-  for arquivo in "${membros[@]}"; do
-    echo "sha256 $(sha256sum "$conteudo/$arquivo" | cut -d' ' -f1) $arquivo"
-  done
 } >"$conteudo/MANIFESTO"
-log "manifesto: eventos_total=$eventos_total eventos_max_seq=$eventos_max_seq arquivos=${#membros[@]}"
+membros+=(MANIFESTO)
+
+# SHA256SUMS no formato do sha256sum ("<hash>  <arquivo>"), com caminhos relativos à raiz do
+# tar: a restauração confere com "sha256sum -c SHA256SUMS" depois de extrair.
+codigo=0
+( cd "$conteudo" && sha256sum -- "${membros[@]}" ) >"$conteudo/SHA256SUMS" || codigo=$?
+[ "$codigo" -eq 0 ] || falhar "sha256sum codigo=$codigo"
+log "manifesto: eventos_total=$eventos_total eventos_max_seq=$eventos_max_seq sha256sums=${#membros[@]}"
 
 # ---------------------------------------------------------------- 5/6. pacote cifrado
 codigo=0
-tar -C "$conteudo" --owner=0 --group=0 --numeric-owner -cf - MANIFESTO "${membros[@]}" \
+tar -C "$conteudo" --owner=0 --group=0 --numeric-owner -cf - SHA256SUMS "${membros[@]}" \
   | age -R "$destinatarios" -o "$parcial" || codigo=$?
 [ "$codigo" -eq 0 ] || falhar "tar|age codigo=$codigo"
 sync -f "$parcial" 2>/dev/null || true
@@ -187,10 +199,19 @@ fi
 # ---------------------------------------------------------------- 8/9. rotação e envio
 # A rotação só chega aqui com o pacote do dia gravado. Se ela falhar, o envio ainda roda
 # (o pacote novo precisa sair da máquina), mas o backup termina com erro.
+# Interface da Task 3: rotacionar.sh <pasta> <quantos>. Diários: 7; semanais (domingo): 4.
 codigo_rotacao=0
 if [ -x "$DIR_SCRIPTS/rotacionar.sh" ]; then
-  "$DIR_SCRIPTS/rotacionar.sh" || codigo_rotacao=$?
-  [ "$codigo_rotacao" -eq 0 ] || log "rotacao codigo=$codigo_rotacao"
+  rotacoes=("$diario 7")
+  [ "$tipo" != semanal ] || rotacoes+=("$semanal 4")
+  for rotacao in "${rotacoes[@]}"; do
+    codigo=0
+    "$DIR_SCRIPTS/rotacionar.sh" "${rotacao% *}" "${rotacao##* }" || codigo=$?
+    if [ "$codigo" -ne 0 ]; then
+      log "rotacao pasta=$(basename "${rotacao% *}") codigo=$codigo"
+      codigo_rotacao=$codigo
+    fi
+  done
 else
   log "rotacionar.sh ausente, rotacao pulada"
 fi

@@ -58,10 +58,14 @@ montar_raiz_falsa() {
   local b="$RAIZ_FALSA/infra/backup"
   mkdir -p "$b" "$RAIZ_FALSA/infra/secrets" "$RAIZ_FALSA/infra/data/chaves" "$RAIZ_FALSA/db"
   cp "$TESTES_DIR/../backup.sh" "$TESTES_DIR/../lib.sh" "$TESTES_DIR/../verificar-dump.sh" "$b/"
+  # Interface da Task 3: rotacionar.sh <pasta absoluta que existe> <inteiro >= 1>.
   cat >"$b/rotacionar.sh" <<EOF
 #!/usr/bin/env bash
+printf '%s\n' "\$*" >>"$MARCAS/rotacionar.chamadas"
+[ "\$#" -eq 2 ] && [[ "\$1" == /* ]] && [ -d "\$1" ] && [[ "\$2" =~ ^[1-9][0-9]*\$ ]] \
+  || { echo "rotacionar falso: argumentos invalidos [\$*]" >&2; exit 1; }
 touch "$MARCAS/rotacionar"
-rm -f "\$GF_BACKUP_DIR/diario/sentinela"
+rm -f "\$1/sentinela"
 EOF
   cat >"$b/enviar.sh" <<EOF
 #!/usr/bin/env bash
@@ -129,14 +133,14 @@ EOF
 # ---------------------------------------------------------------- backup.sh
 
 gera_pacote_decifravel() {
-  local dir="$T/b-decifravel" lista total max_seq linha arquivo hash
+  local dir="$T/b-decifravel" lista total max_seq arquivo
   rodar_backup "$dir" --data 2026-11-10 || { mostrar_stderr; return 1; }
   lista="$(age -d -i "$CHAVE" "$dir/diario/gestor-2026-11-10.tar.age" | tar -tf -)" || return 1
-  for arquivo in gestor.dump MANIFESTO cadeia.txt secrets/pg_superusuario secrets/gf_chave_servico chaves/dek.servico; do
+  for arquivo in gestor.dump MANIFESTO SHA256SUMS cadeia.txt secrets/pg_superusuario secrets/gf_chave_servico chaves/dek.servico; do
     grep -qx "$arquivo" <<<"$lista" || { echo "  falta $arquivo no pacote"; return 1; }
   done
   ! grep -q "README.md" <<<"$lista" || { echo "  README.md entrou no pacote"; return 1; }
-  # MANIFESTO: contagens da fonte e sha256 de cada arquivo conferem.
+  # MANIFESTO: só chave=valor, com as contagens da fonte; os hashes ficam no SHA256SUMS.
   abrir_pacote "$dir/diario/gestor-2026-11-10.tar.age" "$T/aberto"
   read -r total max_seq _ <<<"$(contagens_fonte)"
   grep -qx "eventos_total=$total" "$T/aberto/MANIFESTO" || return 1
@@ -144,16 +148,34 @@ gera_pacote_decifravel() {
   grep -Eqx "ultima_migracao=V[0-9]{4}" "$T/aberto/MANIFESTO" || return 1
   grep -Eqx "pg_versao=17\..*" "$T/aberto/MANIFESTO" || return 1
   grep -Eqx "criado_em=.+" "$T/aberto/MANIFESTO" || return 1
-  [ "$(grep -c '^sha256 ' "$T/aberto/MANIFESTO")" -eq 5 ] || { echo "  esperava 5 linhas sha256"; return 1; }
-  while read -r linha hash arquivo; do
-    [ "$linha" = sha256 ] || continue
-    [ "$(sha256sum "$T/aberto/$arquivo" | cut -d' ' -f1)" = "$hash" ] || { echo "  sha256 $arquivo"; return 1; }
-  done <"$T/aberto/MANIFESTO"
+  ! grep -Evq '^[a-z_]+=' "$T/aberto/MANIFESTO" || { echo "  MANIFESTO com linha fora de chave=valor"; return 1; }
   # Terça-feira: nada em semanal/; enviar.sh chamado com pacote, tipo e cadeia.
   [ -z "$(ls -A "$dir/semanal" 2>/dev/null)" ] || return 1
   [ "$(cat "$MARCAS/enviar.args")" = "$dir/diario/gestor-2026-11-10.tar.age"$'\n'diario$'\n'"$dir/cadeia/cadeia-2026-11-10.txt" ] \
     || { echo "  args do enviar [$(tr '\n' ' ' <"$MARCAS/enviar.args")]"; return 1; }
-  [ -f "$MARCAS/rotacionar" ]
+  # Dia de semana: só a rotação dos diários.
+  [ "$(cat "$MARCAS/rotacionar.chamadas" 2>/dev/null)" = "$dir/diario 7" ] \
+    || { echo "  chamadas do rotacionar [$(tr '\n' ';' <"$MARCAS/rotacionar.chamadas" 2>/dev/null)]"; return 1; }
+}
+
+# SHA256SUMS no formato do sha256sum, cobrindo todo o resto do pacote; sha256sum -c confere,
+# e um byte trocado no dump faz falhar.
+sha256sums_confere() {
+  local dir="$T/b-sha256sums" esperado
+  rodar_backup "$dir" --data 2026-11-10 || { mostrar_stderr; return 1; }
+  abrir_pacote "$dir/diario/gestor-2026-11-10.tar.age" "$T/aberto"
+  [ -f "$T/aberto/SHA256SUMS" ] || { echo "  sem SHA256SUMS"; return 1; }
+  ! grep -Evq '^[0-9a-f]{64}  [^ ].*$' "$T/aberto/SHA256SUMS" || { echo "  formato fora do sha256sum"; return 1; }
+  esperado="$(printf '%s\n' MANIFESTO cadeia.txt chaves/dek.servico gestor.dump \
+    secrets/gf_chave_servico secrets/pg_superusuario | LC_ALL=C sort)"
+  [ "$(cut -c67- "$T/aberto/SHA256SUMS" | LC_ALL=C sort)" = "$esperado" ] \
+    || { echo "  cobertura [$(cut -c67- "$T/aberto/SHA256SUMS" | tr '\n' ' ')]"; return 1; }
+  ( cd "$T/aberto" && sha256sum --quiet -c SHA256SUMS ) || { echo "  sha256sum -c falhou no pacote íntegro"; return 1; }
+  # Um byte trocado no meio do dump.
+  printf '\xff' | dd of="$T/aberto/gestor.dump" bs=1 seek=100 conv=notrunc status=none
+  if ( cd "$T/aberto" && sha256sum --quiet -c SHA256SUMS >/dev/null 2>&1 ); then
+    echo "  sha256sum -c passou com o dump adulterado"; return 1
+  fi
 }
 
 nada_em_claro_sobra() {
@@ -204,6 +226,10 @@ domingo_vai_para_semanal() {
   [ "$(stat -c %i "$dir/semanal/gestor-2026-11-08.tar.age")" = "$(stat -c %i "$dir/diario/gestor-2026-11-08.tar.age")" ] \
     || return 1
   [ "$(sed -n 2p "$MARCAS/enviar.args")" = semanal ] || return 1
+  # Domingo: diários (7) e semanais (4).
+  [ "$(cat "$MARCAS/rotacionar.chamadas" 2>/dev/null)" = "$dir/diario 7"$'\n'"$dir/semanal 4" ] \
+    || { echo "  chamadas do rotacionar [$(tr '\n' ';' <"$MARCAS/rotacionar.chamadas" 2>/dev/null)]"; return 1; }
+  rm -f "$MARCAS/rotacionar.chamadas"
   # Rodar de novo no domingo: o link passa a apontar para o pacote novo.
   rodar_backup "$dir" --data 2026-11-08 || { mostrar_stderr; return 1; }
   [ "$(stat -c %i "$dir/semanal/gestor-2026-11-08.tar.age")" = "$(stat -c %i "$dir/diario/gestor-2026-11-08.tar.age")" ] \
@@ -261,6 +287,127 @@ EOF
   [ -s "$MARCAS/docker.env" ] || { echo "  shim do docker não foi chamado"; return 1; }
   ! grep -q "segredo-teste" "$MARCAS/docker.env" "$MARCAS/enviar.env" || { echo "  token vazou"; return 1; }
   ! grep -q "segredo-teste" "$T/stderr"
+}
+
+# Falha no meio do pacote (Review Focus): um shim no PATH no lugar de <ferramenta>.
+# Antes, um backup bom do dia anterior; ele tem que continuar intacto.
+falha_no_meio() {
+  local ferramenta="$1" corpo="$2" dir="$3" shims="$T/shims-$1" antes codigo=0
+  rodar_backup "$dir" --data 2026-11-09 || { mostrar_stderr; return 1; }
+  antes="$(sha256sum "$dir/diario/gestor-2026-11-09.tar.age" | cut -d' ' -f1)"
+  rm -f "$MARCAS/rotacionar" "$MARCAS/rotacionar.chamadas" "$MARCAS/enviar.args"
+  mkdir -p "$shims"
+  printf '#!/usr/bin/env bash\n%s\n' "$corpo" >"$shims/$ferramenta"
+  chmod 700 "$shims/$ferramenta"
+  PATH="$shims:$PATH" GF_BACKUP_DIR="$dir" GF_BACKUP_DESTINATARIOS="$DESTINATARIOS" PG_CONTAINER="$FONTE_CONTAINER" \
+    GF_TMP="$TMP_RUN" "$RAIZ_FALSA/infra/backup/backup.sh" --data 2026-11-10 2>"$T/stderr" || codigo=$?
+  [ "$codigo" -ne 0 ] || { echo "  backup saiu com 0"; return 1; }
+  grep -q "^FALHA tar|age codigo=" "$T/stderr" || { mostrar_stderr; return 1; }
+  { [ ! -e "$dir/diario/gestor-2026-11-10.tar.age" ] && [ ! -e "$dir/cadeia/cadeia-2026-11-10.txt" ]; } \
+    || { echo "  ficou pacote ou cadeia do dia"; return 1; }
+  [ -z "$(find "$dir" -name '*.parcial' -print)" ] || { echo "  sobrou .parcial: $(find "$dir" -name '*.parcial')"; return 1; }
+  [ -z "$(find "$dir" \( -name '*.dump' -o -name '*.tar' -o -name 'MANIFESTO' -o -name 'cadeia.txt' \) -print)" ] \
+    || { echo "  sobrou em claro em GF_BACKUP_DIR"; return 1; }
+  [ -z "$(ls -A "$TMP_RUN")" ] || { echo "  GF_TMP não ficou vazio"; return 1; }
+  [ "$(sha256sum "$dir/diario/gestor-2026-11-09.tar.age" | cut -d' ' -f1)" = "$antes" ] \
+    || { echo "  pacote do dia anterior mudou"; return 1; }
+  { [ ! -e "$MARCAS/rotacionar" ] && [ ! -e "$MARCAS/enviar.args" ]; } || { echo "  rotação ou envio rodou"; return 1; }
+}
+
+age_falha_no_meio() {
+  # Lê a entrada, escreve parte de uma saída age no -o e sai com erro (como disco cheio).
+  # shellcheck disable=SC2016  # é o corpo do script falso, expandido só quando ele roda
+  falha_no_meio age 'saida=""; while [ "$#" -gt 0 ]; do [ "$1" = -o ] && saida="$2"; shift; done
+cat >/dev/null; printf "age-encryption.org/v1\n-> X25519 parcial" >"$saida"; exit 1' "$T/b-age-falha"
+}
+
+tar_falha_no_meio() {
+  falha_no_meio tar 'printf "tar parcial"; exit 2' "$T/b-tar-falha"
+}
+
+# GF_TMP é obrigatório: sem ele, vazio ou relativo, o backup sai antes do dump, e nada vai
+# para TMPDIR ou /tmp. Uso: rodar_sem_gf_tmp <dir> <modo: ausente|vazio|relativo>.
+rodar_sem_gf_tmp() {
+  local dir="$1" modo="$2" tmpdir="$T/tmpdir-$2" cwd="$T/cwd-tmp-$2" codigo=0
+  local -a gf_tmp=()
+  rm -rf "$tmpdir" "$cwd"; mkdir "$tmpdir" "$cwd"
+  case "$modo" in
+    ausente)  gf_tmp=(-u GF_TMP) ;;
+    vazio)    gf_tmp=(GF_TMP=) ;;
+    relativo) gf_tmp=(GF_TMP=tmp-relativo) ;;
+  esac
+  ( cd "$cwd" && env "${gf_tmp[@]}" TMPDIR="$tmpdir" GF_BACKUP_DIR="$dir" GF_BACKUP_DESTINATARIOS="$DESTINATARIOS" \
+      PG_CONTAINER="$FONTE_CONTAINER" "$RAIZ_FALSA/infra/backup/backup.sh" --data 2026-11-10 2>"$T/stderr" ) || codigo=$?
+  [ "$codigo" -ne 0 ] || { echo "  saiu com 0 ($modo)"; return 1; }
+  grep -qx "FALHA GF_TMP obrigatorio" "$T/stderr" || { mostrar_stderr; return 1; }
+  ! grep -q "dump:" "$T/stderr" || { echo "  fez o dump ($modo)"; return 1; }
+  { [ -z "$(ls -A "$tmpdir")" ] && [ -z "$(ls -A "$cwd")" ] && [ ! -e "$dir" ]; } \
+    || { echo "  criou arquivo ($modo)"; return 1; }
+}
+
+gf_tmp_obrigatorio() {
+  rodar_sem_gf_tmp "$T/b-tmp-ausente" ausente \
+    && rodar_sem_gf_tmp "$T/b-tmp-vazio" vazio \
+    && rodar_sem_gf_tmp "$T/b-tmp-relativo" relativo
+}
+
+# GF_BACKUP_DIR vazio no ambiente (tem precedência sobre o .env) ou relativo no .env: sai
+# antes de criar qualquer coisa. Roda de dentro de uma pasta vazia para ver se algo nasce ali.
+backup_dir_vazio_no_ambiente_recusa() {
+  local cwd="$T/cwd-vazio" codigo=0
+  rm -rf "$cwd"; mkdir "$cwd"
+  ( cd "$cwd" && GF_BACKUP_DIR="" GF_BACKUP_DESTINATARIOS="$DESTINATARIOS" PG_CONTAINER="$FONTE_CONTAINER" \
+      GF_TMP="$TMP_RUN" "$RAIZ_FALSA/infra/backup/backup.sh" --data 2026-11-10 2>"$T/stderr" ) || codigo=$?
+  [ "$codigo" -ne 0 ] || return 1
+  grep -qx "FALHA GF_BACKUP_DIR precisa ser caminho absoluto" "$T/stderr" || { mostrar_stderr; return 1; }
+  [ -z "$(ls -A "$cwd")" ] && [ -z "$(ls -A "$TMP_RUN")" ] && [ ! -e /diario ]
+}
+
+backup_dir_relativo_no_env_recusa() {
+  local cwd="$T/cwd-relativo" codigo=0
+  rm -rf "$cwd"; mkdir "$cwd"
+  printf 'DUCKDNS_TOKEN=segredo-teste\nGF_BACKUP_DIR=backups/gestor\n' >"$RAIZ_FALSA/infra/.env"
+  ( cd "$cwd" && env -u GF_BACKUP_DIR GF_BACKUP_DESTINATARIOS="$DESTINATARIOS" PG_CONTAINER="$FONTE_CONTAINER" \
+      GF_TMP="$TMP_RUN" "$RAIZ_FALSA/infra/backup/backup.sh" --data 2026-11-10 2>"$T/stderr" ) || codigo=$?
+  printf 'DUCKDNS_TOKEN=segredo-teste\n' >"$RAIZ_FALSA/infra/.env"
+  [ "$codigo" -ne 0 ] || return 1
+  grep -qx "FALHA GF_BACKUP_DIR precisa ser caminho absoluto" "$T/stderr" || { mostrar_stderr; return 1; }
+  [ -z "$(ls -A "$cwd")" ] && [ -z "$(ls -A "$TMP_RUN")" ]
+}
+
+# Duas execuções ao mesmo tempo. Um age falso segura a primeira com o .parcial já escrito
+# até a segunda terminar; sem isso a segunda quase sempre chegaria antes de existir .parcial.
+duas_execucoes_ao_mesmo_tempo() {
+  local dir="$T/b-concorrente" shims="$T/shims-age" age_real pid codigo1=0 codigo2=0
+  age_real="$(command -v age)"
+  mkdir -p "$shims"
+  cat >"$shims/age" <<EOF
+#!/usr/bin/env bash
+"$age_real" "\$@" || exit \$?
+touch "$MARCAS/age.escreveu"
+for _ in \$(seq 1 600); do [ -e "$MARCAS/age.liberar" ] && exit 0; sleep 0.1; done
+exit 1
+EOF
+  chmod 700 "$shims/age"
+  mkdir -p "$T/tmp-run-2"
+  PATH="$shims:$PATH" GF_BACKUP_DIR="$dir" GF_BACKUP_DESTINATARIOS="$DESTINATARIOS" PG_CONTAINER="$FONTE_CONTAINER" \
+    GF_TMP="$TMP_RUN" "$RAIZ_FALSA/infra/backup/backup.sh" --data 2026-11-10 2>"$T/stderr-1" &
+  pid=$!
+  for _ in $(seq 1 600); do [ -e "$MARCAS/age.escreveu" ] && break; sleep 0.1; done
+  [ -e "$MARCAS/age.escreveu" ] || { echo "  primeira execução não chegou ao age"; touch "$MARCAS/age.liberar"; wait "$pid" || true; return 1; }
+  [ -e "$dir/diario/.gestor-2026-11-10.parcial" ] || { echo "  sem .parcial durante o age"; touch "$MARCAS/age.liberar"; wait "$pid" || true; return 1; }
+  GF_BACKUP_DIR="$dir" GF_BACKUP_DESTINATARIOS="$DESTINATARIOS" PG_CONTAINER="$FONTE_CONTAINER" \
+    GF_TMP="$T/tmp-run-2" "$RAIZ_FALSA/infra/backup/backup.sh" --data 2026-11-10 2>"$T/stderr" || codigo2=$?
+  local parcial_sobreviveu=0
+  [ -e "$dir/diario/.gestor-2026-11-10.parcial" ] && parcial_sobreviveu=1
+  touch "$MARCAS/age.liberar"
+  wait "$pid" || codigo1=$?
+  { [ "$codigo2" -ne 0 ] && grep -q "^FALHA outro backup em andamento" "$T/stderr"; } \
+    || { echo "  segunda execução: código $codigo2"; mostrar_stderr; return 1; }
+  [ -z "$(ls -A "$T/tmp-run-2")" ] || { echo "  segunda execução criou arquivo em GF_TMP"; return 1; }
+  [ "$parcial_sobreviveu" -eq 1 ] || { echo "  segunda execução apagou o .parcial da primeira"; return 1; }
+  [ "$codigo1" -eq 0 ] || { echo "  primeira execução: código $codigo1"; sed 's/^/  | /' "$T/stderr-1"; return 1; }
+  abrir_pacote "$dir/diario/gestor-2026-11-10.tar.age" "$T/aberto" && [ -s "$T/aberto/gestor.dump" ]
 }
 
 ancora_ok_com_eventos_novos() {
@@ -341,6 +488,7 @@ montar_raiz_falsa
 fonte_subir
 
 caso gera_pacote_decifravel
+caso sha256sums_confere
 caso nada_em_claro_sobra
 caso recusa_chave_privada
 caso recusa_destinatarios_sem_age1
@@ -350,6 +498,12 @@ caso mesmo_dia_substitui
 caso cadeia_dentro_e_fora
 caso codigo_do_enviar_e_o_do_backup
 caso le_so_chaves_do_env
+caso gf_tmp_obrigatorio
+caso age_falha_no_meio
+caso tar_falha_no_meio
+caso backup_dir_vazio_no_ambiente_recusa
+caso backup_dir_relativo_no_env_recusa
+caso duas_execucoes_ao_mesmo_tempo
 caso ancora_ok_com_eventos_novos
 caso ancora_quebrada_falha
 caso dump_reprovado_nao_gera_pacote
