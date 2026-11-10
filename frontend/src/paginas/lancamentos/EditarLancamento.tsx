@@ -54,6 +54,7 @@ export function EditarLancamento({ lancamento: l, categorias, aoFechar }: Props)
       await Promise.all([
         consultas.invalidateQueries({ queryKey: ["lancamentos"] }),
         consultas.invalidateQueries({ queryKey: ["saldos"] }),
+        consultas.invalidateQueries({ queryKey: ["visao-geral"] }),
       ]);
       aoFechar();
     } catch (e) {

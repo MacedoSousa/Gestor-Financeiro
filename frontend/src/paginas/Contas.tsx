@@ -169,7 +169,7 @@ export function Contas() {
       setAviso(editando ? "Conta atualizada." : "Conta criada.");
       setEditando(null);
       setForm(novoFormulario(false));
-      await Promise.all(["contas", "saldos", "lancamentos"].map((k) => consultas.invalidateQueries({ queryKey: [k] })));
+      await Promise.all(["contas", "saldos", "lancamentos", "visao-geral"].map((k) => consultas.invalidateQueries({ queryKey: [k] })));
     } catch (err) {
       if (err instanceof ErroDeApi && err.status === 401) void consultas.invalidateQueries({ queryKey: ["eu"] });
       falhar(err instanceof ErroDeApi ? err.message : "Não foi possível salvar. Tente de novo.");

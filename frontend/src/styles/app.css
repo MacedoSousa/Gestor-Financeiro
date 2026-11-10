@@ -1215,3 +1215,157 @@ select.entrada {
   justify-content: space-between;
   gap: 8px;
 }
+
+/* Visão geral */
+.tom-alerta {
+  color: var(--alerta);
+}
+
+.tom-positivo {
+  color: var(--positivo);
+}
+
+.painel-linha {
+  display: grid;
+  gap: 16px;
+  align-items: start;
+}
+
+.painel-linha > * {
+  min-width: 0;
+}
+
+.painel-linha-1 {
+  grid-template-columns: 2fr 1fr;
+}
+
+.painel-linha-2 {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+@media (max-width: 900px) {
+  .painel-linha-1,
+  .painel-linha-2 {
+    grid-template-columns: 1fr;
+  }
+}
+
+.lista-painel,
+.lista-nota {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.lista-nota {
+  gap: 2px;
+}
+
+.lista-painel li {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.linha-painel {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.faixa-aviso {
+  margin: 0;
+  padding: 12px 16px;
+  border-radius: var(--raio-sm);
+  background: var(--alerta-fundo);
+  color: var(--alerta);
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.erro-secao {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--texto-suave);
+}
+
+.erro-pagina {
+  padding: 20px;
+  border: 1px solid var(--borda);
+  border-radius: var(--raio);
+  background: var(--superficie);
+}
+
+.esqueleto {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.esqueleto span {
+  display: block;
+  height: 14px;
+  border-radius: 6px;
+  background: var(--superficie-2);
+}
+
+.esqueleto span:first-child {
+  width: 40%;
+}
+
+.grafico {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.grafico-eixo {
+  stroke: var(--borda);
+  stroke-width: 1;
+}
+
+.grafico-linha {
+  fill: none;
+  stroke: var(--destaque);
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+
+.grafico-area {
+  fill: var(--destaque);
+  fill-opacity: 0.12;
+  stroke: none;
+}
+
+.grafico-ponto {
+  fill: var(--destaque);
+}
+
+.grafico-rotulo {
+  fill: var(--texto-suave);
+  font-size: 11px;
+}
+
+.valores-por-mes summary {
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--destaque-claro);
+}
+
+.dialogo-largo {
+  width: min(520px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+}

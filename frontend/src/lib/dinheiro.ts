@@ -5,6 +5,15 @@ export function formatarReais(centavos: number): string {
   return reais.format(centavos / 100);
 }
 
+const reaisInteiros = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
+const inteiros = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 0 });
+
+/** Reais sem centavos, truncando para zero: 249999 → "R$ 2.499", nunca "R$ 2.500". Só exibição. */
+export function formatarReaisInteiros(centavos: number, opcoes: { simbolo?: boolean } = {}): string {
+  const inteiro = Math.trunc(centavos / 100) || 0;
+  return (opcoes.simbolo === false ? inteiros : reaisInteiros).format(inteiro);
+}
+
 /**
  * Texto digitado (formato brasileiro) para centavos. Aceita "142,50", "1.234,56", "R$ 23" e "23.90".
  * Ponto com 1 ou 2 casas no fim é decimal; com grupos de 3 dígitos é milhar. Vazio, negativo ou ambíguo → null.
