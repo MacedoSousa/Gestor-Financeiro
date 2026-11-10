@@ -8,7 +8,7 @@ set -uo pipefail
 cd "$(git rev-parse --show-toplevel)" || exit 1
 
 if [ "${1:-}" = "--tudo" ]; then
-  mudou=$'backend/\nfrontend/\n'
+  mudou=$'backend/\nfrontend/\nscripts/\n'
 else
   mudou="$( { git diff --name-only HEAD 2>/dev/null; git ls-files --others --exclude-standard; } | sort -u)"
 fi
