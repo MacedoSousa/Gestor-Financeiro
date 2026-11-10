@@ -32,6 +32,7 @@ public static class LancamentosModule
         services.AddScoped<IConsultaDeSaldos>(sp => sp.GetRequiredService<ConsultaDeSaldosPorConta>());
         services.AddScoped<ConsultaDeSaldos>();
         services.AddScoped<ConsultaDoExtrato>();
+        services.AddScoped<IConsultaDoExtrato>(sp => sp.GetRequiredService<ConsultaDoExtrato>());
         services.AddScoped<ServicoDeLancamentos>();
         services.AddScoped<ServicoDeTransferencias>();
         services.AddScoped<ServicoDeConciliacao>();

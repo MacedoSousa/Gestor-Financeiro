@@ -132,3 +132,10 @@ public interface IConsultaDeFaturas
     /// <summary>Todos os cartões do casal, inclusive arquivados e sem restante; quem decide o que mostrar é o chamador.</summary>
     Task<IReadOnlyList<FaturasDoCartao>> AVencerAsync(CancellationToken ct = default);
 }
+
+/// <summary>Últimos lançamentos do casal, para outros módulos.</summary>
+public interface IConsultaDoExtrato
+{
+    /// <summary>Os <paramref name="quantos"/> mais recentes por data e depois Id, decrescentes; data futura (parcela) não entra.</summary>
+    Task<IReadOnlyList<LancamentoDto>> UltimosAsync(int quantos, CancellationToken ct = default);
+}
