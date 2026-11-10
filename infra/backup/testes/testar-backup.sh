@@ -133,14 +133,14 @@ EOF
 # ---------------------------------------------------------------- backup.sh
 
 gera_pacote_decifravel() {
-  local dir="$T/b-decifravel" lista total max_seq linha arquivo hash
+  local dir="$T/b-decifravel" lista total max_seq arquivo
   rodar_backup "$dir" --data 2026-11-10 || { mostrar_stderr; return 1; }
   lista="$(age -d -i "$CHAVE" "$dir/diario/gestor-2026-11-10.tar.age" | tar -tf -)" || return 1
-  for arquivo in gestor.dump MANIFESTO cadeia.txt secrets/pg_superusuario secrets/gf_chave_servico chaves/dek.servico; do
+  for arquivo in gestor.dump MANIFESTO SHA256SUMS cadeia.txt secrets/pg_superusuario secrets/gf_chave_servico chaves/dek.servico; do
     grep -qx "$arquivo" <<<"$lista" || { echo "  falta $arquivo no pacote"; return 1; }
   done
   ! grep -q "README.md" <<<"$lista" || { echo "  README.md entrou no pacote"; return 1; }
-  # MANIFESTO: contagens da fonte e sha256 de cada arquivo conferem.
+  # MANIFESTO: só chave=valor, com as contagens da fonte; os hashes ficam no SHA256SUMS.
   abrir_pacote "$dir/diario/gestor-2026-11-10.tar.age" "$T/aberto"
   read -r total max_seq _ <<<"$(contagens_fonte)"
   grep -qx "eventos_total=$total" "$T/aberto/MANIFESTO" || return 1
@@ -148,11 +148,7 @@ gera_pacote_decifravel() {
   grep -Eqx "ultima_migracao=V[0-9]{4}" "$T/aberto/MANIFESTO" || return 1
   grep -Eqx "pg_versao=17\..*" "$T/aberto/MANIFESTO" || return 1
   grep -Eqx "criado_em=.+" "$T/aberto/MANIFESTO" || return 1
-  [ "$(grep -c '^sha256 ' "$T/aberto/MANIFESTO")" -eq 5 ] || { echo "  esperava 5 linhas sha256"; return 1; }
-  while read -r linha hash arquivo; do
-    [ "$linha" = sha256 ] || continue
-    [ "$(sha256sum "$T/aberto/$arquivo" | cut -d' ' -f1)" = "$hash" ] || { echo "  sha256 $arquivo"; return 1; }
-  done <"$T/aberto/MANIFESTO"
+  ! grep -Evq '^[a-z_]+=' "$T/aberto/MANIFESTO" || { echo "  MANIFESTO com linha fora de chave=valor"; return 1; }
   # Terça-feira: nada em semanal/; enviar.sh chamado com pacote, tipo e cadeia.
   [ -z "$(ls -A "$dir/semanal" 2>/dev/null)" ] || return 1
   [ "$(cat "$MARCAS/enviar.args")" = "$dir/diario/gestor-2026-11-10.tar.age"$'\n'diario$'\n'"$dir/cadeia/cadeia-2026-11-10.txt" ] \
@@ -160,6 +156,26 @@ gera_pacote_decifravel() {
   # Dia de semana: só a rotação dos diários.
   [ "$(cat "$MARCAS/rotacionar.chamadas" 2>/dev/null)" = "$dir/diario 7" ] \
     || { echo "  chamadas do rotacionar [$(tr '\n' ';' <"$MARCAS/rotacionar.chamadas" 2>/dev/null)]"; return 1; }
+}
+
+# SHA256SUMS no formato do sha256sum, cobrindo todo o resto do pacote; sha256sum -c confere,
+# e um byte trocado no dump faz falhar.
+sha256sums_confere() {
+  local dir="$T/b-sha256sums" esperado
+  rodar_backup "$dir" --data 2026-11-10 || { mostrar_stderr; return 1; }
+  abrir_pacote "$dir/diario/gestor-2026-11-10.tar.age" "$T/aberto"
+  [ -f "$T/aberto/SHA256SUMS" ] || { echo "  sem SHA256SUMS"; return 1; }
+  ! grep -Evq '^[0-9a-f]{64}  [^ ].*$' "$T/aberto/SHA256SUMS" || { echo "  formato fora do sha256sum"; return 1; }
+  esperado="$(printf '%s\n' MANIFESTO cadeia.txt chaves/dek.servico gestor.dump \
+    secrets/gf_chave_servico secrets/pg_superusuario | LC_ALL=C sort)"
+  [ "$(cut -c67- "$T/aberto/SHA256SUMS" | LC_ALL=C sort)" = "$esperado" ] \
+    || { echo "  cobertura [$(cut -c67- "$T/aberto/SHA256SUMS" | tr '\n' ' ')]"; return 1; }
+  ( cd "$T/aberto" && sha256sum --quiet -c SHA256SUMS ) || { echo "  sha256sum -c falhou no pacote íntegro"; return 1; }
+  # Um byte trocado no meio do dump.
+  printf '\xff' | dd of="$T/aberto/gestor.dump" bs=1 seek=100 conv=notrunc status=none
+  if ( cd "$T/aberto" && sha256sum --quiet -c SHA256SUMS >/dev/null 2>&1 ); then
+    echo "  sha256sum -c passou com o dump adulterado"; return 1
+  fi
 }
 
 nada_em_claro_sobra() {
@@ -471,6 +487,7 @@ montar_raiz_falsa
 fonte_subir
 
 caso gera_pacote_decifravel
+caso sha256sums_confere
 caso nada_em_claro_sobra
 caso recusa_chave_privada
 caso recusa_destinatarios_sem_age1

@@ -160,15 +160,19 @@ membros+=(chaves/dek.servico)
   echo "ultima_migracao=$ultima_migracao"
   echo "eventos_total=$eventos_total"
   echo "eventos_max_seq=$eventos_max_seq"
-  for arquivo in "${membros[@]}"; do
-    echo "sha256 $(sha256sum "$conteudo/$arquivo" | cut -d' ' -f1) $arquivo"
-  done
 } >"$conteudo/MANIFESTO"
-log "manifesto: eventos_total=$eventos_total eventos_max_seq=$eventos_max_seq arquivos=${#membros[@]}"
+membros+=(MANIFESTO)
+
+# SHA256SUMS no formato do sha256sum ("<hash>  <arquivo>"), com caminhos relativos à raiz do
+# tar: a restauração confere com "sha256sum -c SHA256SUMS" depois de extrair.
+codigo=0
+( cd "$conteudo" && sha256sum -- "${membros[@]}" ) >"$conteudo/SHA256SUMS" || codigo=$?
+[ "$codigo" -eq 0 ] || falhar "sha256sum codigo=$codigo"
+log "manifesto: eventos_total=$eventos_total eventos_max_seq=$eventos_max_seq sha256sums=${#membros[@]}"
 
 # ---------------------------------------------------------------- 5/6. pacote cifrado
 codigo=0
-tar -C "$conteudo" --owner=0 --group=0 --numeric-owner -cf - MANIFESTO "${membros[@]}" \
+tar -C "$conteudo" --owner=0 --group=0 --numeric-owner -cf - SHA256SUMS "${membros[@]}" \
   | age -R "$destinatarios" -o "$parcial" || codigo=$?
 [ "$codigo" -eq 0 ] || falhar "tar|age codigo=$codigo"
 sync -f "$parcial" 2>/dev/null || true
