@@ -70,7 +70,7 @@ O sistema sobe sozinho quando o PC liga:
 | Fase | Entrega | Situação |
 | --- | --- | --- |
 | 0 · Fundação | Repo, CI, cofre, soft delete, auditoria | Concluída |
-| 1 · Controle manual | Cadastro, login, contas, lançamentos, orçamento, metas, dashboard | Faltam metas e dashboard |
+| 1 · Controle manual | Cadastro, login, contas, lançamentos, orçamento, metas, dashboard | Código concluído; fecha após um mês real conferido com o extrato do Itaú |
 | 2 · Open Finance | Meu Pluggy, webhook, conciliação | — |
 | 3 · WhatsApp | Gateway, parser, comprovantes na GPU | — |
 | 4 · Assistente | FinanceEngine, Gemini, relatório mensal | — |
