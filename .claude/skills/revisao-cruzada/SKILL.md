@@ -5,7 +5,7 @@ description: Use ao terminar uma tarefa do plano, antes de abrir PR, ou quando e
 
 # Revisão cruzada com o Antigravity
 
-O Claude Code implementa; o Antigravity revisa com outro modelo e testa no navegador (ADR-0012, `AGENTS.md`). Modelos diferentes erram em lugares diferentes: a revisão do outro vale mais que a sua própria.
+O Claude Code implementa; o Antigravity revisa com outro modelo e testa no navegador (ADR-012, `AGENTS.md`). Modelos diferentes erram em lugares diferentes: a revisão do outro vale mais que a sua própria.
 
 ## Pedir a revisão
 
@@ -24,7 +24,8 @@ Use também a skill `superpowers:receiving-code-review`. Para cada achado, em or
 2. **Decida** e escreva na seção "Resposta do Claude" do arquivo, na linha do achado:
    - `Corrigido em <hash>` — com teste novo que falhava antes;
    - `Discordo: <motivo técnico, citando regra, spec ou teste>`;
-   - `Fora do escopo: <para onde vai>` (SPEC, "Próximas tarefas").
+   - `Fora do escopo: <para onde vai>` (SPEC, "Próximas tarefas");
+   - `Para o CEO` — quando o achado questiona a spec, uma regra ou uma decisão. Copie-o para a seção "Para o CEO" e não resolva sozinho.
 3. Não apague nem reescreva o texto do revisor.
 
 Todo achado **Bloqueia** precisa de `Corrigido` ou de uma discordância que a pessoa aceite. Depois, `scripts/verificar.sh` de novo e um resumo de uma linha por achado para a pessoa.

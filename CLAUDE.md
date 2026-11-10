@@ -33,7 +33,7 @@ Sistema financeiro pessoal de um casal, rodando num PC de casa. Dados reais de b
 - Mudança em mais de um módulo: proponha o plano antes (plan mode).
 - Dados de teste são sempre sintéticos. CPFs de teste: use geradores válidos, nunca um CPF real.
 - Antes de concluir, rode o teste de arquitetura; o hook `Stop` roda `scripts/verificar.sh` e bloqueia se falhar.
-- Estas regras valem para todo agente, não só para o Claude. O Antigravity revisa e testa no navegador; o Claude implementa (ADR-012, `AGENTS.md`). Ao terminar uma tarefa, use a skill `revisao-cruzada`; nunca `git commit --no-verify`.
+- Estas regras valem para todo agente, não só para o Claude. Papéis (ADR-012, `AGENTS.md`): o CEO (claude.ai) decide e escreve specs; o Claude Code implementa; o Antigravity faz QA e documentação. Siga a ordem de serviço do CEO; o que questiona a spec sobe para ele. Melhoria visual: skill `melhorar-tela`. Ao terminar uma tarefa, use a skill `revisao-cruzada`; nunca `git commit --no-verify`.
 
 ## Onde está cada coisa
 

@@ -1,6 +1,6 @@
 # Agentes neste repositório
 
-Dois agentes trabalham aqui, com papéis diferentes e **as mesmas regras**. A fonte das regras é uma só:
+Três papéis trabalham aqui (CEO, Dev e QA), com **as mesmas regras**. A fonte das regras é uma só:
 
 1. [`CLAUDE.md`](CLAUDE.md) — regras que não se negociam e comandos. Vale para qualquer agente, não só para o Claude.
 2. [`.claude/rules/backend.md`](.claude/rules/backend.md) e [`.claude/rules/frontend.md`](.claude/rules/frontend.md) — regras por pasta.
@@ -8,15 +8,16 @@ Dois agentes trabalham aqui, com papéis diferentes e **as mesmas regras**. A fo
 
 Nenhum arquivo de regra de agente (este, `.agent/rules/`) repete regra: só aponta para os de cima.
 
-## Papéis (ADR-0012)
+## Papéis (ADR-012)
 
-| Agente | Faz | Não faz |
-| --- | --- | --- |
-| **Claude Code** | Spec, plano, implementação com TDD, commits | Revisar o próprio código como revisão final |
-| **Antigravity** | Revisão cruzada de diffs (modelo Gemini), teste no navegador contra `docs/design/`, leitura do repositório inteiro | Editar código no mesmo branch enquanto o Claude implementa |
-| **CI** | Decide: guardas, testes, contrato OpenAPI, gitleaks | — |
+| Papel | Quem | Faz | Não faz |
+| --- | --- | --- | --- |
+| **CEO** | Claude no claude.ai | Prioridade, specs, ADRs, regras, ordens de serviço (`docs/desenvolvimento/despacho.md`) | Código |
+| **Dev fullstack sênior** | Claude Code | Plano, implementação com TDD, migrações, respostas às revisões, commits | Aprovar a própria entrega |
+| **QA e documentação** | Antigravity (Gemini) | Revisão, teste no navegador, acessibilidade, textos, documentação do que já existe | Código, regras, specs, ADRs |
+| **Decide** | Pessoa + CI | Aprova spec, plano e PR; CI roda guardas e testes | — |
 
-Um escritor por vez. Agentes em paralelo só em worktrees ou branches separados.
+Skills de cada papel: [`docs/desenvolvimento/papeis-e-skills.md`](docs/desenvolvimento/papeis-e-skills.md). Um escritor por vez em cada branch.
 
 ## Guardas (valem para todos)
 

@@ -18,3 +18,9 @@
 **Guardas:** `scripts/guardas/regras.sh` é a fonte; usam-na `.claude/hooks/bloquear-delete-fisico.sh`, `.githooks/pre-commit` e `scripts/guardas/verificar-repositorio.sh` (CI). A checagem de `UNIQUE` analisa o comando SQL inteiro, não a linha. Testes das guardas em `scripts/guardas/testes.sh`, também no CI. O teste de arquitetura em C# continua valendo como segunda camada.
 
 **O que não muda:** a regra 10 ("Gemini não calcula") é sobre o Gemini **no produto** (Fase 4). Usar o Gemini como revisor de código não envia dado do sistema a ele: no desenvolvimento só existem dados sintéticos.
+
+## Atualização — três papéis
+
+O Claude no claude.ai passa a ser o **CEO** (prioridade, specs, ADRs, regras e ordens de serviço, `docs/desenvolvimento/despacho.md`); o Claude Code é o **Dev fullstack sênior** (plano, código, testes); o Antigravity é **QA e documentação**. A única escrita do QA é documentação do que já existe (`README.md`, `docs/SPEC.md` em "Entregue"/"Próximas tarefas", `docs/desenvolvimento/**`, `docs/guia/**`), em branch `docs/<assunto>` ou com o Dev parado. Regras, decisões e specs continuam com o CEO, para quem decide não ser quem documenta o que decidiu. Mapa de skills: `docs/desenvolvimento/papeis-e-skills.md`.
+
+**Movimento nas telas:** o AnimatedWebs entra só como referência de componentes (`animatedwebs-components`), reescritos em CSS do projeto, sem dependência nova, dentro de "Movimento e AnimatedWebs" em `.claude/rules/frontend.md`. Ficam fora `animatedwebs-site`, `-hero` e `-backgrounds` (mídia externa bloqueada pela CSP; estética de página de marketing) e `-style` (trocar o design system exige ADR próprio).

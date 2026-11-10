@@ -24,6 +24,20 @@ Tela · largura · resultado. Só dados sintéticos; capturas fora do git.
 | # | Gravidade | Tela | Achado | Referência | Resposta do Claude |
 | - | --------- | ---- | ------ | ---------- | ------------------ |
 
+## Acessibilidade
+
+| # | Gravidade | Tela | Achado | Critério WCAG | Resposta do Claude |
+| - | --------- | ---- | ------ | ------------- | ------------------ |
+
+## Textos
+
+| # | Gravidade | Onde | Atual | Proposto | Motivo | Resposta do Claude |
+| - | --------- | ---- | ----- | -------- | ------ | ------------------ |
+
+## Para o CEO
+
+Achados que questionam a spec, uma regra ou uma decisão. O Dev não resolve sozinho.
+
 ## Resumo
 
 <n> bloqueia · <n> importantes · <n> sugestões. O branch <pode | não pode> seguir para PR.

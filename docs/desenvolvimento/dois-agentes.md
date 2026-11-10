@@ -1,6 +1,6 @@
-# Desenvolvimento com Claude Code e Antigravity
+# Desenvolvimento com CEO, Dev e QA
 
-Decisão e motivos: [ADR-012](../adr/0012-dois-agentes.md). Resumo para agentes: [`AGENTS.md`](../../AGENTS.md).
+Decisão e motivos: [ADR-012](../adr/0012-dois-agentes.md). Resumo para agentes: [`AGENTS.md`](../../AGENTS.md). Papéis e skills: [`papeis-e-skills.md`](papeis-e-skills.md). Ordens de serviço: [`despacho.md`](despacho.md).
 
 ## Preparar o clone (uma vez)
 
@@ -26,13 +26,16 @@ Os nomes de menu e de pasta abaixo são da versão em que este guia foi escrito;
 
 | Etapa | Quem | Saída |
 | --- | --- | --- |
-| Spec | Claude (`superpowers:brainstorming`), aprovada pela pessoa | `docs/superpowers/specs/AAAA-MM-DD-<bloco>-design.md` |
-| Leitura crítica da spec | Antigravity (`/revisar` apontando para a spec) | `.revisoes/<branch>.md` |
-| Plano | Claude (`superpowers:writing-plans`) | `docs/superpowers/plans/AAAA-MM-DD-<bloco>.md` |
-| Tarefa *n* | Claude: teste que falha → código → `scripts/verificar.sh` verde → commit | commit no branch `fase-N/<bloco>` |
-| Revisão da tarefa | Antigravity: `/revisar`; se mudou tela, `/testar-no-navegador` | `.revisoes/<branch>.md` |
-| Resposta | Claude: skill `revisao-cruzada` | correções com teste, respostas no arquivo |
+| Spec | CEO (`brainstorming`), aprovada pela pessoa | `docs/superpowers/specs/AAAA-MM-DD-<bloco>-design.md` |
+| Leitura crítica da spec | QA (`/revisar` apontando para a spec) | `.revisoes/<branch>.md` |
+| Plano | Dev (`superpowers:writing-plans`), aprovado pela pessoa | `docs/superpowers/plans/AAAA-MM-DD-<bloco>.md` |
+| Tarefa *n* | Dev: teste que falha → código → `scripts/verificar.sh` verde → commit | commit no branch `fase-N/<bloco>` |
+| Revisão da tarefa | QA: `/revisar`; se mudou tela, `/testar-no-navegador`, `/auditar-acessibilidade`, `/revisar-textos` | `.revisoes/<branch>.md` |
+| Resposta | Dev: skill `revisao-cruzada`; o que questiona a spec sobe ao CEO | correções com teste, respostas no arquivo |
+| Documentação | QA: `/documentar` | SPEC "Entregue", README, `docs/guia/` |
 | PR | pessoa | CI verde (guardas, testes, contrato, gitleaks) |
+
+Quem manda cada passo: o CEO, por ordens de serviço (`despacho.md`). Papéis e skills: `papeis-e-skills.md`.
 
 ## Convenções que os dois seguem
 

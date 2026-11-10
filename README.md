@@ -62,7 +62,7 @@ Testes: `scripts/verificar.sh` roda as guardas e os testes da parte que mudou. S
 
 ## Desenvolvimento com dois agentes
 
-O Claude Code implementa e o Antigravity revisa e testa no navegador, com as mesmas regras (`CLAUDE.md`) e as mesmas guardas (`pre-commit` e CI). Papéis e fluxo: [`AGENTS.md`](AGENTS.md) e [`docs/desenvolvimento/dois-agentes.md`](docs/desenvolvimento/dois-agentes.md) (ADR-012).
+O Claude no claude.ai é o CEO (specs e decisões), o Claude Code implementa e o Antigravity faz QA e documentação, com as mesmas regras (`CLAUDE.md`) e as mesmas guardas (`pre-commit` e CI). Papéis e fluxo: [`AGENTS.md`](AGENTS.md) e [`docs/desenvolvimento/dois-agentes.md`](docs/desenvolvimento/dois-agentes.md) (ADR-012).
 
 ## Sempre ligado (servidor de casa)
 
