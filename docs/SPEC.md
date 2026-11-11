@@ -35,7 +35,7 @@ Um casal (dois CPFs, uma conta conjunta Itaú) vê num só lugar contas, cartõe
 | --- | --- | --- | --- |
 | 0 · Fundação | Repo, CI, migração V0001, cofre, soft delete, auditoria, casca do front | CI verde; `DELETE` falha no banco; cadeia confere | Concluída (PR #1, #2) |
 | 1 · Controle manual | Cadastro, login (passkey/TOTP), contas, lançamentos, orçamento, metas, dashboard | Um mês fechado à mão | Código concluído (PR #10); fecha depois de um mês real conferido contra o extrato do Itaú |
-| 2 · Open Finance | Meu Pluggy, webhook, sync diário, conciliação em 3 níveis | Conta conjunta sem duplicatas | — |
+| 2 · Open Finance | Meu Pluggy por cônjuge (ADR-015), só leitura, sync diário sem webhook, histórico de 2026, caixa "A conferir" | Contas do Itaú sem duplicatas e saldo igual ao do banco | Spec aprovada (`docs/superpowers/specs/2026-11-11-fase-2-open-finance-design.md`) |
 | 3 · WhatsApp | Gateway (chip dedicado), parser pt-BR, comprovantes na GPU | Bot responde o saldo da categoria | — |
 | 4 · Assistente | FinanceEngine completo (CDI/IR/IOF via BCB SGS), Gemini, relatório dia 1 | Todo número do texto confere | — |
 | 5 · Endurecimento | Backups 3-2-1, hash da cadeia fora do PC, revisão de segurança | Restauração ensaiada | — |
