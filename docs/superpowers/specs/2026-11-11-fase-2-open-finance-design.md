@@ -145,3 +145,15 @@ Numeração dos itens da revisão. Esta seção prevalece sobre as anteriores.
 **Documentos e regras**
 - **D25 · SPEC.md:** a linha da Fase 2 é atualizada neste PR.
 - **D26 · Regra 5:** o cliente da Pluggy registra só o status HTTP e o campo de código do erro; nunca o corpo da resposta.
+
+### Complementos do CEO à conferência do Dev (PR #28)
+
+- **D15 (corrigida):** o `CHECK` novo é "categoria nula só com `revisao = A_REVISAR`, **exceto transferência e pagamento de fatura**", que continuam obrigados a ter categoria nula. Lançamentos manuais de hoje já passam.
+- **D12 (chaves do que o sistema cria):** origem nova `SISTEMA` no `CHECK` de `origem` (permitida em conta ligada, porque não é lançamento à mão). Chaves naturais, idempotentes: rendimento diário `rendimento:<conta_id>:<AAAA-MM-DD>`; despesa de IR/IOF ou taxa `ajuste-investimento:<conta_id>:<AAAA-MM-DD>`; lado manual criado em D9 e D10 `par:<id da transação importada>`. A conciliação de saldo manual de hoje (contas não ligadas) mantém a chave atual.
+- **D3 (cartão e parcelas futuras):** a medição da etapa 4 cobre também o que o "valor usado" do banco inclui (pendentes **e** parcelas futuras). A fórmula de comparação do cartão é a que fechar com os dados medidos e fica escrita no plano; a diferença só aparece em "Conexões" se persistir por duas sincronizações seguidas.
+- **D4 (apelido):** a sugestão inclui o tipo: "Itaú Corrente · <nome>", "Itaú Cartão · <nome>"; grupos de investimento usam o nome do grupo ("CDBs Casa").
+- **D7 (vínculo):** o id externo no vínculo também fica **em claro e sem HMAC**; unicidade `(item, tipo, id_externo) WHERE NOT is_deleted`. A trava contra a mesma conta física vir por dois items continua pelo `identidade_hmac`. A §1 fica corrigida por esta linha.
+- **D20 e D23 (slot):** o slot é **escolhido explicitamente** no cadastro da conexão ("Estas chaves estão nos arquivos `pluggy_1_*` / `pluggy_2_*`"). Ao salvar, o sistema autentica com as chaves daquele slot e faz `GET /items/{id}` com o item informado; se falhar, recusa na hora. Os arquivos de 11/11 viram o slot 1, do cônjuge que os criou.
+- **D21 (auditoria):** o campo `ip` registra `sistema:integracoes` nas gravações do job; sem coluna nova.
+- **D27 (regra 9 e Identidade):** a exceção que o código já tem passa para o `CLAUDE.md`: o `Identidade` pode desligar o filtro `Casal` só nos fluxos anteriores à sessão (login, sessões, pedido de dispositivo, recuperação, primeiro acesso). O plano acrescenta um teste de arquitetura que lista os lugares permitidos.
+- **D28 (instalação de root):** `/opt/gestor-financeiro` passa a pertencer ao root (menos `infra/data/` e os arquivos da API com dono 1654). Operações na instalação de verdade são só da pessoa, com `sudo` (`sudo git -C /opt/gestor-financeiro pull`, `sudo docker compose ...`). Agentes trabalham só em `~/Gestor-Financeiro` e `~/gf-qa`, nunca em `/opt`. Risco aceito e registrado: estar no grupo `docker` equivale a ser root (ADR-013); a troca de dono impede a alteração por engano, não um ataque de quem já roda como o usuário.
