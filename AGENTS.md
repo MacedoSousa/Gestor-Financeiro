@@ -24,7 +24,7 @@ Skills de cada papel: [`docs/desenvolvimento/papeis-e-skills.md`](docs/desenvolv
 - `.githooks/pre-commit` — bloqueia DELETE físico, segredo no stage, migração já commitada alterada, migração sem `audit.proteger`, `UNIQUE` sem índice parcial e buraco na numeração. Ligue com `scripts/instalar-hooks.sh`.
 - `scripts/verificar.sh` — roda guardas e testes da parte que mudou. Ninguém diz "terminei" sem a saída verde dele.
 - CI (`.github/workflows/ci.yml`) — roda as mesmas guardas no repositório inteiro; `--no-verify` não escapa.
-- **Merge:** só pela pessoa, com os Checks verdes e o sinal do CEO no chat. Commit `WIP:` não entra no `main`.
+- **Merge:** só pela pessoa, com os Checks verdes e o sinal do CEO, que cita o commit do topo do PR ("merge do #N no commit abc1234"). A pessoa só faz o merge se o último commit na aba Commits do PR for esse. Antes de enviar um commit para um PR, o Dev confere se ele ainda está aberto (`gh pr view <n> --json state`); se já foi mergeado, rebase sobre o `main` e PR novo. Todo relato do Dev termina com o commit do topo do PR. Commit `WIP:` não entra no `main`.
 
 ## Passagem de trabalho
 
