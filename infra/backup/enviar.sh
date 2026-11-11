@@ -10,7 +10,8 @@
 # semanal/; a cadeia vai para cadeia/. Rotação: diario 7 sempre, semanal 4 aos domingos;
 # cadeia/ nunca é rotacionada (Decisão 1).
 #
-# Pendrive primeiro. "nao configurado" e "nao montado" só avisam; qualquer outra falha do
+# Pendrive primeiro. "nao configurado" (as duas variáveis vazias) e "nao montado" só avisam;
+# só uma das duas preenchida é "configuracao incompleta" e falha. Qualquer outra falha do
 # pendrive conta para a saída. O rclone roda sempre, mesmo se o pendrive falhar.
 # Sai ≠0 se o rclone falhar ou se o pendrive falhar (fora os dois avisos).
 #
@@ -79,8 +80,13 @@ enviar_pendrive() {
   local montagem pasta m p d codigo
   montagem="$(ler_env GF_BACKUP_PENDRIVE_MONTAGEM)"
   pasta="$(ler_env GF_BACKUP_PENDRIVE_PASTA)"
-  if [ -z "$montagem" ] || [ -z "$pasta" ]; then
+  # As duas vazias: pendrive não usado (aviso). Só uma: erro de configuração.
+  if [ -z "$montagem" ] && [ -z "$pasta" ]; then
     log "aviso pendrive nao configurado"
+    return 0
+  fi
+  if [ -z "$montagem" ] || [ -z "$pasta" ]; then
+    erro "pendrive configuracao incompleta"
     return 0
   fi
   # A pasta tem que ser absoluta e, depois de resolver .. e links, ficar dentro da montagem.

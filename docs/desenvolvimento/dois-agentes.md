@@ -48,7 +48,7 @@ Quem manda cada passo: o CEO, por ordens de serviço (`despacho.md`). Papéis e 
 - **Migração:** skill `nova-migracao`; o `pre-commit` recusa o que fugir dela.
 - **Contrato:** mudou endpoint → `contracts/openapi.json` e `frontend/src/api/schema.d.ts` no mesmo commit.
 - **Pronto:** só com a saída verde de `scripts/verificar.sh` colada. "AVISO: ... NÃO testado" significa que aquela parte não foi verificada. PR só com 'Verificação: tudo verde.' (sem avisos); 'verde COM AVISOS' não vale para PR.
-- **Merge:** só pela pessoa, com os Checks verdes e o sinal do CEO no chat. Commit `WIP:` não entra no `main`.
+- **Merge:** só pela pessoa, com os Checks verdes e o sinal do CEO, que cita o commit do topo do PR ("merge do #N no commit abc1234"). A pessoa só faz o merge se o último commit na aba Commits do PR for esse. Antes de enviar um commit para um PR, o Dev confere se ele ainda está aberto (`gh pr view <n> --json state`); se já foi mergeado, rebase sobre o `main` e PR novo. Todo relato do Dev termina com o commit do topo do PR. Commit `WIP:` não entra no `main`.
 - **Dados:** sempre sintéticos, inclusive em capturas de tela e na revisão.
 
 ## Quando um agente discorda do outro
