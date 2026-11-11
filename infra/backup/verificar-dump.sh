@@ -91,7 +91,7 @@ restaurar_dump "$GF_DESCARTAVEL" gestor "$dump" || codigo=$?
 falhas=0
 
 # Cadeia de hashes de cada casal (inclusive casal_id nulo).
-quebras="$(psql_descartavel "$GF_DESCARTAVEL" gestor -F ' ' -c "
+quebras="$(psql_silencioso "$GF_DESCARTAVEL" gestor -F ' ' -c "
   SELECT coalesce(c.casal_id::text, 'nulo'), v.seq, v.motivo
     FROM (SELECT DISTINCT casal_id FROM audit.eventos) c
    CROSS JOIN LATERAL audit.verificar_cadeia(c.casal_id) v
@@ -104,7 +104,7 @@ done <<<"$quebras"
 
 # Contagens contra o MANIFESTO.
 if [ -n "$manifesto" ]; then
-  contagens="$(psql_descartavel "$GF_DESCARTAVEL" gestor -F ' ' \
+  contagens="$(psql_silencioso "$GF_DESCARTAVEL" gestor -F ' ' \
     -c "SELECT count(*), coalesce(max(seq), 0) FROM audit.eventos")" || falhar "consulta de contagem codigo=$?"
   read -r obtido_total obtido_max_seq <<<"$contagens"
   if [ "$obtido_total" != "$esperado_total" ]; then
@@ -135,7 +135,7 @@ fi
 
 # Âncora: linhas do cadeia-*.txt anterior que não existem mais no restaurado.
 if [ -n "$ancora_valores" ]; then
-  ausentes="$(psql_descartavel "$GF_DESCARTAVEL" gestor -F ' ' -c "
+  ausentes="$(psql_silencioso "$GF_DESCARTAVEL" gestor -F ' ' -c "
     SELECT coalesce(a.casal_id::text, 'nulo'), a.seq
       FROM (VALUES $ancora_valores) a(casal_id, seq, hash)
      WHERE NOT EXISTS (SELECT 1 FROM audit.eventos e
@@ -155,7 +155,7 @@ fi
 
 # Emissão só com tudo aprovado: o backup nunca usa contagens de um dump reprovado.
 if [ -n "$emitir" ]; then
-  contagens="$(psql_descartavel "$GF_DESCARTAVEL" gestor -F ' ' \
+  contagens="$(psql_silencioso "$GF_DESCARTAVEL" gestor -F ' ' \
     -c "SELECT count(*), coalesce(max(seq), 0) FROM audit.eventos")" || falhar "consulta de contagem codigo=$?"
   read -r obtido_total obtido_max_seq <<<"$contagens"
   [[ "$obtido_total" =~ ^[0-9]+$ && "$obtido_max_seq" =~ ^[0-9]+$ ]] || falhar "contagem ilegível"

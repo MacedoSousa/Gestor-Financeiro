@@ -223,6 +223,22 @@ recusa_sem_dek() {
   grep -q "^FALHA .*dek.servico" "$T/stderr" && [ -z "$(find "$dir" -type f 2>/dev/null)" ]
 }
 
+# Sobra de editor em infra/secrets (nome fora do padrão que o restaurar.sh aceita): o backup
+# falha antes do dump, sem pacote, citando só o nome. O README.md continua ignorado.
+recusa_segredo_com_nome_fora_do_padrao() {
+  local dir="$T/b-nome-segredo" r=0 nome
+  for nome in 'pg_superusuario~' '.pg_superusuario.swp'; do
+    printf 'conteudo-de-sobra-xyzzy\n' >"$RAIZ_FALSA/infra/secrets/$nome"
+    rm -rf "$dir"
+    if rodar_backup "$dir" --data 2026-11-10; then echo "  aceitou $nome"; r=1; fi
+    rm -f "$RAIZ_FALSA/infra/secrets/$nome"
+    [ "$r" -eq 0 ] || return 1
+    grep -qxF "FALHA arquivo inesperado em infra/secrets: $nome" "$T/stderr" || { mostrar_stderr; return 1; }
+    ! grep -q 'conteudo-de-sobra-xyzzy' "$T/stderr" || { echo "  conteúdo no log"; return 1; }
+    [ ! -e "$dir" ] || { echo "  criou $dir (passou do ponto do dump)"; return 1; }
+  done
+}
+
 domingo_vai_para_semanal() {
   local dir="$T/b-domingo"
   rodar_backup "$dir" --data 2026-11-08 || { mostrar_stderr; return 1; }
@@ -316,8 +332,8 @@ cadeia_dentro_e_fora() {
   fora="$dir/cadeia/cadeia-2026-11-10.txt"
   abrir_pacote "$dir/diario/gestor-2026-11-10.tar.age" "$T/aberto"
   cmp -s "$fora" "$T/aberto/cadeia.txt" || return 1
-  [ "$(wc -l <"$fora")" -eq 2 ] || return 1
-  [ "$(cut -d' ' -f1 "$fora")" = "$CASAL_1"$'\n'"$CASAL_2" ] || return 1
+  [ "$(wc -l <"$fora")" -eq 3 ] || return 1
+  [ "$(cut -d' ' -f1 "$fora")" = "$CASAL_1"$'\n'"$CASAL_2"$'\n'nulo ] || return 1
   ! grep -Evq '^([0-9a-f-]{36}|nulo) [0-9]+ [0-9a-f]{64}$' "$fora"
 }
 
@@ -532,7 +548,7 @@ dump_reprovado_nao_gera_pacote() {
   echo sentinela >"$dir/diario/sentinela"
   echo pacote-antigo >"$dir/diario/gestor-2026-11-01.tar.age"
   antes="$(find "$dir/diario" -printf '%P %i %s %T@\n' | LC_ALL=C sort)"
-  fonte_adulterar_evento >/dev/null
+  fonte_adulterar_evento "$CASAL_1" >/dev/null
   if rodar_backup "$dir" --data 2026-11-10; then return 1; fi
   grep -q "^FALHA cadeia casal=$CASAL_1" "$T/stderr" || { mostrar_stderr; return 1; }
   depois="$(find "$dir/diario" -printf '%P %i %s %T@\n' | LC_ALL=C sort)"
@@ -556,6 +572,7 @@ caso nada_em_claro_sobra
 caso recusa_chave_privada
 caso recusa_destinatarios_sem_age1
 caso recusa_sem_dek
+caso recusa_segredo_com_nome_fora_do_padrao
 caso domingo_vai_para_semanal
 caso rotacao_real_no_domingo
 caso envio_real_no_domingo

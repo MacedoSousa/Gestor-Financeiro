@@ -61,10 +61,14 @@ grep -Eq '^age1[0-9a-z]+[[:space:]]*$' "$destinatarios" \
 dir_segredos="$GF_RAIZ/infra/secrets"
 dek="$GF_RAIZ/infra/data/chaves/dek.servico"
 { [ -f "$dek" ] && [ -r "$dek" ]; } || falhar "chaves/dek.servico ausente"
+# Nome fora do padrão (sobra de editor, por exemplo) faria o restaurar.sh recusar o pacote:
+# falha aqui, antes do dump, citando só o nome. Lista separada por NUL: nome com quebra de
+# linha não vira dois nomes.
 segredos=()
-while IFS= read -r arquivo; do
+while IFS= read -r -d '' arquivo; do
+  nome_de_segredo_valido "$arquivo" || falhar "arquivo inesperado em infra/secrets: $arquivo"
   segredos+=("$arquivo")
-done < <(find "$dir_segredos" -maxdepth 1 -type f ! -name README.md -printf '%f\n' 2>/dev/null | LC_ALL=C sort)
+done < <(find "$dir_segredos" -maxdepth 1 -type f ! -name README.md -printf '%f\0' 2>/dev/null | LC_ALL=C sort -z)
 [ "${#segredos[@]}" -gt 0 ] || falhar "infra/secrets sem segredos"
 
 ultima_migracao="$(find "$GF_RAIZ/db/migrations/" -maxdepth 1 -name 'V*.sql' -printf '%f\n' 2>/dev/null \
@@ -120,7 +124,7 @@ docker exec "$PG_CONTAINER" pg_dump -U postgres -d gestor -Fc >"$conteudo/gestor
 [ "$codigo" -eq 0 ] || falhar "pg_dump codigo=$codigo"
 log "dump: gestor.dump bytes=$(wc -c <"$conteudo/gestor.dump")"
 
-pg_versao="$(psql_descartavel "$PG_CONTAINER" gestor -c 'SHOW server_version' | cut -d' ' -f1)" \
+pg_versao="$(psql_silencioso "$PG_CONTAINER" gestor -c 'SHOW server_version' | cut -d' ' -f1)" \
   || falhar "versao do postgres"
 
 # ---------------------------------------------------------------- 2/3. verificação e âncora

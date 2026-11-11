@@ -18,6 +18,13 @@ falhar() {
   exit 1
 }
 
+# Nome aceito para um arquivo de infra/secrets (e para secrets/<nome> dentro do pacote): letra,
+# dígito, "_" ou "-" no início, depois também ".", e nunca "..". Fica de fora sobra de editor
+# (pg_superusuario~, .pg_superusuario.swp). O backup.sh recusa o que o restaurar.sh recusaria.
+nome_de_segredo_valido() {
+  [[ "$1" =~ ^[A-Za-z0-9_-][A-Za-z0-9._-]*$ && "$1" != *..* ]]
+}
+
 aleatorio() {
   od -An -N8 -tx1 /dev/urandom | tr -d ' \n'
 }
@@ -50,7 +57,7 @@ subir_descartavel() {
     -e POSTGRES_PASSWORD="$(aleatorio)$(aleatorio)" -e POSTGRES_DB=gestor \
     "$GF_IMAGEM_POSTGRES" >/dev/null 2>&1 || { log "descartável: docker run falhou"; return 1; }
   esperar_postgres "$GF_DESCARTAVEL" || return 1
-  psql_descartavel "$GF_DESCARTAVEL" gestor \
+  psql_silencioso "$GF_DESCARTAVEL" gestor \
     -c "CREATE ROLE gf_migrator NOLOGIN; CREATE ROLE gf_app NOLOGIN;" >/dev/null \
     || { log "descartável: papéis não criados"; return 1; }
 }
@@ -63,9 +70,9 @@ derrubar_descartavel() {
   ( trap '' INT TERM; docker rm -f "$container" >/dev/null 2>&1 ) || true
 }
 
-# psql como postgres no container, pelo socket local (o container não tem rede).
-# Uso: psql_descartavel <container> <banco> [args do psql...]. O stderr é descartado.
-psql_descartavel() {
+# psql como postgres num container (o descartável ou o postgres da instalação), pelo socket local.
+# Uso: psql_silencioso <container> <banco> [args do psql...]. O stderr é descartado (Decisão 9).
+psql_silencioso() {
   local container="$1" banco="$2"; shift 2
   docker exec -i "$container" psql -X -q -t -A -v ON_ERROR_STOP=1 -U postgres -d "$banco" "$@" 2>/dev/null
 }
@@ -112,7 +119,7 @@ restaurar_dump() {
 # "<casal_id|nulo> <seq> <hash em hex minúsculo>", ordenado por casal_id, nulo no fim.
 gerar_cadeia() {
   local container="$1" banco="$2"
-  psql_descartavel "$container" "$banco" -F ' ' -c "
+  psql_silencioso "$container" "$banco" -F ' ' -c "
     SELECT coalesce(casal_id::text, 'nulo'), seq, encode(hash, 'hex')
       FROM (SELECT DISTINCT ON (casal_id) casal_id, seq, hash
               FROM audit.eventos
