@@ -138,15 +138,23 @@ if [ "$papeis" != "gf_app gf_migrator" ]; then
 fi
 echo "ok init criou gf_app e gf_migrator"
 
-# Roda um modo da api e, se falhar, mostra só as linhas de erro (nunca segredos).
+# Roda um modo da api e, se falhar, mostra só as linhas de erro (nunca segredos). A saída fica
+# em $T/api$1.saida para conferências depois.
 rodar_api() {
   local saida codigo=0
   saida="$("${COMPOSE[@]}" run --rm --no-deps api "$1" 2>&1)" || codigo=$?
+  printf '%s\n' "$saida" >"$T/api$1.saida"
   [ "$codigo" -eq 0 ] && return 0
   grep -i -E 'denied|exception|unauthorized|password|role' <<<"$saida" | sort -u | head -5 | sed 's/^/  | /'
   return 1
 }
 rodar_api --migrar || falhar "api --migrar"
+# O Npgsql não pode tentar o GSSAPI (o projeto não usa Kerberos): a imagem não tem a lib e o
+# .NET imprimia "Cannot load library libgssapi_krb5.so.2" em toda execução.
+if grep -qi libgssapi "$T/api--migrar.saida"; then
+  grep -i libgssapi "$T/api--migrar.saida" | sort -u | head -3 | sed 's/^/  | /'
+  falhar "a saída do --migrar tem libgssapi"
+fi
 echo "ok api --migrar"
 rodar_api --inicializar-chaves || falhar "api --inicializar-chaves"
 echo "ok api --inicializar-chaves"
@@ -164,5 +172,11 @@ papeis="$("${COMPOSE[@]}" exec -T postgres psql -X -q -t -A -U postgres -d gesto
   || falhar "pg_stat_activity"
 grep -qx gf_app <<<"$papeis" || falhar "a api não está conectada como gf_app (conexões: $(tr '\n' ' ' <<<"$papeis"))"
 echo "ok a api conectou com o papel gf_app"
+
+# A conexão da api (string App) também não tenta o GSSAPI.
+if "${COMPOSE[@]}" logs --no-color api 2>&1 | grep -qi libgssapi; then
+  falhar "o log da api tem libgssapi"
+fi
+echo "ok sem libgssapi no log da api"
 
 echo "subida do zero ok"
