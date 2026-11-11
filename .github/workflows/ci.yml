@@ -109,10 +109,17 @@ jobs:
 
       # find em vez de infra/backup/**/*.sh: sem globstar, ** não pega infra/backup/*.sh.
       - name: shellcheck
-        run: find infra/backup -name '*.sh' -print0 | xargs -0 shellcheck -x
+        run: find infra/backup infra/testes infra/scripts -name '*.sh' -print0 | xargs -0 shellcheck -x
 
       - name: Testes do backup (Postgres descartável em docker)
         run: infra/backup/testes/rodar-todos.sh
+
+      - name: Segredos do gerar-segredos.sh (pasta 0700, segredos 0444)
+        run: infra/testes/testar-gerar-segredos.sh
+
+      # Constrói a api e sobe o compose real (postgres e api) num projeto aleatório, do zero.
+      - name: O compose real sobe do zero
+        run: infra/testes/testar-subida.sh
 
   segredos:
     runs-on: ubuntu-latest
