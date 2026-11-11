@@ -331,9 +331,60 @@ public class ContasTests(PostgresFixture pg)
         Assert.Equal(HttpStatusCode.Unauthorized, (await api.CreateClient().GetAsync(Rota)).StatusCode);
     }
 
+    /// <summary>
+    /// Corrida entre apagar a conta e lançar nela. A barreira (registrada depois do verificador do Lancamentos, então
+    /// consultada depois dele) segura o apagar com a conta já dada como livre, e o lançamento é enviado nesse meio-tempo.
+    /// Sem trava, o lançamento entra e a conta é apagada mesmo assim. Com a trava, o lançamento espera o apagar e
+    /// encontra a conta apagada. Em nenhum caso sobra lançamento não apagado apontando para conta apagada.
+    /// </summary>
+    [Fact]
+    public async Task Apagar_conta_e_lancar_nela_ao_mesmo_tempo_nunca_deixa_lancamento_em_conta_apagada()
+    {
+        var barreira = new BarreiraNoVerificador();
+        var (api, banco, cliente, _, _) = await IniciarAsync(s => s.AddSingleton<IVerificadorDeUsoDaConta>(barreira));
+        await using var _ = api;
+        var conta = await CriarAsync(cliente, Corrente("Itaú conjunta"));
+        var categorias = (await JsonAsync(await cliente.GetAsync("/api/v1/categorias"))).EnumerateArray();
+        var categoria = categorias.First(c => c.GetProperty("tipo").GetString() == "DESPESA").GetProperty("id").GetGuid();
+
+        var apagar = cliente.DeleteAsync($"{Rota}/{conta}");
+        await barreira.Entrou.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        var lancar = cliente.PostAsJsonAsync("/api/v1/lancamentos", new
+        {
+            chaveIdempotente = Guid.NewGuid(), contaId = conta, natureza = "DESPESA", valorCentavos = 2_500L, data = "2026-11-04",
+            descricao = "Padaria", categoriaId = categoria, parcelas = 1,
+        });
+        // Sem trava, o lançamento termina aqui; com trava, ele fica esperando o apagar.
+        await Task.WhenAny(lancar, Task.Delay(TimeSpan.FromSeconds(2)));
+        barreira.Liberar.SetResult();
+        var (apagou, lancou) = (await apagar, await lancar);
+
+        var orfaos = await EscalarAsync<long>(banco, $"""
+            SELECT count(*) FROM lancamentos.transacoes t JOIN contas.contas c ON c.id = t.conta_id
+            WHERE t.conta_id = '{conta}' AND NOT t.is_deleted AND c.is_deleted
+            """);
+        Assert.True(orfaos == 0, $"lançamento em conta apagada (apagar {(int)apagou.StatusCode}, lançar {(int)lancou.StatusCode})");
+        Assert.True(apagou.StatusCode == HttpStatusCode.Conflict || lancou.StatusCode == HttpStatusCode.NotFound,
+            $"apagar {(int)apagou.StatusCode}, lançar {(int)lancou.StatusCode}");
+    }
+
     private sealed class VerificadorFalso : IVerificadorDeUsoDaConta
     {
         public HashSet<Guid> EmUso { get; } = [];
         public Task<bool> EstaEmUsoAsync(Guid contaId, CancellationToken ct) => Task.FromResult(EmUso.Contains(contaId));
+    }
+
+    /// <summary>Avisa que o apagar chegou aos verificadores e o segura até o teste liberar; nunca diz "em uso".</summary>
+    private sealed class BarreiraNoVerificador : IVerificadorDeUsoDaConta
+    {
+        public TaskCompletionSource Entrou { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource Liberar { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public async Task<bool> EstaEmUsoAsync(Guid contaId, CancellationToken ct)
+        {
+            Entrou.TrySetResult();
+            await Liberar.Task.WaitAsync(TimeSpan.FromSeconds(30), ct);
+            return false;
+        }
     }
 }

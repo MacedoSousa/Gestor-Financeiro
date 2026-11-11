@@ -54,7 +54,8 @@ internal sealed class ServicoDeConciliacao(LancamentosDbContext db, IUsuarioAtua
         await db.Database.ExecuteSqlAsync(
             $"SELECT pg_advisory_xact_lock(hashtextextended('lancamentos.casal:' || {casalId}::text, 0))", ct);
 
-        // Depois do lock: a conta pode ter sido arquivada enquanto esperávamos.
+        // Depois do lock: a conta pode ter sido arquivada (ou apagada) enquanto esperávamos.
+        await TravaDeConta.TomarAsync(db, [contaId], ct);
         var (conta, recusaNoLock) = await ContaConciliavelAsync(contaId, ct);
         if (recusaNoLock is not null) return recusaNoLock;
         var hoje = Brasilia.Hoje(relogio);
