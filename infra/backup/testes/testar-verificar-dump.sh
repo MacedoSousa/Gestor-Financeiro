@@ -138,9 +138,10 @@ duas_fases_com_disable_triggers_e_fiel() {
 
 cadeia_txt_confere() {
   gerar_cadeia "$FONTE_CONTAINER" gestor >"$GF_TMP/cadeia.txt"
-  # Uma linha por casal semeado, ordenada por casal_id.
-  [ "$(cut -d' ' -f1 "$GF_TMP/cadeia.txt")" = "$CASAL_1"$'\n'"$CASAL_2" ] || return 1
+  # Uma linha por casal semeado, ordenada por casal_id, e a dos eventos sem casal no fim.
+  [ "$(cut -d' ' -f1 "$GF_TMP/cadeia.txt")" = "$CASAL_1"$'\n'"$CASAL_2"$'\n'nulo ] || return 1
   grep -Eq "^$CASAL_1 [0-9]+ [0-9a-f]{64}$" "$GF_TMP/cadeia.txt" || return 1
+  grep -Eq "^nulo [0-9]+ [0-9a-f]{64}$" "$GF_TMP/cadeia.txt" || return 1
   "$VERIFICAR" "$GF_TMP/integro.dump" --cadeia "$GF_TMP/cadeia.txt" 2>"$GF_TMP/stderr"
 }
 
@@ -150,6 +151,15 @@ cadeia_txt_divergente_falha() {
   if "$VERIFICAR" "$GF_TMP/integro.dump" --cadeia "$GF_TMP/cadeia-errada.txt" 2>"$GF_TMP/stderr"; then return 1; fi
   grep -q "FALHA cadeia.txt casal=$CASAL_1" "$GF_TMP/stderr" \
     && ! grep -q "casal=$CASAL_2" "$GF_TMP/stderr"
+}
+
+# Só a linha dos eventos sem casal (a última) divergente.
+cadeia_txt_nulo_divergente_falha() {
+  gerar_cadeia "$FONTE_CONTAINER" gestor \
+    | sed -E "\$s/ [0-9a-f]{64}$/ $(printf '0%.0s' {1..64})/" >"$GF_TMP/cadeia-errada.txt"
+  if "$VERIFICAR" "$GF_TMP/integro.dump" --cadeia "$GF_TMP/cadeia-errada.txt" 2>"$GF_TMP/stderr"; then return 1; fi
+  grep -q "FALHA cadeia.txt casal=nulo" "$GF_TMP/stderr" \
+    && ! grep -q -e "casal=$CASAL_1" -e "casal=$CASAL_2" "$GF_TMP/stderr"
 }
 
 emitir_escreve_contagens_e_cadeia() {
@@ -201,11 +211,21 @@ ancora_mal_formada_falha() {
 # Destrutivo na fonte: roda por último.
 evento_adulterado_falha_com_seq() {
   local seq
-  seq="$(fonte_adulterar_evento)"
+  seq="$(fonte_adulterar_evento "$CASAL_1")"
   [ -n "$seq" ] || return 1
   fonte_dump "$GF_TMP/adulterado.dump"
   if "$VERIFICAR" "$GF_TMP/adulterado.dump" 2>"$GF_TMP/stderr"; then return 1; fi
   grep -q "FALHA cadeia casal=$CASAL_1 seq=$seq " "$GF_TMP/stderr"
+}
+
+# Destrutivo na fonte: a cadeia dos eventos sem casal também é conferida.
+evento_nulo_adulterado_falha_com_seq() {
+  local seq
+  seq="$(fonte_adulterar_evento nulo)"
+  [ -n "$seq" ] || { echo "  nenhum evento sem casal na fonte"; return 1; }
+  fonte_dump "$GF_TMP/adulterado-nulo.dump"
+  if "$VERIFICAR" "$GF_TMP/adulterado-nulo.dump" 2>"$GF_TMP/stderr"; then return 1; fi
+  grep -q "FALHA cadeia casal=nulo seq=$seq " "$GF_TMP/stderr"
 }
 
 # ---------------------------------------------------------------- execução
@@ -224,12 +244,14 @@ caso duas_fases_sem_disable_triggers_nao_e_fiel
 caso duas_fases_com_disable_triggers_e_fiel
 caso cadeia_txt_confere
 caso cadeia_txt_divergente_falha
+caso cadeia_txt_nulo_divergente_falha
 caso emitir_escreve_contagens_e_cadeia
 caso ancora_presente_passa
 caso ancora_antiga_passa
 caso ancora_ausente_falha_sem_emitir
 caso ancora_mal_formada_falha
 caso evento_adulterado_falha_com_seq
+caso evento_nulo_adulterado_falha_com_seq
 
 if [ "$sobras" -eq 0 ]; then ok descartavel_some; else falha descartavel_some; fi
 

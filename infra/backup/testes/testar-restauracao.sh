@@ -212,7 +212,19 @@ verificar_ida_e_volta() {
   if rodar "$VARIANTES/cadeia-trocada.tar.age" -i "$CHAVE" --verificar; then
     echo "  cadeia.txt trocado passou"; return 1
   fi
-  tem "FALHA cadeia.txt"
+  tem "FALHA cadeia.txt casal=$CASAL_1" || return 1
+
+  # A linha dos eventos sem casal (a última) também é conferida.
+  d="$VARIANTES/cadeia-nulo-trocada"
+  abrir_base "$d"
+  grep -q '^nulo ' "$d/cadeia.txt" || { echo "  pacote sem a linha nulo"; return 1; }
+  sed -i '$s/ [0-9a-f]\{64\}$/ '"$(printf '0%.0s' {1..64})"'/' "$d/cadeia.txt"
+  (cd "$d" && grep -v '  SHA256SUMS$' SHA256SUMS | cut -c67- | xargs sha256sum -- >SHA256SUMS.novo && mv SHA256SUMS.novo SHA256SUMS)
+  empacotar "$d" "$VARIANTES/cadeia-nulo-trocada.tar.age"
+  if rodar "$VARIANTES/cadeia-nulo-trocada.tar.age" -i "$CHAVE" --verificar; then
+    echo "  linha nulo trocada passou"; return 1
+  fi
+  tem "FALHA cadeia.txt casal=nulo"
 }
 
 identidade_errada_falha() {
@@ -258,6 +270,9 @@ instalar_em_raiz_vazia() {
   obtido="$(psql_r -F ' ' -c "SELECT count(*), max(seq) FROM audit.eventos")"
   [ "$obtido" = "$total $max_seq" ] || { echo "  contagens: $obtido, manifesto $total $max_seq"; return 1; }
   [ "$(psql_r -c "SELECT count(*) FROM identidade.casais")" = 2 ] || { echo "  casais"; return 1; }
+  # Os eventos sem casal também vieram, e a cadeia deles confere (contada nas quebras acima).
+  [ "$(psql_r -c "SELECT count(*) > 0 FROM audit.eventos WHERE casal_id IS NULL")" = t ] \
+    || { echo "  sem eventos de casal nulo no instalado"; return 1; }
 
   # Próximos passos: chown, up -d e o aviso só dos cadeia-*.txt posteriores; nada movido.
   tem "chown 1654" || return 1

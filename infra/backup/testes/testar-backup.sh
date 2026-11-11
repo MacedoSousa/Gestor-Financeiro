@@ -332,8 +332,8 @@ cadeia_dentro_e_fora() {
   fora="$dir/cadeia/cadeia-2026-11-10.txt"
   abrir_pacote "$dir/diario/gestor-2026-11-10.tar.age" "$T/aberto"
   cmp -s "$fora" "$T/aberto/cadeia.txt" || return 1
-  [ "$(wc -l <"$fora")" -eq 2 ] || return 1
-  [ "$(cut -d' ' -f1 "$fora")" = "$CASAL_1"$'\n'"$CASAL_2" ] || return 1
+  [ "$(wc -l <"$fora")" -eq 3 ] || return 1
+  [ "$(cut -d' ' -f1 "$fora")" = "$CASAL_1"$'\n'"$CASAL_2"$'\n'nulo ] || return 1
   ! grep -Evq '^([0-9a-f-]{36}|nulo) [0-9]+ [0-9a-f]{64}$' "$fora"
 }
 
@@ -548,7 +548,7 @@ dump_reprovado_nao_gera_pacote() {
   echo sentinela >"$dir/diario/sentinela"
   echo pacote-antigo >"$dir/diario/gestor-2026-11-01.tar.age"
   antes="$(find "$dir/diario" -printf '%P %i %s %T@\n' | LC_ALL=C sort)"
-  fonte_adulterar_evento >/dev/null
+  fonte_adulterar_evento "$CASAL_1" >/dev/null
   if rodar_backup "$dir" --data 2026-11-10; then return 1; fi
   grep -q "^FALHA cadeia casal=$CASAL_1" "$T/stderr" || { mostrar_stderr; return 1; }
   depois="$(find "$dir/diario" -printf '%P %i %s %T@\n' | LC_ALL=C sort)"

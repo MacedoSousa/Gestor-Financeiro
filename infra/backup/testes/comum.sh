@@ -13,6 +13,8 @@ CASAL_1="00000000-0000-4000-8000-0000000000b1"
 CASAL_2="00000000-0000-4000-8000-0000000000b2"
 NOME_SINTETICO_1="Familia Sintetica Xyzzy"
 NOME_SINTETICO_2="Familia Sintetica Plugh"
+SEM_CASAL="00000000-0000-4000-8000-0000000000c1"
+NOME_SINTETICO_SEM_CASAL="Registro Sintetico Thud"
 FONTE_CONTAINER=""
 
 # psql no banco-fonte, sem esconder o stderr (dados sintéticos).
@@ -48,6 +50,26 @@ INSERT INTO identidade.casais (id, nome_familia) VALUES ('$CASAL_2', '$NOME_SINT
 UPDATE identidade.casais SET nome_familia = '$NOME_SINTETICO_2 B' WHERE id = '$CASAL_2';
 UPDATE identidade.casais SET nome_familia = '$NOME_SINTETICO_2 C' WHERE id = '$CASAL_2';
 SQL
+
+  # Eventos com casal_id nulo (a cadeia "nulo" do cadeia.txt). Toda tabela do sistema tem
+  # casal_id, então só aqui, na fonte sintética: uma tabela sem casal_id protegida pelo
+  # audit.proteger de verdade, para o trigger gravar os eventos como faria com uma tabela
+  # do sistema que um dia não tenha casal.
+  psql_fonte gf_migrator >/dev/null <<SQL
+CREATE SCHEMA teste_backup;
+CREATE TABLE teste_backup.sem_casal (
+    id         uuid    PRIMARY KEY,
+    nome       text    NOT NULL,
+    is_deleted boolean NOT NULL DEFAULT false
+);
+SELECT audit.proteger('teste_backup.sem_casal');
+GRANT USAGE ON SCHEMA teste_backup TO gf_app;
+SQL
+  psql_fonte gf_app >/dev/null <<SQL
+SELECT set_config('app.ip', 'teste-backup', false);
+INSERT INTO teste_backup.sem_casal (id, nome) VALUES ('$SEM_CASAL', '$NOME_SINTETICO_SEM_CASAL');
+UPDATE teste_backup.sem_casal SET nome = '$NOME_SINTETICO_SEM_CASAL B' WHERE id = '$SEM_CASAL';
+SQL
 }
 
 fonte_derrubar() {
@@ -61,12 +83,15 @@ fonte_dump() {
   docker exec "$FONTE_CONTAINER" pg_dump -U postgres -d gestor -Fc >"$saida"
 }
 
-# Adultera, como superusuário, o primeiro evento do casal 1. Imprime o seq adulterado.
+# Adultera, como superusuário, o primeiro evento de um casal (padrão: o casal 1; "nulo" = os
+# eventos sem casal). Imprime o seq adulterado.
 fonte_adulterar_evento() {
+  local casal="${1:-$CASAL_1}" filtro
+  if [ "$casal" = nulo ]; then filtro="casal_id IS NULL"; else filtro="casal_id = '$casal'"; fi
   psql_fonte postgres <<SQL
 ALTER TABLE audit.eventos DISABLE TRIGGER trg_eventos_imutavel;
 UPDATE audit.eventos SET alteracoes = alteracoes || '{"adulterado": true}'::jsonb
- WHERE seq = (SELECT min(seq) FROM audit.eventos WHERE casal_id = '$CASAL_1')
+ WHERE seq = (SELECT min(seq) FROM audit.eventos WHERE $filtro)
 RETURNING seq;
 ALTER TABLE audit.eventos ENABLE TRIGGER trg_eventos_imutavel;
 SQL
