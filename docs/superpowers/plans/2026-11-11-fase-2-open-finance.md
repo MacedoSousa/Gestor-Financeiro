@@ -90,13 +90,51 @@ backend/src/Modules/Contas/Contracts/IContasLigadas.cs          (etapa 3)
 backend/src/Modules/Investimentos/Contracts/IMetasDeContas.cs   (etapa 3)
 backend/src/Modules/Lancamentos/Contracts/IImportacaoDeLancamentos.cs (etapas 4 a 6)
 backend/src/Modules/Lancamentos/Aplicacao/Importacao.cs, Revisao.cs, Pareamento.cs, AConferir.cs, RendimentoAutomatico.cs
-infra/pluggy/medir-saldos.sh + infra/pluggy/testes/                 (etapa 4, medição D3)
+infra/pluggy/medir-saldos.sh + infra/pluggy/testes/                 (etapa 1, medição D3 e origem do banco)
 frontend/src/paginas/Conexoes.tsx, RevisarImportados.tsx, AConferir.tsx
 ```
 
 ---
 
 ## Etapa 1 · Cliente da Pluggy só de leitura (PR 1)
+
+### Tarefa 1.0: Medição D3 e origem do banco (primeiro commit do PR da etapa 1; rodada pela pessoa)
+
+Decisão 9 (CEO 11/11 19h): este é o primeiro commit do PR da etapa 1.
+
+**Arquivos:**
+- Criar: `infra/pluggy/medir-saldos.sh`; `infra/pluggy/testes/pluggy-falso.py` (servidor local só com a biblioteca padrão, que responde JSON sintético); `infra/pluggy/testes/testar-medicao.sh`.
+- Modelo: `~/testar-pluggy.sh` (v2, com cursor) do CEO. Mesmo cuidado:
+  - a chave vai por descritor de arquivo;
+  - o corpo do `/auth` vai pela entrada padrão;
+  - nada é gravado em disco;
+  - a saída nunca tem valor, saldo, descrição, nome ou número.
+
+**O que o script responde, só com estrutura e booleanos:**
+1. Por cartão, qual fórmula fecha com o "valor usado" do banco (`balance`), sem imprimir valores: (a) confirmadas da fatura aberta; (b) a + pendentes; (c) b + parcelas futuras; (d) a + parcelas futuras. Saída: `cartão N: fecha com (c)` ou `cartão N: nenhuma; diferença <1% | 1–10% | >10%`.
+2. Por conta corrente: quantas pendentes existem e se o `balance` muda entre duas leituras com 60 s de intervalo (se a Pluggy atualiza o saldo sem novas transações).
+3. Sinal: contagem de `type` (DEBIT/CREDIT) × sinal de `amount`, por tipo de conta.
+4. Categorias distintas da Pluggy (id + nome genérico, como "Credit card payment" e "Investments", com contagem). Isso fixa os identificadores usados na etapa 6.
+5. Formato de data: se `date` tem hora e fuso.
+6. Quantas transações têm valor zero e quantas têm descrição vazia.
+7. De onde vem o banco (decisão 1): quais campos da conta e do item existem (ex.: `bankData`, `institution`, `connector`) e se algum traz o **código do banco** (3 dígitos). Saída: nome do campo e `código: sim/não`, sem valores. Se o código vier, ele entra na trava de conta repetida (Tarefa 3.2).
+
+**Uso pela pessoa, nunca por agente:**
+```
+ITEM=<id> SLOT=1 bash infra/pluggy/medir-saldos.sh
+```
+As chaves vêm de `infra/secrets/pluggy_<slot>_*`.
+
+- [ ] **Passo 1:** `testar-medicao.sh`, que falha. Ele sobe `pluggy-falso.py` numa porta livre com dados sintéticos, em que o cartão fecha com (c), e roda o script com `PLUGGY_URL=http://127.0.0.1:<porta>` e segredos sintéticos numa pasta temporária. Espera:
+  - a linha `cartão 1: fecha com (c)`;
+  - uma linha `banco: campo <nome do campo> · código: sim` para a conta sintética que traz o código, sem o valor do código na saída;
+  - nenhum dos valores sintéticos (`12345`, `"Mercado Sintético"`) na saída;
+  - nenhum arquivo novo fora da pasta temporária.
+- [ ] **Passo 2:** `infra/pluggy/testes/testar-medicao.sh` → FALHA. Escrever o script. Rodar → PASSA. shellcheck pela imagem → limpo. Ligar o teste no job `backup` do CI, que já tem as ferramentas.
+- [ ] **Passo 3:** commit "Pluggy: medição de saldos e origem do banco (estrutura)", o primeiro do PR da etapa 1. A pessoa roda o script; o resultado entra no plano, nesta tarefa, como "Resultado da medição: fórmula do cartão …; código do banco …; categorias …".
+  - A etapa 1 segue sem esperar.
+  - Usam o resultado: a Tarefa 3.2 (código do banco), a 4.5 (fórmula do cartão) e a 6.2 (ids das categorias).
+  - As tarefas 4.2 e 4.3 podem andar antes do resultado (decisão 9).
 
 ### Tarefa 1.1: Teste de arquitetura "só leitura na Pluggy"
 
@@ -152,7 +190,7 @@ frontend/src/paginas/Conexoes.tsx, RevisarImportados.tsx, AConferir.tsx
   internal sealed record CredenciaisPluggy(int Slot, string ClientId, string ClientSecret);
   internal sealed record ItemPluggy(string Id, string Status, string? ExecutionStatus, DateTimeOffset? ConsentimentoVenceEm, DateTimeOffset? AtualizadoEm);
   internal sealed record ContaPluggy(string Id, string Tipo, string? Subtipo, string Nome, string? Numero, string? AgenciaEConta,
-      long SaldoCentavos, long? LimiteCentavos, string? Portador, string? FinalDoCartao);
+      string? CodigoDoBanco /* campo medido na Tarefa 1.0; nulo se a Pluggy não trouxer */, long SaldoCentavos, long? LimiteCentavos, string? Portador, string? FinalDoCartao);
   internal sealed record TransacaoPluggy(string Id, DateOnly Data, long ValorCentavos, string Tipo /* DEBIT|CREDIT */, string Status /* POSTED|PENDING */,
       string? Descricao, string? CategoriaId, string? Categoria, int? Parcela, int? Parcelas, string? FaturaId);
   internal sealed record FaturaPluggy(string Id, DateOnly Vencimento, DateOnly? Fechamento, long TotalCentavos);
@@ -317,6 +355,8 @@ public interface IMetasDeContas { Task<bool> LigarContaAMetaAsync(Guid contaId, 
   - `Apelido_repetido_devolve_a_sugestao`;
   - `Put_nao_muda_o_saldo_inicial_de_conta_ligada`: 409 "Esta conta vem do banco. O saldo inicial é calculado." (D3);
   - `Put_de_conta_ligada_aceita_apelido_e_dias`;
+  - `Conta_ligada_pode_ser_arquivada_e_desarquivada`;
+  - `Apagar_conta_ligada_da_409`: "Esta conta vem do banco. Arquive para parar a sincronização." (decisão 7);
   - `ContaResumo_expoe_Ligada`;
   - `LigarContaAMeta_e_idempotente`.
 - [ ] **Passo 2:** rodar `--filter "ContasTests|MetasTests"` → FALHA.
@@ -330,14 +370,15 @@ public interface IMetasDeContas { Task<bool> LigarContaAMetaAsync(Guid contaId, 
 - Teste: `backend/tests/GestorFinanceiro.IntegrationTests/NascimentoTests.cs`
 
 **Migração (V0013), `integracoes.vinculos`:**
-- colunas: `id`, `casal_id`, `item_id REFERENCES integracoes.items` (D18), `tipo text CHECK (tipo IN ('CONTA','CARTAO','INVESTIMENTO'))`, `id_externo text NOT NULL` (em claro, D7), `conta_id uuid NULL` (nulo = aplicação aguardando grupo), `identidade_hmac bytea NULL`, `historico_desde date NULL`, `diferenca_centavos bigint NULL`, `diferencas_seguidas smallint NOT NULL DEFAULT 0`;
+- colunas: `id`, `casal_id`, `item_id REFERENCES integracoes.items` (D18), `tipo text CHECK (tipo IN ('CONTA','CARTAO','INVESTIMENTO'))`, `id_externo text NOT NULL` (em claro, D7), `conta_id uuid NULL` (nulo = aplicação aguardando grupo), `identidade_hmac bytea NULL`, `historico_desde date NULL`, `importado_ate date NULL` (último dia coberto pela importação do vínculo; decisão 7), `diferenca_centavos bigint NULL`, `diferencas_seguidas smallint NOT NULL DEFAULT 0`;
 - `ux_vinculos_externo (item_id, tipo, id_externo) WHERE NOT is_deleted`;
 - `ux_vinculos_identidade (casal_id, identidade_hmac) WHERE NOT is_deleted AND identidade_hmac IS NOT NULL`;
 - `audit.proteger`.
 - `identidade_hmac`, com `ICofre.IndiceCego(…, "integracoes.identidade")`:
-  - conta: `"<banco normalizado>|<AgenciaEConta>"`;
-  - cartão: `"<banco normalizado>|<FinalDoCartao>|<Portador normalizado>"`;
+  - conta: `"<CodigoDoBanco ou vazio>|<AgenciaEConta>"`;
+  - cartão: `"<CodigoDoBanco ou vazio>|<FinalDoCartao>|<Portador normalizado>"` (portador por HMAC, decisão 6);
   - investimento: nulo.
+- O nome do banco digitado na tela do item **nunca** entra no `identidade_hmac`; ele serve só ao apelido (decisão 1).
 
 **Interfaces:**
 - Produz: `Descoberta.ListarAsync(Guid itemId, CancellationToken ct) → DescobertaDto`.
@@ -351,6 +392,7 @@ public interface IMetasDeContas { Task<bool> LigarContaAMetaAsync(Guid contaId, 
   - `Conta_conjunta_sugere_Conjunta`: "Itaú Corrente · Conjunta";
   - `Dias_do_cartao_vem_das_faturas`: 3 faturas sintéticas com fechamento 03 e vencimento 10 → 3 e 10 (D1);
   - `Conta_que_ja_vem_da_outra_conexao_e_marcada`;
+  - `Nome_do_banco_diferente_nas_duas_conexoes_ainda_trava`: "Itaú" numa conexão e "itau unibanco" na outra, mesma agência e conta → marcada (decisão 1);
   - `Descoberta_nao_grava_nada`.
 - [ ] **Passo 2:** rodar `--filter NascimentoTests` → FALHA.
 - [ ] **Passo 3:** implementar. Os dias sugeridos são a moda do dia de `Fechamento` e de `Vencimento` das faturas; sem faturas, nulo e a pessoa preenche.
@@ -394,37 +436,6 @@ public interface IMetasDeContas { Task<bool> LigarContaAMetaAsync(Guid contaId, 
 ---
 
 ## Etapa 4 · Importação, histórico de 2026, saldo inicial e bloqueio (PR 4)
-
-### Tarefa 4.1: Medição D3 (script de estrutura, rodado pela pessoa)
-
-**Arquivos:**
-- Criar: `infra/pluggy/medir-saldos.sh`; `infra/pluggy/testes/pluggy-falso.py` (servidor local só com a biblioteca padrão, que responde JSON sintético); `infra/pluggy/testes/testar-medicao.sh`.
-- Modelo: `~/testar-pluggy.sh` (v2, com cursor) do CEO. Mesmo cuidado:
-  - a chave vai por descritor de arquivo;
-  - o corpo do `/auth` vai pela entrada padrão;
-  - nada é gravado em disco;
-  - a saída nunca tem valor, saldo, descrição, nome ou número.
-
-**O que o script responde, só com estrutura e booleanos:**
-1. Por cartão, qual fórmula fecha com o "valor usado" do banco (`balance`), sem imprimir valores: (a) confirmadas da fatura aberta; (b) a + pendentes; (c) b + parcelas futuras; (d) a + parcelas futuras. Saída: `cartão N: fecha com (c)` ou `cartão N: nenhuma; diferença <1% | 1–10% | >10%`.
-2. Por conta corrente: quantas pendentes existem e se o `balance` muda entre duas leituras com 60 s de intervalo (se a Pluggy atualiza o saldo sem novas transações).
-3. Sinal: contagem de `type` (DEBIT/CREDIT) × sinal de `amount`, por tipo de conta.
-4. Categorias distintas da Pluggy (id + nome genérico, como "Credit card payment" e "Investments", com contagem). Isso fixa os identificadores usados na etapa 6.
-5. Formato de data: se `date` tem hora e fuso.
-6. Quantas transações têm valor zero e quantas têm descrição vazia.
-
-**Uso pela pessoa, nunca por agente:**
-```
-ITEM=<id> SLOT=1 bash infra/pluggy/medir-saldos.sh
-```
-As chaves vêm de `infra/secrets/pluggy_<slot>_*`.
-
-- [ ] **Passo 1:** `testar-medicao.sh`, que falha. Ele sobe `pluggy-falso.py` numa porta livre com dados sintéticos, em que o cartão fecha com (c), e roda o script com `PLUGGY_URL=http://127.0.0.1:<porta>` e segredos sintéticos numa pasta temporária. Espera:
-  - a linha `cartão 1: fecha com (c)`;
-  - nenhum dos valores sintéticos (`12345`, `"Mercado Sintético"`) na saída;
-  - nenhum arquivo novo fora da pasta temporária.
-- [ ] **Passo 2:** `infra/pluggy/testes/testar-medicao.sh` → FALHA. Escrever o script. Rodar → PASSA. shellcheck pela imagem → limpo. Ligar o teste no job `backup` do CI, que já tem as ferramentas, ou num job `infra` novo.
-- [ ] **Passo 3:** commit "Pluggy: medição de saldos (estrutura)". **Parar:** a pessoa roda o script e o resultado entra no plano, nesta tarefa, como "Fórmula do cartão: …". As tarefas 4.4 e 6.x usam esse resultado. Sem ele, a 4.4 não começa.
 
 ### Tarefa 4.2: Estados, origem `SISTEMA` e `CHECK`s (Lancamentos)
 
@@ -482,6 +493,7 @@ public interface IImportacaoDeLancamentos
   - `Importar_de_novo_nao_duplica`;
   - `Reimportar_atualiza_valor_e_data`;
   - `Categoria_revisada_pelo_casal_e_preservada`;
+  - `Descricao_revisada_pelo_casal_e_preservada`: o banco manda outra descrição para a mesma chave → a do casal fica (decisão 5);
   - `Apagada_pelo_banco_vira_soft_delete_com_auditoria`;
   - `Linha_apagada_nao_e_recriada`;
   - `Pendente_vira_definitiva_com_outro_id_mantendo_a_categoria`;
@@ -523,10 +535,11 @@ public interface IImportacaoDeLancamentos
 - Teste: `backend/tests/GestorFinanceiro.IntegrationTests/SincronizacaoTests.cs`
 
 **Regras:**
-- Por vínculo CONTA ou CARTAO, desde `historico_desde`, ou desde `max(historico_desde, última sincronização ok − 10 dias)` depois da primeira importação: lê `/v2/transactions`, mapeia e chama `ImportarAsync`. Cada vínculo é uma chamada; a falha num vínculo não desfaz os outros.
+- Vínculo cuja conta está **arquivada** (`ContaResumo.Arquivada`) não sincroniza: nada é lido nem importado, o histórico fica e `importado_ate` não anda (decisão 7).
+- Por vínculo CONTA ou CARTAO, desde `historico_desde` na primeira importação; depois, desde `max(historico_desde, importado_ate − 10 dias)`. Assim, ao desarquivar, a próxima sincronização importa o período que ficou de fora. Ao terminar, `importado_ate` = hoje. lê `/v2/transactions`, mapeia e chama `ImportarAsync`. Cada vínculo é uma chamada; a falha num vínculo não desfaz os outros.
 - `historico_desde`: 2026-01-01, ou a data mais antiga recebida se o banco entregar menos. A tela mostra "Histórico desde DD/MM".
 - Saldo inicial, depois da **primeira** importação do vínculo: `DefinirSaldoInicialAsync(conta, saldoBanco − soma das confirmadas importadas até hoje, historico_desde)`.
-  - Para cartão, use a fórmula medida na Tarefa 4.1, com "saldo do sistema = −(valor usado)" (D3).
+  - Para cartão, use a fórmula medida na Tarefa 1.0, com "saldo do sistema = −(valor usado)" (D3).
 - Conferência a cada sincronização: se o saldo do sistema hoje (`IConsultaDeSaldos`) diferir do esperado pela fórmula, grava `diferenca_centavos` e incrementa `diferencas_seguidas`; se bater, zera.
   - A tela mostra "Diferença de R$ X com o banco" só com `diferencas_seguidas >= 2`. Nada é ajustado.
 - Item: `ultima_tentativa_em` sempre; `ultima_sincronizacao_em` só com sucesso.
@@ -539,6 +552,8 @@ public interface IImportacaoDeLancamentos
   - `Diferenca_so_aparece_na_segunda_sincronizacao_seguida`;
   - `Falha_num_vinculo_nao_desfaz_o_outro`;
   - `Sincronizacao_seguinte_usa_a_janela_de_10_dias`;
+  - `Conta_arquivada_nao_sincroniza_e_mantem_o_historico`;
+  - `Desarquivar_importa_o_periodo_que_ficou_de_fora`;
   - `Fatura_do_banco_diferente_aparece_em_conexoes_sem_mudar_a_fatura`;
   - `Aplicacao_nova_espera_o_grupo`.
 - [ ] **Passo 2:** rodar → FALHA. Implementar. Rodar → PASSA.
@@ -546,7 +561,7 @@ public interface IImportacaoDeLancamentos
 
 **Pronto quando:**
 - `scripts/verificar.sh --tudo` está verde;
-- o resultado da Tarefa 4.1 está registrado no plano;
+- o resultado da Tarefa 1.0 está registrado no plano (a 4.5 depende dele);
 - o QA viu, com a Pluggy simulada, o histórico importado, o saldo que fecha e o 409 em conta ligada.
 
 ---
@@ -582,19 +597,22 @@ public interface IImportacaoDeLancamentos
 
 **Interfaces (API):**
 - `GET /lancamentos/a-revisar` → `IReadOnlyList<GrupoARevisarDto(string Descricao, int Quantidade, long TotalCentavos, Guid? CategoriaSugeridaId, IReadOnlyList<Guid> Ids)>`, agrupado pela descrição normalizada.
-- `POST /lancamentos/revisao` com o corpo `{ ids: Guid[], categoriaId: Guid, aplicar: "SO_ESTA" | "SEMPRE" }`.
+- `POST /lancamentos/revisao` com o corpo `{ ids: Guid[], categoriaId: Guid, aplicar: "SO_ESTA" | "SEMPRE" | "SEMPRE_DO_BANCO" }`.
   - Marca `REVISADA` com a categoria. `SEMPRE` cria ou atualiza a regra pela descrição normalizada do primeiro id.
+  - `SEMPRE_DO_BANCO` é o botão "sempre que o banco disser <categoria>": cria ou atualiza a entrada do mapa para a `categoria_externa` do primeiro id. Nenhum outro caminho grava no mapa; não há aprendizado silencioso (decisão 2).
   - Valida: a categoria é de despesa para despesa e de receita para receita, como hoje.
-- `GET /lancamentos/categorias-externas` e `PUT /lancamentos/categorias-externas/{id}`: o mapa, editável na mesma tela (ver "Para o CEO" 2).
+- `GET /lancamentos/categorias-externas` e `PUT /lancamentos/categorias-externas/{id}`: o mapa, editável na mesma tela (decisão 2).
 
 - [ ] **Passo 1:** testes que falham:
   - `Aceitar_em_massa_marca_revisada`;
   - `Sempre_cria_regra_e_a_proxima_importacao_sugere`;
   - `So_esta_nao_cria_regra`;
+  - `Sempre_que_o_banco_disser_grava_o_mapa`;
+  - `Mapa_nunca_muda_sem_o_botao`: revisar 5 lançamentos da mesma categoria da Pluggy com `SO_ESTA` e `SEMPRE` não cria entrada no mapa;
   - `Revisada_passa_a_contar_no_orcamento`;
   - `Criar_categoria_na_revisao` (usa o `POST /categorias` existente).
 - [ ] **Passo 2:** rodar → FALHA. Implementar. Rodar → PASSA.
-- [ ] **Passo 3:** front "Revisar importados", agrupado, com aceitar em massa, "só esta / sempre que vier assim" e criar categoria. Regerar o cliente. Testes de `lib`. Commit "Lancamentos: revisão em lote".
+- [ ] **Passo 3:** front "Revisar importados", agrupado, com aceitar em massa, "só esta / sempre que vier assim / sempre que o banco disser <categoria>" e criar categoria. Regerar o cliente. Testes de `lib`. Commit "Lancamentos: revisão em lote".
 
 **Pronto quando:** verde, e o QA revisou um lote no navegador.
 
@@ -623,7 +641,7 @@ Task<Guid?> CriarParManualAsync(Guid transacaoImportadaId, Guid contaManualId, C
 
 **API:**
 - `GET /a-conferir` → `IReadOnlyList<ItemAConferirDto(Guid Id, string Tipo, Guid ContaId, string ContaApelido, DateOnly Data, long ValorCentavos, string? Descricao, IReadOnlyList<OpcaoDto> Opcoes)>`.
-- `POST /a-conferir/{id}/resolucao` com o corpo `{ opcao: "TRANSFERENCIA" | "GASTO" | "RECEITA" | "APORTE" | "RESGATE" | "IR_IOF_TAXA" | "RESGATE_NAO_IDENTIFICADO", contaId?, categoriaId?, outraTransacaoId? }`.
+- `POST /a-conferir/{id}/resolucao` com o corpo `{ opcao: "TRANSFERENCIA" | "GASTO" | "RECEITA" | "APORTE" | "RESGATE" | "IR_IOF_TAXA" | "DEIXAR_PARA_DEPOIS", contaId?, categoriaId?, outraTransacaoId? }`.
 
 - [ ] **Passo 1:** testes que falham:
   - `Pendente_que_sumiu_aparece_uma_vez`;
@@ -643,9 +661,9 @@ Task<Guid?> CriarParManualAsync(Guid transacaoImportadaId, Guid contaManualId, C
 
 **Regras:**
 - Transferência: saída numa conta ligada e entrada noutra conta ligada do casal, mesmo |valor|, datas até 1 dia útil, **par único** → `ParearComoTransferenciaAsync`. Sem par único → item `TRANSFERENCIA_SEM_PAR`.
-- Pagamento de fatura (D10): saída da corrente com `categoria_externa` = id de "pagamento de fatura" (medido na 4.1) e crédito no cartão ligado do mesmo valor, até 1 dia útil → par.
+- Pagamento de fatura (D10): saída da corrente com `categoria_externa` = id de "pagamento de fatura" (medido na Tarefa 1.0) e crédito no cartão ligado do mesmo valor, até 1 dia útil → par.
   - Cartão não ligado → item, e a resolução cria o lado do cartão (`CriarParManualAsync`).
-- Aplicação e resgate (D12): transação da corrente com `categoria_externa` de investimento (medida na 4.1) → item `APORTE_OU_RESGATE`, com o grupo sugerido pelas regras de descrição.
+- Aplicação e resgate (D12): transação da corrente com `categoria_externa` de investimento (medida na Tarefa 1.0) → item `APORTE_OU_RESGATE`, com o grupo sugerido pelas regras de descrição.
 
 - [ ] **Passo 1:** testes que falham:
   - `Transferencia_entre_ligadas_vira_par_nunca_gasto_e_receita`;
@@ -662,21 +680,28 @@ Task<Guid?> CriarParManualAsync(Guid transacaoImportadaId, Guid contaManualId, C
 - Modificar: `Sincronizacao.cs`, que soma os saldos das aplicações por `conta_id` e chama o rendimento
 - Teste: `backend/tests/GestorFinanceiro.IntegrationTests/RendimentoAutomaticoTests.cs`
 
-**Interface:** `Task RegistrarSaldoDoBancoAsync(Guid contaId, DateOnly dia, long saldoDoBancoCentavos, CancellationToken ct)` em `IImportacaoDeLancamentos`.
+**Interfaces (em `IImportacaoDeLancamentos`):**
+- `Task RegistrarSaldoDoBancoAsync(Guid contaId, DateOnly dia, long saldoDoBancoCentavos, CancellationToken ct)`;
+- `Task<bool> TemMovimentoAConferirAsync(IReadOnlyCollection<Guid> contasIds, CancellationToken ct)`: há item `APORTE_OU_RESGATE` aberto em alguma dessas contas.
 
 **Regras:**
-- Com item `APORTE_OU_RESGATE` aberto no casal, não calcula nada (ver "Para o CEO" 3).
+- A `Sincronizacao` (Integracoes) segura o rendimento **só dos grupos do mesmo item** (decisão 3). Antes de chamar `RegistrarSaldoDoBancoAsync` para os grupos de um item, ela chama `TemMovimentoAConferirAsync` com as contas CONTA daquele item. Se der verdadeiro, pula os grupos desse item; os grupos de outros items seguem.
 - Senão, diferença = saldo do banco − saldo do sistema no dia:
   - maior que 0 → receita "Rendimentos", origem `SISTEMA`, chave `rendimento:<conta>:<dia>`. Se a chave já existe no dia, **atualiza** o valor para `valor atual + diferença` (decisão de 18h58);
-  - menor que 0 → item `DIFERENCA_NEGATIVA`, chave `diferenca:<conta>:<dia>`, com o valor atualizado.
-- Resolução `IR_IOF_TAXA` → despesa origem `SISTEMA`, chave `ajuste-investimento:<conta>:<dia>`, na categoria escolhida, criada ou atualizada pela chave.
+  - menor que 0 → item `DIFERENCA_NEGATIVA`, chave `diferenca:<conta>:<dia em que abriu>`. Enquanto houver um aberto para a conta, ele é atualizado (valor e data da última leitura), em vez de abrir outro.
+- Opções da diferença negativa (decisão 4): só `IR_IOF_TAXA` e `DEIXAR_PARA_DEPOIS`. Não existe "resgate não identificado".
+- Resolução `IR_IOF_TAXA` → despesa origem `SISTEMA`, chave `ajuste-investimento:<conta>:<dia>`, na categoria escolhida, criada ou atualizada pela chave; o item fica `RESOLVIDO`.
+- Resolução `DEIXAR_PARA_DEPOIS` → nenhum lançamento; o item continua `ABERTO` em "A conferir".
 
 - [ ] **Passo 1:** testes que falham:
   - `Diferenca_positiva_vira_rendimento`;
   - `Segunda_sincronizacao_do_dia_atualiza_o_mesmo_rendimento`;
   - `Diferenca_negativa_vai_para_a_conferir_e_nunca_some`;
   - `IR_IOF_cria_despesa_na_categoria_escolhida`;
-  - `Aporte_pendente_segura_o_rendimento`;
+  - `Deixar_para_depois_nao_lanca_e_mantem_aberto`;
+  - `Diferenca_negativa_aberta_e_atualizada_nao_duplicada`;
+  - `Resgate_nao_identificado_nao_e_opcao`: a opção é recusada com 400;
+  - `Aporte_pendente_segura_so_os_grupos_do_mesmo_item`: aporte aberto na corrente do item A → grupo do item A sem rendimento; grupo do item B com rendimento;
   - `Rendimento_nao_entra_na_receita_do_orcamento` (regra existente).
 - [ ] **Passo 2:** rodar → FALHA. Implementar. Rodar → PASSA.
 - [ ] **Passo 3:** front "A conferir", com as opções por tipo. Regerar o cliente. Commit "Lancamentos: rendimento automático e A conferir no front".
@@ -765,18 +790,16 @@ public interface IPendenciasDeLancamentos
 
 ---
 
-## Para o CEO
+## Decisões do CEO
 
-O que a spec deixou aberto ou ambíguo. O plano tomou a decisão indicada em cada item, a confirmar.
+Decisões sobre o "Para o CEO" da primeira versão deste plano (PR #30). Elas valem sobre o texto das tarefas.
 
-1. **Nome do banco.** O conector de todo item do Meu Pluggy é `MeuPluggy` (medido em 11/11), então o nome do banco não vem do conector. O plano pede o nome na tela do item (campo `banco`, pré-preenchido pelo que a Pluggy der). Esse nome entra no apelido (D4) e no `identidade_hmac`; se for digitado diferente nas duas conexões, a trava contra a mesma conta física falha.
-   - Proposta: antecipar para o início da etapa 3 a parte da medição que mostra quais campos de conta e item trazem o banco.
-   - Alternativa: tirar o banco do `identidade_hmac` e usar só agência + conta.
-2. **Como o mapa categoria-da-Pluggy → categoria do casal é preenchido.** A spec cria o mapa, mas não diz como ele é alimentado. O plano o deixa editável na tela "Revisar importados" (lista das categorias da Pluggy já vistas). Alternativa: aprender sozinho quando N revisões seguidas da mesma categoria da Pluggy escolhem a mesma categoria.
-3. **Aporte pendente segura o rendimento de qual grupo (D12)?** Antes de ser conferido, um aporte não diz para qual grupo vai. O plano segura o rendimento de **todos** os grupos do casal enquanto houver `APORTE_OU_RESGATE` aberto, o que é conservador. Alternativa: segurar só os grupos do mesmo banco.
-4. **"Resgate não identificado" (D12).** A spec dá a opção, mas não diz que lançamento ela cria. Uma diferença negativa precisa de um lançamento para o saldo fechar. Despesa exige categoria (D15), e transferência exige o outro lado. A opção fica bloqueada no plano até a decisão.
-5. **Descrição de linha já revisada.** O plano: o banco só atualiza a descrição enquanto a linha está `A_REVISAR`; depois da revisão, descrição e categoria são do casal. A spec só fala da categoria.
-6. **Portador do cartão no `identidade_hmac`.** A §1 diz "final do número + titular". O plano usa o portador informado pelo banco (`creditData.holder`, normalizado e só dentro do HMAC). O `usuario_id` da conexão não serviria, porque a mesma conta física vinda das duas conexões teria usuários diferentes.
-7. **Conta ligada: arquivar e apagar.** A spec não diz. O plano mantém o apagar como hoje (recusado se a conta tiver lançamentos, sempre o caso numa conta ligada). Uma conta ligada arquivada continua recebendo a sincronização, porque o banco é a fonte. Confirmar, ou definir que arquivar desliga o vínculo.
-8. **Pagamento de fatura e investimento por categoria da Pluggy.** O reconhecimento depende dos ids das categorias "pagamento de fatura" e "investimentos" da Pluggy, que a medição da Tarefa 4.1 vai mostrar. Se o Itaú não marcar essas categorias, tudo cai em "A conferir" e as regras de descrição aprendem. Confirmar que esse é o caminho aceito.
-9. **Medição D3 e a ordem da etapa 4.** A Tarefa 4.1 para o trabalho até a pessoa rodar o script. Confirmar que a etapa 4 pode ficar parada à espera dele, ou que as tarefas 4.2 e 4.3, que não dependem da fórmula, podem andar antes.
+1. **Nome do banco** (CEO 11/11 19h). O nome digitado nunca entra na trava de conta repetida. A trava usa agência e conta, mais o código do banco se a medição mostrar que ele vem da Pluggy. O nome serve só ao apelido. → Tarefas 1.0 (item 7 da medição), 1.3 (`ContaPluggy.CodigoDoBanco`) e 3.2.
+2. **Mapa de categorias** (CEO 11/11 19h). Editável em "Revisar importados", com o botão "sempre que o banco disser <categoria>"; sem aprendizado silencioso. → Tarefa 5.2.
+3. **Aporte pendente** (CEO 11/11 19h). Segura o rendimento só dos grupos do mesmo item. → Tarefa 6.3.
+4. **Diferença negativa** (CEO 11/11 19h). "Resgate não identificado" sai. Ficam "IR/IOF ou taxa" (despesa na categoria escolhida, chave `ajuste-investimento`) e "deixar para depois" (fica em "A conferir", sem lançamento). → Tarefas 6.1 e 6.3.
+5. **Descrição depois da revisão** (CEO 11/11 19h). Passa a ser do casal, como a categoria. → Tarefa 4.3.
+6. **Portador do cartão por HMAC** (CEO 11/11 19h): confirmado. → Tarefa 3.2.
+7. **Arquivar conta ligada** (CEO 11/11 19h). Desliga a sincronização do vínculo e mantém o histórico. Desarquivar religa e importa o período que ficou de fora. Apagar continua recusado. → Tarefas 3.1, 3.2 (`importado_ate`) e 4.5.
+8. **Reconhecimento pela categoria da Pluggy** (CEO 11/11 19h), com "A conferir" como reserva: confirmado. → Tarefa 6.2.
+9. **Medição** (CEO 11/11 19h). O `medir-saldos.sh`, incluindo de onde vem o banco, é o primeiro commit do PR da etapa 1 e é rodado pela pessoa. As tarefas 4.2 e 4.3 podem andar antes do resultado. → Tarefa 1.0.
