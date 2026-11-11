@@ -24,7 +24,7 @@ Sistema financeiro pessoal de um casal, rodando num PC de casa. Dados reais de b
 6. **Dinheiro é `Dinheiro` (centavos em `long`)** no domínio e `bigint` no banco. Nunca `double`/`float`.
 7. **Módulos não se enxergam.** Só tipos em `GestorFinanceiro.Modules.<X>.Contracts` (e a classe `<X>Module`) são `public`; o resto é `internal`. Um módulo nunca lê o schema de outro.
 8. **API só por DTO.** Endpoints em `/api/v1`, erros em Problem Details (RFC 9457). Mudou contrato → regere o cliente do front no mesmo commit.
-9. **Toda consulta respeita os filtros nomeados** `SoftDelete` e `Casal`. `IgnoreQueryFilters` só com o nome do filtro (`["SoftDelete"]`) e só na tela de lixeira ou, dentro do módulo dono, na checagem de chave natural de importação (sem expor o conteúdo da linha apagada; spec da Fase 2, D6); nunca desligar o filtro `Casal`.
+9. **Toda consulta respeita os filtros nomeados** `SoftDelete` e `Casal`. `IgnoreQueryFilters` só com o nome do filtro (`["SoftDelete"]`) e só na tela de lixeira ou, dentro do módulo dono, na checagem de chave natural de importação (sem expor o conteúdo da linha apagada; spec da Fase 2, D6); nunca desligar o filtro `Casal`, exceto no `Identidade`, nos fluxos anteriores à sessão (login, sessões, pedido de dispositivo, recuperação, primeiro acesso).
 10. **Gemini não calcula.** Números vêm do `FinanceEngine`; o Gemini recebe só agregados com apelidos (`Conjuge_1`) e o texto dele é conferido contra os números.
 
 ## Como trabalhar aqui
@@ -33,6 +33,7 @@ Sistema financeiro pessoal de um casal, rodando num PC de casa. Dados reais de b
 - Mudança em mais de um módulo: proponha o plano antes (plan mode).
 - Dados de teste são sempre sintéticos. CPFs de teste: use geradores válidos, nunca um CPF real.
 - Antes de concluir, rode o teste de arquitetura; o hook `Stop` roda `scripts/verificar.sh` e bloqueia se falhar.
+- Agentes nunca operam em `/opt/gestor-financeiro` (a instalação de verdade, de root); só a pessoa, com `sudo`.
 - Estas regras valem para todo agente, não só para o Claude. Papéis (ADR-012, `AGENTS.md`): o CEO (claude.ai) decide e escreve specs; o Claude Code implementa; o Antigravity faz QA e documentação. Siga a ordem de serviço do CEO; o que questiona a spec sobe para ele. Melhoria visual: skill `melhorar-tela`. Ao terminar uma tarefa, use a skill `revisao-cruzada`; nunca `git commit --no-verify`.
 
 ## Onde está cada coisa
