@@ -24,8 +24,11 @@ TMP_RUN="$T/tmp-run"
 falhas=0
 sobras=0
 
+PENDRIVES=()
 limpar() {
+  local p
   fonte_derrubar
+  for p in "${PENDRIVES[@]}"; do rm -rf "$p"; done
   rm -rf "$T"
 }
 trap limpar EXIT
@@ -254,6 +257,46 @@ rotacao_real_no_domingo() {
   [ ! -e "$dir/diario/gestor-2026-10-02.tar.age" ] && [ -e "$dir/diario/gestor-2026-10-03.tar.age" ] || return 1
   [ ! -e "$dir/semanal/gestor-2026-10-04.tar.age" ] && [ -e "$dir/semanal/gestor-2026-10-11.tar.age" ] || return 1
   grep -q "rotacao: pasta=diario manteve=7 removeu=2" "$T/stderr" && grep -q "rotacao: pasta=semanal manteve=4 removeu=1" "$T/stderr"
+}
+
+# Ponta a ponta com o enviar.sh e o rotacionar.sh de verdade no lugar dos falsos, num domingo.
+# Pendrive: pasta num mktemp de /dev/shm (ponto de montagem real); rclone: :local:<tmp>.
+# Uso: envio_real <dir> <remoto rclone>. Saída do backup em $T/stderr; código em ENVIO_CODIGO.
+ENVIO_PEN="" ENVIO_CODIGO=0
+envio_real() {
+  local dir="$1" remoto="$2" b="$RAIZ_FALSA/infra/backup"
+  ENVIO_PEN="$(mktemp -d -p /dev/shm)"; PENDRIVES+=("$ENVIO_PEN")
+  mv "$b/rotacionar.sh" "$T/rotacionar-falso.sh"; mv "$b/enviar.sh" "$T/enviar-falso.sh"
+  cp "$TESTES_DIR/../rotacionar.sh" "$TESTES_DIR/../enviar.sh" "$b/"
+  ENVIO_CODIGO=0
+  GF_BACKUP_DIR="$dir" GF_BACKUP_DESTINATARIOS="$DESTINATARIOS" PG_CONTAINER="$FONTE_CONTAINER" GF_TMP="$TMP_RUN" \
+    GF_BACKUP_PENDRIVE_MONTAGEM=/dev/shm GF_BACKUP_PENDRIVE_PASTA="$ENVIO_PEN" GF_BACKUP_RCLONE_REMOTO="$remoto" \
+    "$b/backup.sh" --data 2026-11-08 2>"$T/stderr" || ENVIO_CODIGO=$?
+  mv -f "$T/rotacionar-falso.sh" "$b/rotacionar.sh"; mv -f "$T/enviar-falso.sh" "$b/enviar.sh"
+}
+
+envio_real_no_domingo() {
+  local dir="$T/b-envio-real" rem="$T/remoto-envio-real" h destino pasta
+  envio_real "$dir" ":local:$rem"
+  [ "$ENVIO_CODIGO" -eq 0 ] || { echo "  backup saiu com $ENVIO_CODIGO"; mostrar_stderr; return 1; }
+  h="$(sha256sum "$dir/diario/gestor-2026-11-08.tar.age" | cut -d' ' -f1)"
+  for destino in "$ENVIO_PEN" "$rem"; do
+    for pasta in diario semanal; do
+      [ "$(sha256sum "$destino/$pasta/gestor-2026-11-08.tar.age" 2>/dev/null | cut -d' ' -f1)" = "$h" ] \
+        || { echo "  $pasta em $destino não confere"; return 1; }
+    done
+    cmp -s "$destino/cadeia/cadeia-2026-11-08.txt" "$dir/cadeia/cadeia-2026-11-08.txt" \
+      || { echo "  cadeia em $destino não confere"; return 1; }
+  done
+}
+
+envio_real_rclone_falha_backup_falha() {
+  local dir="$T/b-envio-real-falha"
+  envio_real "$dir" ":local:/caminho/sem/permissao"
+  [ "$ENVIO_CODIGO" -ne 0 ] || { echo "  backup saiu com 0"; return 1; }
+  [ -f "$dir/diario/gestor-2026-11-08.tar.age" ] || { echo "  sem pacote local"; return 1; }
+  [ -f "$ENVIO_PEN/diario/gestor-2026-11-08.tar.age" ] || { echo "  sem pacote no pendrive"; mostrar_stderr; return 1; }
+  grep -q "envio codigo=" "$T/stderr" || { mostrar_stderr; return 1; }
 }
 
 mesmo_dia_substitui() {
@@ -515,6 +558,8 @@ caso recusa_destinatarios_sem_age1
 caso recusa_sem_dek
 caso domingo_vai_para_semanal
 caso rotacao_real_no_domingo
+caso envio_real_no_domingo
+caso envio_real_rclone_falha_backup_falha
 caso mesmo_dia_substitui
 caso cadeia_dentro_e_fora
 caso codigo_do_enviar_e_o_do_backup
