@@ -220,10 +220,18 @@ rodando="$("${compose[@]}" ps -q postgres 2>/dev/null)" || falhar "compose ps"
 [ -z "$rodando" ] || falhar "postgres em execucao"
 
 # Os segredos são 0444 (os containers leem com outro uid e o compose ignora "mode" em segredo de
-# arquivo); quem os protege no host é a pasta, em 0700. Existente com outro modo: recusa.
+# arquivo); quem os protege no host é a pasta, em 0700. Existente com outro modo: recusa. Exceção,
+# como no gerar-segredos.sh: a pasta do clone, só com o README.md, é fechada em 0700 (na hora de
+# gravar, depois de todas as recusas). Qualquer outra coisa ali nunca é corrigida em silêncio.
+fechar_pasta=0
 if [ -e "$dir_segredos" ] || [ -L "$dir_segredos" ]; then
-  { [ -d "$dir_segredos" ] && [ ! -L "$dir_segredos" ] && [ "$(stat -c %a "$dir_segredos")" = 700 ]; } \
-    || falhar "infra/secrets precisa estar em 0700"
+  { [ -d "$dir_segredos" ] && [ ! -L "$dir_segredos" ]; } || falhar "infra/secrets precisa estar em 0700"
+  if [ "$(stat -c %a "$dir_segredos")" != 700 ]; then
+    { [ -f "$dir_segredos/README.md" ] && [ ! -L "$dir_segredos/README.md" ] \
+      && [ "$(find "$dir_segredos" -mindepth 1 -maxdepth 1 -printf x 2>/dev/null)" = x ]; } \
+      || falhar "infra/secrets precisa estar em 0700"
+    fechar_pasta=1
+  fi
 fi
 
 # Compara um arquivo do pacote com o que já existe. 0 = ausente (instalar), 1 = igual (manter).
@@ -261,6 +269,10 @@ fi
 # chave de serviço legível por grupo/outros). dek.servico 0400, em data/chaves.
 mkdir -p -- "$GF_RAIZ/infra" "$dir_chaves"
 [ -d "$dir_segredos" ] || mkdir -m 700 -- "$dir_segredos"
+if [ "$fechar_pasta" -eq 1 ]; then
+  chmod 700 -- "$dir_segredos"
+  log "infra/secrets fechada em 0700 (só tinha o README)"
+fi
 for nome in "${instalar_segredos[@]}"; do
   modo=444
   [ "$nome" != gf_chave_servico ] || modo=400

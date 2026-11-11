@@ -3,7 +3,8 @@
 #
 # Os segredos são 0444: o compose monta segredo de arquivo como bind mount e ignora "mode", e os
 # containers leem com outro uid (postgres 70, api 1654). Quem protege no host é a pasta, em
-# 0700: se ela já existir com outro modo, o script falha em vez de gravar.
+# 0700: se ela já existir com outro modo, o script falha em vez de gravar. Exceção: a pasta do
+# clone, só com o README.md, é fechada em 0700 com aviso.
 # Exceção: gf_chave_servico fica 0400, porque a api recusa chave de serviço legível por
 # grupo/outros (ChaveDeServico.cs); ela recebe chown 1654 (próximos passos, abaixo).
 # Teste: infra/testes/testar-gerar-segredos.sh e infra/testes/testar-subida.sh.
@@ -15,8 +16,17 @@ umask 077
 mkdir -p "$raiz/infra"
 [ -d "$dir" ] || mkdir -m 700 "$dir"
 if [ -L "$dir" ] || [ "$(stat -c %a "$dir")" != 700 ]; then
-  echo "FALHA infra/secrets precisa estar em 0700" >&2
-  exit 1
+  # Clone novo: o git cria a pasta (por causa do README.md) com o modo do umask. Só com o
+  # README não há segredo a proteger, então ela é fechada. Qualquer outra coisa ali: falha,
+  # nunca corrige em silêncio uma pasta que pode já ter segredo exposto.
+  if [ ! -L "$dir" ] && [ -f "$dir/README.md" ] && [ ! -L "$dir/README.md" ] \
+     && [ "$(find "$dir" -mindepth 1 -maxdepth 1 -printf x 2>/dev/null)" = x ]; then
+    chmod 700 "$dir"
+    echo "infra/secrets fechada em 0700 (só tinha o README)" >&2
+  else
+    echo "FALHA infra/secrets precisa estar em 0700" >&2
+    exit 1
+  fi
 fi
 
 gerar_senha() { openssl rand -base64 33 | tr -d '/+=' | cut -c1-40; }
