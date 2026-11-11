@@ -136,6 +136,20 @@ As chaves vêm de `infra/secrets/pluggy_<slot>_*`.
   - Usam o resultado: a Tarefa 3.2 (código do banco), a 4.5 (fórmula do cartão) e a 6.2 (ids das categorias).
   - As tarefas 4.2 e 4.3 podem andar antes do resultado (decisão 9).
 
+**Resultado da medição** (rodada pela pessoa em 11/11, ~20h55; item do Itaú e um segundo banco com corrente e dois cartões; só estrutura):
+- **Datas:** a corrente tem hora real em todas as transações. No cartão, 30 estão às 03:00Z e o resto em outras horas. Nenhuma está às 00:00Z, nos dois bancos. A conversão para o dia de São Paulo está certa.
+- **Sinal:** na corrente, DEBIT é negativo e CREDIT é positivo. No cartão, DEBIT é positivo (compra) e CREDIT é negativo (pagamento ou estorno). O segundo banco confirma a corrente.
+- **Categorias do Itaú presentes:**
+  - `05100000` Credit card payment, `03000000` Investments, `03020000` Fixed income, `03060000` Proceeds interests and dividends;
+  - `04000000` Same person transfer, `05010000` Transfer - Bank Slip, `15030000` Tax on financial operations, `15010000` Income taxes;
+  - 4 transações sem categoria.
+
+  O segundo banco tem 7 transações `04000000` entre contas da mesma pessoa em bancos diferentes.
+- **Banco:** nenhum campo traz o código do banco; `bankData.transferNumber` existe nos dois bancos, e o conector é sempre `MeuPluggy`.
+- **Cartão:** nenhuma das fórmulas (a) a (d) fecha o saldo; a diferença passa de 10%. Há 184 transações dentro de faturas pelo `billId` e 32 sem `billId` (as pendentes).
+- **Segundo banco:** tem dois cartões sem transação no ano, um com 11 faturas e outro sem nenhuma.
+- As decisões do CEO sobre este resultado estão em "Decisões do CEO" (11/11 21h).
+
 ### Tarefa 1.1: Teste de arquitetura "só leitura na Pluggy"
 
 **Arquivos:**
