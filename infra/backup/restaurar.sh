@@ -219,6 +219,13 @@ fi
 rodando="$("${compose[@]}" ps -q postgres 2>/dev/null)" || falhar "compose ps"
 [ -z "$rodando" ] || falhar "postgres em execucao"
 
+# Os segredos são 0444 (os containers leem com outro uid e o compose ignora "mode" em segredo de
+# arquivo); quem os protege no host é a pasta, em 0700. Existente com outro modo: recusa.
+if [ -e "$dir_segredos" ] || [ -L "$dir_segredos" ]; then
+  { [ -d "$dir_segredos" ] && [ ! -L "$dir_segredos" ] && [ "$(stat -c %a "$dir_segredos")" = 700 ]; } \
+    || falhar "infra/secrets precisa estar em 0700"
+fi
+
 # Compara um arquivo do pacote com o que já existe. 0 = ausente (instalar), 1 = igual (manter).
 # Diferente, ilegível ou que não seja arquivo regular aborta.
 comparar_existente() {
@@ -250,10 +257,14 @@ else
   log "segredo igual mantido: dek.servico"
 fi
 
-# Segredos e dek.servico, 0400.
-mkdir -p -- "$dir_segredos" "$dir_chaves"
+# Segredos 0444 numa pasta 0700, como o gerar-segredos.sh; gf_chave_servico 0400 (a api recusa
+# chave de serviço legível por grupo/outros). dek.servico 0400, em data/chaves.
+mkdir -p -- "$GF_RAIZ/infra" "$dir_chaves"
+[ -d "$dir_segredos" ] || mkdir -m 700 -- "$dir_segredos"
 for nome in "${instalar_segredos[@]}"; do
-  install -m 400 -T -- "$dir/secrets/$nome" "$dir_segredos/$nome"
+  modo=444
+  [ "$nome" != gf_chave_servico ] || modo=400
+  install -m "$modo" -T -- "$dir/secrets/$nome" "$dir_segredos/$nome"
 done
 [ "$instalar_dek" -eq 0 ] || install -m 400 -T -- "$dir/chaves/dek.servico" "$dir_chaves/dek.servico"
 log "segredos: instalados=$(( ${#instalar_segredos[@]} + instalar_dek )) mantidos=$((mantidos + 1 - instalar_dek))"
@@ -318,7 +329,7 @@ cat <<EOF
 Restauração instalada a partir de $nome_pacote (eventos_total=$obtido_total, eventos_max_seq=$obtido_max_seq).
 O postgres ficou de pé. Próximos passos, na raiz $GF_RAIZ:
   1. Dê à API a posse do que ela lê:
-       sudo chown 1654 infra/secrets/{gf_chave_servico,pgpass_app,pgpass_migrador}
+       sudo chown 1654 infra/secrets/gf_chave_servico
        sudo chown -R 1654 infra/data/chaves
   2. Suba o resto:
        docker compose -f infra/docker-compose.yml up -d

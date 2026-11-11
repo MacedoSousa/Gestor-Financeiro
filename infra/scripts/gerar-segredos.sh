@@ -1,12 +1,23 @@
 #!/usr/bin/env bash
 # Gera os segredos locais em infra/secrets/ (fora do git). Não sobrescreve nada que já exista.
+#
+# Os segredos são 0444: o compose monta segredo de arquivo como bind mount e ignora "mode", e os
+# containers leem com outro uid (postgres 70, api 1654). Quem protege no host é a pasta, em
+# 0700: se ela já existir com outro modo, o script falha em vez de gravar.
+# Exceção: gf_chave_servico fica 0400, porque a api recusa chave de serviço legível por
+# grupo/outros (ChaveDeServico.cs); ela recebe chown 1654 (próximos passos, abaixo).
+# Teste: infra/testes/testar-gerar-segredos.sh e infra/testes/testar-subida.sh.
 set -euo pipefail
 
 raiz="$(cd "$(dirname "$0")/../.." && pwd)"
 dir="$raiz/infra/secrets"
-mkdir -p "$dir"
-chmod 700 "$dir"
 umask 077
+mkdir -p "$raiz/infra"
+[ -d "$dir" ] || mkdir -m 700 "$dir"
+if [ -L "$dir" ] || [ "$(stat -c %a "$dir")" != 700 ]; then
+  echo "FALHA infra/secrets precisa estar em 0700" >&2
+  exit 1
+fi
 
 gerar_senha() { openssl rand -base64 33 | tr -d '/+=' | cut -c1-40; }
 
@@ -16,7 +27,7 @@ criar() {
     echo "mantido  $nome"
   else
     "$@" > "$dir/$nome"
-    chmod 400 "$dir/$nome"
+    if [ "$nome" = gf_chave_servico ]; then chmod 400 "$dir/$nome"; else chmod 444 "$dir/$nome"; fi
     echo "criado   $nome"
   fi
 }
@@ -31,9 +42,10 @@ criar gf_chave_servico  openssl rand 32
 cat <<EOF
 
 Próximos passos (a API em container roda como o usuário 'app', uid 1654):
-  1. Dê à API a posse dos arquivos que ela lê e crie a pasta das chaves já com o dono certo
-     (se o Docker criar infra/data/chaves sozinho, ela fica com o root e a API não grava nem lê):
-       sudo chown 1654 infra/secrets/{gf_chave_servico,pgpass_app,pgpass_migrador}
+  1. Dê à API a posse da chave de serviço (0400; os outros segredos são 0444 numa pasta 0700 e
+     não precisam de chown) e crie a pasta das chaves já com o dono certo (se o Docker criar
+     infra/data/chaves sozinho, ela fica com o root e a API não grava nem lê):
+       sudo chown 1654 infra/secrets/gf_chave_servico
        sudo install -d -o 1654 -m 700 infra/data/chaves
   2. docker compose -f infra/docker-compose.yml up -d postgres
   3. Rode as migrações e crie a chave de dados. --inicializar-chaves cria só a DEK e o envelope

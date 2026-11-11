@@ -23,9 +23,7 @@ COMPOSE_TESTE="$TESTES_DIR/compose-restauracao.yml"
 umask 077
 ID_EXECUCAO="$(aleatorio)"
 GF_EXECUCAO="teste-$ID_EXECUCAO"
-GF_TESTE_UID="$(id -u)"
-GF_TESTE_GID="$(id -g)"
-export GF_EXECUCAO GF_TESTE_UID GF_TESTE_GID
+export GF_EXECUCAO
 
 T="$(mktemp -d)"
 CHAVE="$T/chave.txt"
@@ -245,7 +243,7 @@ sha256sums_nao_conferem_aborta() {
 }
 
 instalar_em_raiz_vazia() {
-  local base="$CASO/base" f total max_seq quebras obtido BACKUP_TESTE="$CASO/backup"
+  local base="$CASO/base" f modo total max_seq quebras obtido BACKUP_TESTE="$CASO/backup"
   preparar_raiz vazia
   abrir_base "$base"
   mkdir -p "$BACKUP_TESTE/cadeia"
@@ -257,8 +255,11 @@ instalar_em_raiz_vazia() {
 
   for f in "$base"/secrets/*; do
     cmp -s "$f" "$R/infra/secrets/$(basename "$f")" || { echo "  segredo $(basename "$f") diferente"; return 1; }
-    [ "$(stat -c %a "$R/infra/secrets/$(basename "$f")")" = 400 ] || { echo "  modo de $(basename "$f")"; return 1; }
+    # 0444 (os containers leem com outro uid), menos a chave de serviço: 0400, a api recusa outra.
+    modo=444; [ "$(basename "$f")" != gf_chave_servico ] || modo=400
+    [ "$(stat -c %a "$R/infra/secrets/$(basename "$f")")" = "$modo" ] || { echo "  modo de $(basename "$f")"; return 1; }
   done
+  [ "$(stat -c %a "$R/infra/secrets")" = 700 ] || { echo "  modo da pasta infra/secrets"; return 1; }
   cmp -s "$base/chaves/dek.servico" "$R/infra/data/chaves/dek.servico" || { echo "  dek diferente"; return 1; }
   [ "$(stat -c %a "$R/infra/data/chaves/dek.servico")" = 400 ] || { echo "  modo do dek"; return 1; }
 
@@ -307,6 +308,19 @@ instalar_recusa_segredo_diferente() {
   [ "$(marca "$R/infra/secrets/pg_superusuario")" = "$antes" ] || { echo "  arquivo reescrito"; return 1; }
   [ "$(cat "$R/infra/secrets/pg_superusuario")" = "$ALTERADO" ] || { echo "  conteúdo mudou"; return 1; }
   [ "$(find "$R/infra/secrets" -mindepth 1 | wc -l)" = 1 ] || { echo "  instalou outros segredos"; return 1; }
+  [ ! -e "$R/infra/data/chaves" ] || { echo "  instalou o dek"; return 1; }
+  [ -z "$(compose_r ps -aq 2>/dev/null)" ] || { echo "  subiu container"; return 1; }
+}
+
+# Os segredos são 0444 (os containers leem com outro uid); quem protege no host é a pasta em
+# 0700. Pasta existente com outro modo: recusa antes de gravar qualquer coisa.
+instalar_recusa_pasta_de_segredos_aberta() {
+  preparar_raiz aberta
+  mkdir -m 755 "$R/infra/secrets"
+  if instalar; then echo "  instalou"; return 1; fi
+  tem "FALHA infra/secrets precisa estar em 0700" || return 1
+  [ -z "$(ls -A "$R/infra/secrets")" ] || { echo "  gravou segredos"; return 1; }
+  [ "$(stat -c %a "$R/infra/secrets")" = 755 ] || { echo "  mudou o modo da pasta"; return 1; }
   [ ! -e "$R/infra/data/chaves" ] || { echo "  instalou o dek"; return 1; }
   [ -z "$(compose_r ps -aq 2>/dev/null)" ] || { echo "  subiu container"; return 1; }
 }
@@ -429,7 +443,7 @@ instalar_recusa_postgres_rodando() {
   abrir_base "$base"
   mkdir -p "$R/infra/secrets"
   for nome in pg_superusuario pg_senha_app pg_senha_migrador; do
-    install -m 400 "$base/secrets/$nome" "$R/infra/secrets/$nome"
+    install -m 444 "$base/secrets/$nome" "$R/infra/secrets/$nome"
   done
   compose_r up -d postgres >/dev/null 2>&1 || { echo "  postgres de teste não subiu"; return 1; }
   [ -n "$(compose_r ps -q postgres)" ] || { echo "  postgres de teste não está rodando"; return 1; }
@@ -447,7 +461,7 @@ instalar_aceita_segredo_igual() {
   preparar_raiz igual
   abrir_base "$base"
   mkdir -p "$R/infra/secrets"
-  install -m 400 "$base/secrets/pg_superusuario" "$R/infra/secrets/pg_superusuario"
+  install -m 444 "$base/secrets/pg_superusuario" "$R/infra/secrets/pg_superusuario"
   antes="$(marca "$R/infra/secrets/pg_superusuario")"
   instalar || { mostrar; return 1; }
   [ "$(marca "$R/infra/secrets/pg_superusuario")" = "$antes" ] || { echo "  reescreveu o segredo igual"; return 1; }
@@ -478,7 +492,7 @@ log_sem_conteudo() {
 
 TODOS=(
   verificar_ida_e_volta identidade_errada_falha sha256sums_nao_conferem_aborta instalar_em_raiz_vazia
-  instalar_recusa_volume_com_dados instalar_recusa_segredo_diferente
+  instalar_recusa_volume_com_dados instalar_recusa_segredo_diferente instalar_recusa_pasta_de_segredos_aberta
   pacote_com_caminho_estranho_recusa sha256sums_incompleto_aborta identidade_dentro_do_repositorio_recusa
   identidade_pela_entrada_padrao gf_tmp_obrigatorio nada_em_claro_sobra instalar_recusa_postgres_rodando
   instalar_aceita_segredo_igual log_sem_conteudo
