@@ -44,8 +44,10 @@ services:
       postgres: { condition: service_healthy }
     environment:
       ASPNETCORE_ENVIRONMENT: Production
-      ConnectionStrings__App: "Host=postgres;Database=gestor;Username=gf_app;Passfile=/run/secrets/pgpass_app"
-      ConnectionStrings__Migrador: "Host=postgres;Database=gestor;Username=gf_migrator;Passfile=/run/secrets/pgpass_migrador"
+      # GSS Encryption Mode=Disable: o Npgsql tenta GSS por padrão (Prefer) e o .NET carrega o
+      # libgssapi_krb5.so.2, que a imagem não tem. Sem Kerberos aqui; a autenticação é SCRAM.
+      ConnectionStrings__App: "Host=postgres;Database=gestor;Username=gf_app;Passfile=/run/secrets/pgpass_app;GSS Encryption Mode=Disable"
+      ConnectionStrings__Migrador: "Host=postgres;Database=gestor;Username=gf_migrator;Passfile=/run/secrets/pgpass_migrador;GSS Encryption Mode=Disable"
       Seguranca__WebAuthn__RpId: ${DOMINIO:?defina DOMINIO em infra/.env}
       Seguranca__WebAuthn__Origens__0: https://${DOMINIO:?defina DOMINIO em infra/.env}
     secrets: [gf_chave_servico, pgpass_app, pgpass_migrador]

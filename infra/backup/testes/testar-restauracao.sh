@@ -325,6 +325,36 @@ instalar_recusa_pasta_de_segredos_aberta() {
   [ -z "$(compose_r ps -aq 2>/dev/null)" ] || { echo "  subiu container"; return 1; }
 }
 
+# Clone novo: infra/secrets existe só com o README.md, no modo do umask. Sem segredo a proteger,
+# o --instalar fecha a pasta em 0700, avisa e instala.
+instalar_fecha_pasta_do_clone_so_com_readme() {
+  preparar_raiz clone
+  mkdir -m 775 "$R/infra/secrets"
+  cp "$RAIZ_REPO/infra/secrets/README.md" "$R/infra/secrets/README.md"
+  instalar || { mostrar; return 1; }
+  tem "infra/secrets fechada em 0700 (só tinha o README)" || return 1
+  [ "$(stat -c %a "$R/infra/secrets")" = 700 ] || { echo "  pasta $(stat -c %a "$R/infra/secrets")"; return 1; }
+  [ "$(find "$R/infra/secrets" -type f ! -name README.md | wc -l)" = 6 ] || { echo "  segredos instalados"; return 1; }
+  cmp -s "$RAIZ_REPO/infra/secrets/README.md" "$R/infra/secrets/README.md" || { echo "  mexeu no README"; return 1; }
+  [ -f "$R/infra/data/chaves/dek.servico" ] || { echo "  sem dek"; return 1; }
+}
+
+# Decisão do #24: pasta aberta com qualquer coisa além do README continua recusada.
+instalar_recusa_pasta_aberta_com_mais_que_o_readme() {
+  local antes
+  preparar_raiz aberta-readme
+  mkdir -m 775 "$R/infra/secrets"
+  cp "$RAIZ_REPO/infra/secrets/README.md" "$R/infra/secrets/README.md"
+  echo x >"$R/infra/secrets/notas.txt"
+  antes="$(cd "$R/infra/secrets" && find . -printf '%P %y %s\n' | sort)"
+  if instalar; then echo "  instalou"; return 1; fi
+  tem "FALHA infra/secrets precisa estar em 0700" || return 1
+  [ "$(cd "$R/infra/secrets" && find . -printf '%P %y %s\n' | sort)" = "$antes" ] || { echo "  gravou segredos"; return 1; }
+  [ "$(stat -c %a "$R/infra/secrets")" = 775 ] || { echo "  mudou o modo da pasta"; return 1; }
+  [ ! -e "$R/infra/data/chaves" ] || { echo "  instalou o dek"; return 1; }
+  [ -z "$(compose_r ps -aq 2>/dev/null)" ] || { echo "  subiu container"; return 1; }
+}
+
 # ---------------------------------------------------------------- CEO
 
 # Membros perigosos: cada pacote sai ≠0 com "FALHA pacote membro inesperado", antes do docker,
@@ -493,6 +523,7 @@ log_sem_conteudo() {
 TODOS=(
   verificar_ida_e_volta identidade_errada_falha sha256sums_nao_conferem_aborta instalar_em_raiz_vazia
   instalar_recusa_volume_com_dados instalar_recusa_segredo_diferente instalar_recusa_pasta_de_segredos_aberta
+  instalar_fecha_pasta_do_clone_so_com_readme instalar_recusa_pasta_aberta_com_mais_que_o_readme
   pacote_com_caminho_estranho_recusa sha256sums_incompleto_aborta identidade_dentro_do_repositorio_recusa
   identidade_pela_entrada_padrao gf_tmp_obrigatorio nada_em_claro_sobra instalar_recusa_postgres_rodando
   instalar_aceita_segredo_igual log_sem_conteudo
