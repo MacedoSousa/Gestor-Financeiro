@@ -236,6 +236,26 @@ domingo_vai_para_semanal() {
     && [ "$(find "$dir/semanal" -type f | wc -l)" -eq 1 ]
 }
 
+# Com o rotacionar.sh de verdade (Task 3) no lugar do falso, num domingo: diario/ fica com 7 e
+# semanal/ com 4, e o pacote do dia sobrevive nos dois.
+rotacao_real_no_domingo() {
+  local dir="$T/b-rotacao-real" b="$RAIZ_FALSA/infra/backup" dia r=0
+  mkdir -p "$dir/diario" "$dir/semanal"
+  for dia in 01 02 03 04 05 06 07 08; do echo antigo >"$dir/diario/gestor-2026-10-$dia.tar.age"; done
+  for dia in 04 11 18 25; do echo antigo >"$dir/semanal/gestor-2026-10-$dia.tar.age"; done
+  mv "$b/rotacionar.sh" "$T/rotacionar-falso.sh"
+  cp "$TESTES_DIR/../rotacionar.sh" "$b/rotacionar.sh"
+  rodar_backup "$dir" --data 2026-11-08 || r=1
+  mv -f "$T/rotacionar-falso.sh" "$b/rotacionar.sh"
+  [ "$r" -eq 0 ] || { mostrar_stderr; return 1; }
+  [ "$(find "$dir/diario" -name 'gestor-*.tar.age' | wc -l)" -eq 7 ] || { echo "  diario: $(find "$dir/diario" -mindepth 1 -printf '%f ')"; return 1; }
+  [ "$(find "$dir/semanal" -name 'gestor-*.tar.age' | wc -l)" -eq 4 ] || { echo "  semanal: $(find "$dir/semanal" -mindepth 1 -printf '%f ')"; return 1; }
+  [ -f "$dir/diario/gestor-2026-11-08.tar.age" ] && [ -f "$dir/semanal/gestor-2026-11-08.tar.age" ] || return 1
+  [ ! -e "$dir/diario/gestor-2026-10-02.tar.age" ] && [ -e "$dir/diario/gestor-2026-10-03.tar.age" ] || return 1
+  [ ! -e "$dir/semanal/gestor-2026-10-04.tar.age" ] && [ -e "$dir/semanal/gestor-2026-10-11.tar.age" ] || return 1
+  grep -q "rotacao: pasta=diario manteve=7 removeu=2" "$T/stderr" && grep -q "rotacao: pasta=semanal manteve=4 removeu=1" "$T/stderr"
+}
+
 mesmo_dia_substitui() {
   local dir="$T/b-mesmo-dia" inode_antes
   rodar_backup "$dir" --data 2026-11-10 || { mostrar_stderr; return 1; }
@@ -494,6 +514,7 @@ caso recusa_chave_privada
 caso recusa_destinatarios_sem_age1
 caso recusa_sem_dek
 caso domingo_vai_para_semanal
+caso rotacao_real_no_domingo
 caso mesmo_dia_substitui
 caso cadeia_dentro_e_fora
 caso codigo_do_enviar_e_o_do_backup
