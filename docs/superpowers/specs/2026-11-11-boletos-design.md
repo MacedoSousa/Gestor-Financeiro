@@ -216,3 +216,7 @@ Domínio puro em `Boletos.Dominio.LinhaDigitavel`, sem banco, 100% coberto por t
 4. Débito automático (estados e confirmação).
 5. Painel (vencimentos e aviso).
 6. Tela `/boletos` e link "Calendário".
+
+## Nota da Fase 2 (11/11/2026)
+
+Medido com a conexão real: o Itaú não manda `boletoMetadata` nas transações de pagamento. O vínculo entre o pagamento que chega do banco e o vencimento é por conta, valor e data (até 3 dias depois do vencimento), com a descrição como desempate; o `codigo_barras_hmac` continua sendo a chave do cadastro e vira chave forte se o banco passar a mandar o código. Detalhe: spec da Fase 2, seção 5.
