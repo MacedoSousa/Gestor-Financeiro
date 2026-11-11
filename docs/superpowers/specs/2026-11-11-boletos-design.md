@@ -59,7 +59,7 @@ Para cada conta recorrente ativa e cada mês a partir de `inicio`, se não exist
 | `PAGO` | `pago_em` preenchido |
 | `DISPENSADO` | o mês foi pulado (só para conta recorrente) |
 
-**Vencimento efetivo:** se o vencimento cai em sábado ou domingo, vale a segunda-feira seguinte (o boleto pode ser pago no dia útil seguinte sem juros). Feriados ficam fora deste bloco. "Hoje" é o dia em São Paulo, pelo relógio do sistema já usado no painel.
+**Vencimento efetivo:** se o vencimento cai em sábado ou domingo, vale a segunda-feira seguinte (o boleto pode ser pago no dia útil seguinte sem juros). Feriados ficam fora deste bloco. "Hoje" é `Brasilia.Hoje`, o mesmo relógio do painel (fuso de São Paulo).
 
 Um previsto com débito automático segue a mesma régua (`DEBITO_PROGRAMADO` / `AGUARDANDO_DEBITO`), com o valor estimado.
 
@@ -67,7 +67,7 @@ Um previsto com débito automático segue a mesma régua (`DEBITO_PROGRAMADO` / 
 
 - **Cadastrar boleto:** pela linha digitável (seção 2). Se a linha tem valor, ele vem preenchido e pode ser corrigido; se tem vencimento (só no bancário), idem. Se a conta recorrente for escolhida e já houver previsto no mês, o boleto o substitui (o previsto some porque passa a existir vencimento no mês).
 - **Pagar / confirmar débito:** pede a data (padrão hoje, nunca no futuro), o valor pago (padrão o valor do vencimento; muda por juros ou desconto) e a conta (padrão a do vencimento; corrente ou cartão). Cria a despesa pelo contrato do ADR-014 com a categoria do vencimento. Para um previsto, grava primeiro o vencimento do mês e depois paga, na mesma requisição.
-- **Desfazer pagamento:** apaga (soft delete) a despesa pelo contrato e limpa o pagamento. A auditoria guarda os dois lados.
+- **Desfazer pagamento:** apaga (soft delete) a despesa pelo contrato e limpa o pagamento. A auditoria guarda os dois lados. A regra C7 do Lancamentos vale também aqui: se a despesa foi no cartão e a fatura dela já fechou, o desfazer é recusado com `409` "A fatura deste cartão já fechou; este pagamento não pode mais ser desfeito." O contrato não passa por cima de regra do Lancamentos.
 - **Apagar:** só vencimento não pago (soft delete). Pago → `409` "Desfaça o pagamento antes de apagar."
 - **Pular mês:** só para previsto: grava um vencimento `dispensado` naquele mês. Desfazer o pulo apaga (soft delete) esse registro e o previsto volta.
 - **Arquivar conta recorrente:** para de gerar previstos a partir do mês seguinte; vencimentos já gravados ficam.
@@ -75,9 +75,10 @@ Um previsto com débito automático segue a mesma régua (`DEBITO_PROGRAMADO` / 
 ### Regras de validação
 
 - **Conta de pagamento:** `CORRENTE` ou `CARTAO`, não arquivada (decisão da pessoa em 11/11: "tudo digital"; o cartão depende do mês). Poupança, dinheiro e investimento ficam de fora.
-- **Boleto pago no cartão:** a despesa é uma compra à vista no cartão, com data = data do pagamento; ela entra na fatura pelo calendário do cartão (`CalendarioDaFatura`) e no orçamento pela data da compra, como qualquer compra. O boleto fica `PAGO` na hora. Parcelar o boleto no cartão (com tarifa) fica fora deste bloco.
-- **Categoria:** de despesa, não arquivada; papel `DIVIDAS` aceito (financiamento por boleto); papel `INVESTIMENTO` e `RENDIMENTOS` recusados.
+- **Boleto pago no cartão:** a despesa é uma compra à vista no cartão, com data = data do pagamento; ela entra na fatura pelo mesmo caminho de qualquer compra no cartão (`IConsultaDeContas.VencimentoDaFatura`; o `CalendarioDaFatura` é interno do `Contas`) e no orçamento pela data da compra, como qualquer compra. O boleto fica `PAGO` na hora. Parcelar o boleto no cartão (com tarifa) fica fora deste bloco.
+- **Categoria:** de despesa, não arquivada no cadastro e na edição; papel `DIVIDAS` aceito (financiamento por boleto); papel `INVESTIMENTO` recusado (é aporte, não gasto). Se a categoria for arquivada depois do cadastro, pagar é recusado com `409` "A categoria deste boleto foi arquivada. Escolha outra antes de pagar."
 - **Despesa de boleto no extrato:** aparece com origem `BOLETO` e **não pode ser editada nem apagada pelo extrato** (`409` "Esta despesa veio de um boleto. Para mudar, desfaça o pagamento em Boletos."). Sem isso, o boleto ficaria "Pago" apontando para uma despesa que não existe.
+- **Conta e categoria em uso pelos Boletos:** o `Boletos` registra a sua implementação de `IVerificadorDeUsoDaConta` (o `ServicoDeContas` já consulta todas): conta usada em vencimento não apagado ou em conta recorrente não arquivada não pode ser apagada. Para categoria, nasce em `Lancamentos.Contracts` o `IVerificadorDeUsoDaCategoria`, no mesmo padrão; o `ServicoDeCategorias` passa a consultar todos (a checagem de lançamentos atual vira a implementação do próprio `Lancamentos`), e o `Boletos` registra a dele. Em uso → `409` "Esta conta é usada em boletos ou contas recorrentes." / "Esta categoria é usada em boletos ou contas recorrentes."
 - **Concorrência:** pagar um vencimento já pago, ou apagar um que foi pago no meio-tempo → `409`. Repetir a mesma requisição de pagamento (mesma `ChaveIdempotente`) devolve o mesmo resultado.
 
 ### Aviso no painel
@@ -121,19 +122,24 @@ Domínio puro em `Boletos.Dominio.LinhaDigitavel`, sem banco, 100% coberto por t
 ### Contratos entre módulos
 
 - **`Lancamentos.Contracts.IDespesaDeVencimento`** (ADR-014):
+  - `DespesaDeVencimentoDto(Guid VencimentoId, Guid ContaId, Guid CategoriaId, DateOnly Data, long ValorCentavos, string Descricao)`. O casal e o usuário vêm do contexto da requisição (`IUsuarioAtual`), como em qualquer lançamento; a descrição vai em claro no DTO e o `Lancamentos` a cifra, como já faz.
   - `RegistrarAsync(DespesaDeVencimentoDto)` → `Guid transacaoId`. Cria despesa com `origem = 'BOLETO'` e `id_externo = <id do vencimento>`. Se já existe despesa não apagada com essa chave, devolve a existente (idempotente). Valida conta e categoria pelas regras da seção 1.
-  - `DesfazerAsync(Guid vencimentoId)` → soft delete da despesa daquele vencimento; sem despesa, não faz nada.
+  - `DesfazerAsync(Guid vencimentoId)` → soft delete da despesa daquele vencimento; sem despesa, não faz nada; fatura já fechada → resultado de recusa (o `Boletos` responde `409`, seção 1).
+- **`Lancamentos.Contracts.IConsultaDeFaturas`** ganha `DoMesAsync(DateOnly mes)`: as faturas de cada cartão com **vencimento** naquele mês (cartão, apelido, fechamento, vencimento, valor até agora e estado). O `AVencerAsync()` atual continua para o painel. O calendário de `/boletos` usa o método novo.
 - **`Boletos.Contracts.IConsultaDeVencimentos`** para o Painel: `DoMesAsync(DateOnly hoje)` → itens com `VencimentoId?`, `ContaRecorrenteId?`, `Descricao`, `Vencimento`, `Estado`, `ValorCentavos`, `Estimado`, mais o total "a pagar no mês" e se ele é estimado.
 - Boletos lê `IConsultaDeContas` e `IConsultaDeCategorias` (já existem).
 
-**Migração em Lancamentos:** o `CHECK` de `origem` em `lancamentos.transacoes` passa a aceitar `BOLETO` (`ALTER TABLE ... DROP CONSTRAINT ... ADD CONSTRAINT ...`, sem mexer em linha). `LancamentoDto.Origem` e o OpenAPI ganham `BOLETO`. Editar ou apagar transação com origem `BOLETO` pelos endpoints de Lancamentos → `409`.
+**Origem `BOLETO` no Lancamentos:**
+- migração: o `CHECK` da V0004 não tem nome no SQL, então o Postgres o chamou de `transacoes_origem_check`. A migração confere esse nome (o teste de integração lê `pg_constraint`) e faz `ALTER TABLE lancamentos.transacoes DROP CONSTRAINT transacoes_origem_check, ADD CONSTRAINT transacoes_origem_check CHECK (origem IN ('MANUAL', 'OPEN_FINANCE', 'WHATSAPP', 'BOLETO'))`, sem tocar em linha;
+- código: o enum `OrigemDaTransacao`, o conversor do `LancamentosDbContext`, o `LancamentoDto.Origem`, o OpenAPI e o filtro `origem` do extrato (`ConsultaDoExtrato`), com o rótulo "Boleto" no front;
+- regra: editar ou apagar transação com origem `BOLETO` pelos endpoints de Lancamentos → `409` (seção 1).
 
 ### Endpoints (Boletos.Api; DTOs só em `Contracts`; erros em Problem Details; tudo sob o filtro `Casal`)
 
 | Método e rota | O que faz |
 | --- | --- |
 | `POST /api/v1/linha-digitavel/analise` | Analisa sem gravar; devolve tipo, valor e vencimento para preencher o formulário. `422` com a mensagem da seção 2 |
-| `GET /api/v1/vencimentos?mes=AAAA-MM` | Vencimentos e previstos do mês, com estado, mais as faturas do mês (pelo contrato de faturas) para o calendário |
+| `GET /api/v1/vencimentos?mes=AAAA-MM` | Vencimentos e previstos do mês, com estado, mais as faturas com vencimento no mês (`IConsultaDeFaturas.DoMesAsync`) para o calendário |
 | `POST /api/v1/vencimentos` | Cadastra boleto (`ChaveIdempotente`, linha, descrição, valor, vencimento, categoria, conta, débito automático, conta recorrente opcional). `409` se o código de barras já existe |
 | `PUT /api/v1/vencimentos/{id}` | Edita descrição, valor, vencimento, categoria, conta e débito automático de um vencimento não pago |
 | `DELETE /api/v1/vencimentos/{id}` | Soft delete de vencimento não pago |
@@ -149,7 +155,9 @@ Domínio puro em `Boletos.Dominio.LinhaDigitavel`, sem banco, 100% coberto por t
 
 ### Painel (`GET /api/v1/visao-geral`)
 
-- `VencimentoDto` ganha `Tipo` (`FATURA` ou `BOLETO`), `VencimentoId?`, `Descricao?` e `Estimado`; `Fechamento` passa a ser opcional (só fatura). Para boleto, `Estado` usa os da seção 1.
+- `VencimentoDto` ganha `Tipo` (`FATURA` ou `BOLETO`), `VencimentoId?`, `ContaRecorrenteId?`, `Descricao?`, `Estimado` e `EstadoDoBoleto?`.
+  - `ContaId` e `Apelido` continuam obrigatórios: na fatura, o cartão; no boleto, a conta de pagamento (o painel mostra "Energia · Itaú").
+  - `Fechamento` e `Estado` passam a ser opcionais e só de fatura; `EstadoDoBoleto` é só de boleto, com os valores da seção 1. Os dois nunca vêm preenchidos juntos (teste no contrato), e o front escolhe o rótulo pelo `Tipo`. Assim `VENCIDA` (fatura) e `VENCIDO` (boleto) nunca dividem o mesmo campo.
 - Ordem de "Próximos vencimentos": fatura vencida e boletos `VENCIDO` primeiro (mais antigo antes), fora do corte de 5; depois, por vencimento efetivo, faturas e boletos misturados, com corte de 5. `PAGO` e `DISPENSADO` não aparecem.
 - `AindaDaParaGastarDto` ganha `BoletosAPagarCentavos?` e `BoletosAPagarEstimado`; o front mostra "Boletos a pagar no mês: R$ X" (ou "≈ R$ X").
 - Seção independente: se a consulta de Boletos falha, só os boletos somem e a seção mostra o erro padrão; as faturas continuam.
