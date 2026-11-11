@@ -30,3 +30,5 @@
 **Descartado:**
 - *`pgcrypto` ou `gpg -c` com senha guardada no servidor* — quem invade o servidor leva a senha junto com os dados.
 - *Chave privada no servidor para testar a decifragem* — a mesma coisa; o teste acontece antes de cifrar e no ensaio mensal de restauração (`restaurar.sh --verificar`), feito fora do servidor ou com a chave trazida só para o ensaio.
+
+**Permissões dos segredos (11/11, PR #24):** o Docker Compose monta segredo de arquivo direto do disco e ignora `mode`, e cada container lê com outro usuário (Postgres 70, API 1654). Por isso os segredos ficam em 0444 dentro de `infra/secrets/` em 0700: **a pasta é a fechadura** (nenhum outro usuário do host entra) e **o compose escolhe quem recebe cada segredo**. Exceção: `gf_chave_servico` fica 0400 com dono 1654, porque a API recusa chave de serviço legível por grupo ou outros. `gerar-segredos.sh` e `restaurar.sh --instalar` falham se a pasta não estiver em 0700. O teste `infra/testes/testar-subida.sh`, no CI, sobe o compose real do zero.

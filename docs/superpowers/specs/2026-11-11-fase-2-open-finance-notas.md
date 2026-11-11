@@ -1,6 +1,6 @@
 # Fase 2 · Open Finance — notas de pesquisa do CEO (não é spec)
 
-**Status:** pesquisa de 10/11/2026 para preparar a conversa de design. Nada aqui está decidido. A spec da Fase 2 nasce destas notas, pelo `brainstorming`, com a pessoa.
+**Status:** substituídas pela spec `2026-11-11-fase-2-open-finance-design.md` e pelo ADR-015 onde divergem. Pesquisa de 10/11/2026 para preparar a conversa de design. Nada aqui está decidido. A spec da Fase 2 nasce destas notas, pelo `brainstorming`, com a pessoa.
 
 **Fonte:** tipos do SDK oficial `pluggy-sdk` 0.94.2 (npm, publicado em 05/11/2026), lidos direto do pacote. Referências citadas pelo próprio SDK: documentação em https://docs.pluggy.ai e OpenAPI em https://api.pluggy.ai/oas3.json — **o CEO não teve acesso a elas nesta pesquisa; conferir antes da spec.** ADR-007 e ADR-010 continuam valendo.
 
