@@ -53,6 +53,7 @@ internal sealed class ServicoDeTransferencias(LancamentosDbContext db, IUsuarioA
             return new ResultadoDeTransferencia.Existente(await MontarAsync(existentes, casalId, ct));
         }
 
+        await TravaDeConta.TomarAsync(db, [p.ContaOrigemId, p.ContaDestinoId], ct);
         var origem = await contas.ObterAsync(p.ContaOrigemId, ct);
         var destino = await contas.ObterAsync(p.ContaDestinoId, ct);
         if (origem is null || destino is null) return Falhou(new ResultadoDeLancamento.NaoEncontrado());

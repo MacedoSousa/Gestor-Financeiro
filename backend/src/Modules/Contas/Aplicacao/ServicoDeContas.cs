@@ -68,8 +68,16 @@ internal sealed class ServicoDeContas(
         return await SalvarAsync(conta.Id, ct);
     }
 
+    /// <summary>
+    /// Só apaga conta sem uso. A trava da conta (<see cref="ChaveDeTrava.Conta"/>, a mesma que criar e editar lançamento
+    /// tomam) vai até o commit: um lançamento nesta conta ou já está gravado quando os verificadores olham, ou espera e
+    /// encontra a conta apagada.
+    /// </summary>
     public async Task<ResultadoDeConta> ApagarAsync(Guid id, CancellationToken ct)
     {
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
+        await db.Database.ExecuteSqlAsync($"SELECT pg_advisory_xact_lock(hashtextextended({ChaveDeTrava.Conta(id)}, 0))", ct);
+
         var conta = await db.Contas.FirstOrDefaultAsync(c => c.Id == id, ct);
         if (conta is null) return new ResultadoDeConta.NaoEncontrada();
 
@@ -79,6 +87,7 @@ internal sealed class ServicoDeContas(
 
         db.Contas.Remove(conta); // SoftDeleteInterceptor converte em is_deleted = true.
         await db.SaveChangesAsync(ct);
+        await tx.CommitAsync(ct);
         return new ResultadoDeConta.Ok(id);
     }
 

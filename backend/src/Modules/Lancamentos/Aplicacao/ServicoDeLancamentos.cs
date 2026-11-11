@@ -62,6 +62,7 @@ internal sealed class ServicoDeLancamentos(LancamentosDbContext db, IUsuarioAtua
             return new ResultadoDeLancamento.Existente((await extrato.MontarAsync([existente], casalId, null, ct)).Single());
         }
 
+        await TravaDeConta.TomarAsync(db, [p.ContaId], ct);
         var conta = await contas.ObterAsync(p.ContaId, ct);
         if (conta is null) return new ResultadoDeLancamento.NaoEncontrado();
         if (conta.Arquivada) return new ResultadoDeLancamento.Recusado(TituloContaArquivada, 400);
@@ -120,6 +121,8 @@ internal sealed class ServicoDeLancamentos(LancamentosDbContext db, IUsuarioAtua
         var alvo = await db.Transacoes.FirstOrDefaultAsync(t => t.Id == id, ct);
         if (alvo is null) return new ResultadoDeLancamento.NaoEncontrado();
         if (alvo.Natureza == NaturezaDaTransacao.Transferencia) return await EditarTransferenciaAsync(alvo, p, tx, ct);
+        // Antes da trava da categoria, na mesma ordem do criar (conta, depois categoria).
+        await TravaDeConta.TomarAsync(db, [alvo.ContaId], ct);
         if (p.Natureza == "TRANSFERENCIA") return Invalido("natureza", "Despesa ou receita não vira transferência.");
         if (p.CategoriaId is not { } categoriaId) return Invalido("categoriaId", "Informe a categoria.");
         var natureza = LerNatureza(p.Natureza);
@@ -175,6 +178,7 @@ internal sealed class ServicoDeLancamentos(LancamentosDbContext db, IUsuarioAtua
         if (!string.IsNullOrWhiteSpace(p.Contraparte)) return Invalido("contraparte", "Transferência não tem contraparte.");
 
         var pernas = alvo.GrupoId is { } grupo ? await db.Transacoes.Where(t => t.GrupoId == grupo).ToListAsync(ct) : [alvo];
+        await TravaDeConta.TomarAsync(db, pernas.Select(t => t.ContaId), ct);
         foreach (var t in pernas) t.EditarTransferencia(new Dinheiro(p.ValorCentavos), p.Data, p.Descricao, cofre);
 
         await db.SaveChangesAsync(ct);

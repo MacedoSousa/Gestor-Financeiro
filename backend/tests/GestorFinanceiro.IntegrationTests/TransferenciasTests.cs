@@ -102,6 +102,25 @@ public class TransferenciasTests(PostgresFixture pg)
     private static Task<long> ContarAsync(BancoDeTeste banco, string condicao = "true") =>
         EscalarAsync<long>(banco, $"SELECT count(*) FROM lancamentos.transacoes WHERE {condicao}");
 
+    /// <summary>
+    /// Cada transferência trava as duas contas. Em ordem crescente de id, A→B e B→A ao mesmo tempo esperam uma pela
+    /// outra em vez de cair em deadlock (que o Postgres derrubaria com 40P01, virando 500).
+    /// </summary>
+    [Fact]
+    public async Task Transferencias_em_sentidos_opostos_ao_mesmo_tempo_nao_travam()
+    {
+        await using var c = await IniciarAsync();
+        var a = await CriarCorrenteAsync(c.Cliente, "Conta A", 1_000_000);
+        var b = await CriarCorrenteAsync(c.Cliente, "Conta B", 1_000_000);
+
+        var pedidos = Enumerable.Range(0, 20)
+            .Select(i => c.Cliente.PostAsJsonAsync(Rota, i % 2 == 0 ? Nova(a, b, 1_000) : Nova(b, a, 1_000)));
+        var respostas = await Task.WhenAll(pedidos).WaitAsync(TimeSpan.FromSeconds(60));
+
+        Assert.All(respostas, r => Assert.Equal(HttpStatusCode.Created, r.StatusCode));
+        Assert.Equal(40L, await ContarAsync(c.Banco, "grupo_id IS NOT NULL"));
+    }
+
     [Fact]
     public async Task Transferencia_cria_par_e_nao_conta_como_despesa_nem_receita()
     {
