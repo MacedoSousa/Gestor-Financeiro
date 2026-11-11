@@ -274,7 +274,7 @@ log "pg_restore: ok"
 
 # Conferência do instalado: cadeia de cada casal, contagens do MANIFESTO e cadeia.txt.
 falhas=0
-quebras="$(psql_descartavel "$container" gestor -F ' ' -c "
+quebras="$(psql_silencioso "$container" gestor -F ' ' -c "
   SELECT coalesce(c.casal_id::text, 'nulo'), v.seq, v.motivo
     FROM (SELECT DISTINCT casal_id FROM audit.eventos) c
    CROSS JOIN LATERAL audit.verificar_cadeia(c.casal_id) v
@@ -285,7 +285,7 @@ while read -r casal seq motivo; do
   falhas=$((falhas + 1))
 done <<<"$quebras"
 
-contagens="$(psql_descartavel "$container" gestor -F ' ' \
+contagens="$(psql_silencioso "$container" gestor -F ' ' \
   -c "SELECT count(*), coalesce(max(seq), 0) FROM audit.eventos")" || falhar "consulta de contagem codigo=$?"
 read -r obtido_total obtido_max_seq <<<"$contagens"
 if [ "$obtido_total" != "$esperado_total" ]; then

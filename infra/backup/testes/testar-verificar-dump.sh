@@ -67,7 +67,7 @@ restaurar_e_contar() {
     return 1
   fi
   restaurar_dump "$GF_DESCARTAVEL" gestor "$GF_TMP/integro.dump" "$@" 2>"$GF_TMP/restore.log" || codigo=$?
-  contagens="$(psql_descartavel "$GF_DESCARTAVEL" gestor -c "$CONTAGENS_SQL" || echo "erro")"
+  contagens="$(psql_silencioso "$GF_DESCARTAVEL" gestor -c "$CONTAGENS_SQL" || echo "erro")"
   derrubar_descartavel "$GF_DESCARTAVEL"
   GF_DESCARTAVEL=""
   RESULTADO="$codigo $contagens"

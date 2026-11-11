@@ -124,7 +124,7 @@ docker exec "$PG_CONTAINER" pg_dump -U postgres -d gestor -Fc >"$conteudo/gestor
 [ "$codigo" -eq 0 ] || falhar "pg_dump codigo=$codigo"
 log "dump: gestor.dump bytes=$(wc -c <"$conteudo/gestor.dump")"
 
-pg_versao="$(psql_descartavel "$PG_CONTAINER" gestor -c 'SHOW server_version' | cut -d' ' -f1)" \
+pg_versao="$(psql_silencioso "$PG_CONTAINER" gestor -c 'SHOW server_version' | cut -d' ' -f1)" \
   || falhar "versao do postgres"
 
 # ---------------------------------------------------------------- 2/3. verificação e âncora
