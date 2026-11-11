@@ -1,0 +1,31 @@
+# Compose dos testes da restauração (Task 5): só o postgres, com os mesmos secrets e o mesmo
+# init (infra/postgres/init) do infra/docker-compose.yml.
+#
+# O teste copia este arquivo para <raiz temporária>/infra/ (os caminhos relativos apontam
+# para ali) e sobe com um projeto de nome aleatório (-p). Diferenças do compose real, todas
+# para o teste rodar sem root e sem deixar nada no disco:
+#   - dados em tmpfs, sem rede;
+#   - user = quem roda o teste: os segredos instalados pelo restaurar.sh são 0400 desse
+#     usuário, e o init (00-papeis.sh) precisa lê-los;
+#   - PGDATA numa subpasta do tmpfs, que esse usuário cria.
+# Derrubar com "docker compose down", sem -v.
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    user: "${GF_TESTE_UID:?defina GF_TESTE_UID}:${GF_TESTE_GID:?defina GF_TESTE_GID}"
+    environment:
+      POSTGRES_DB: gestor
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD_FILE: /run/secrets/pg_superusuario
+      PGDATA: /var/lib/postgresql/data/pgdata
+    secrets: [pg_superusuario, pg_senha_app, pg_senha_migrador]
+    tmpfs: [/var/lib/postgresql/data]
+    volumes:
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    network_mode: none
+
+secrets:
+  pg_superusuario:   { file: ./secrets/pg_superusuario }
+  pg_senha_app:      { file: ./secrets/pg_senha_app }
+  pg_senha_migrador: { file: ./secrets/pg_senha_migrador }
