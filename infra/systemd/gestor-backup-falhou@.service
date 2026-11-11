@@ -1,0 +1,8 @@
+# Chamada pelo OnFailure= do gestor-backup.service. Só registra no journal o nome da unidade
+# que falhou (%i); o motivo está no journal dela (journalctl -u gestor-backup.service).
+[Unit]
+Description=Gestor Financeiro: aviso de falha em %i
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/logger -p user.err "gestor-backup falhou: %i"

@@ -1,0 +1,36 @@
+# Backup diário do Gestor Financeiro: dump → verificação → pacote cifrado com age → rotação e
+# envio (infra/backup/backup.sh). Disparado pelo gestor-backup.timer; não tem [Install].
+#
+# Roda como root: lê infra/secrets e a chave do rclone e grava em /var/backups/gestor. Sem
+# EnvironmentFile: o infra/.env tem o token do DuckDNS; o backup.sh lê só as GF_BACKUP_*.
+# O que existe em claro fica em GF_TMP, o RuntimeDirectory (memória, apagado ao terminar).
+# Instalação: veja infra/systemd/gestor-backup.timer.
+[Unit]
+Description=Gestor Financeiro: backup diário cifrado
+Requires=docker.service
+Wants=network-online.target
+After=docker.service network-online.target gestor-financeiro.service
+OnFailure=gestor-backup-falhou@%n.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/gestor-financeiro
+ExecStart=/opt/gestor-financeiro/infra/backup/backup.sh
+Environment=GF_TMP=%t/gestor-backup
+Environment=DOCKER_CONFIG=%t/gestor-backup/docker
+Environment=RCLONE_CONFIG=/root/.config/rclone/rclone.conf
+Environment=RCLONE_CACHE_DIR=%t/gestor-backup/rclone-cache
+RuntimeDirectory=gestor-backup
+RuntimeDirectoryMode=0700
+UMask=0077
+# Termina antes do reinício das 04:00.
+TimeoutStartSec=50min
+Nice=10
+IOSchedulingClass=idle
+
+# Só grava no destino local, no pendrive (opcional: "-" não falha sem /media) e na config do
+# rclone (o rclone renova o token ali). /var/backups/gestor vem do gestor-backup.tmpfiles.conf.
+ProtectSystem=strict
+ReadWritePaths=/var/backups/gestor -/media /root/.config/rclone
+PrivateTmp=true
+NoNewPrivileges=true
