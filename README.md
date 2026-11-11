@@ -34,7 +34,7 @@ docs/                       SPEC, ADRs, telas de referência (design/), specs e 
 
 ## Rodando localmente
 
-Pré-requisitos: .NET SDK 10, Node 22 ou mais novo, Docker.
+Pré-requisitos: .NET SDK 10, Node 22 ou mais novo, Docker do apt do Ubuntu (docker.io e docker-compose-v2; o do snap não funciona, veja ADR-013).
 
 ```bash
 # 1. Segredos locais (uma vez)

@@ -78,6 +78,21 @@ espera_sucesso "CREATE TABLE a.b com audit passa"  checar_conteudo_de_migracao "
 apaga="$(sql V0011__d.sql "DELETE FROM boletos.x;")"
 espera_falha   "DELETE físico em migração"        checar_conteudo_de_migracao "$apaga"
 
+# Docker do snap (ADR-013): um docker falso na frente do PATH.
+docker_falso() { mkdir -p "$tmp/$1"; printf '#!/bin/sh\nexit 0\n' >"$tmp/$1/docker"; chmod +x "$tmp/$1/docker"; }
+docker_falso snap/bin
+docker_falso usr/bin
+mkdir -p "$tmp/sem-docker"; ln -s "$tmp/snap/bin/docker" "$tmp/sem-docker/link-para-snap"
+docker_falso link/bin; rm "$tmp/link/bin/docker"; ln -s "$tmp/snap/bin/docker" "$tmp/link/bin/docker"
+espera_sucesso "docker em /snap/bin é do snap"     env PATH="$tmp/snap/bin:/usr/bin:/bin" bash -c "source '$raiz/scripts/guardas/regras.sh'; docker_e_do_snap"
+espera_sucesso "link para o docker do snap é do snap" env PATH="$tmp/link/bin:/usr/bin:/bin" bash -c "source '$raiz/scripts/guardas/regras.sh'; docker_e_do_snap"
+# Como no snap de verdade: /snap/bin/docker é um link para /usr/bin/snap.
+mkdir -p "$tmp/real/snap/bin" "$tmp/real/usr/bin"; printf '#!/bin/sh\nexit 0\n' >"$tmp/real/usr/bin/snap"
+chmod +x "$tmp/real/usr/bin/snap"; ln -s "$tmp/real/usr/bin/snap" "$tmp/real/snap/bin/docker"
+espera_sucesso "/snap/bin/docker → /usr/bin/snap é do snap" env PATH="$tmp/real/snap/bin:/usr/bin:/bin" bash -c "source '$raiz/scripts/guardas/regras.sh'; docker_e_do_snap"
+espera_falha   "docker em /usr/bin não é do snap"  env PATH="$tmp/usr/bin:/usr/bin:/bin" bash -c "source '$raiz/scripts/guardas/regras.sh'; docker_e_do_snap"
+espera_falha   "sem docker no PATH não é do snap"  env PATH="$tmp/sem-docker" /bin/bash -c "source '$raiz/scripts/guardas/regras.sh'; docker_e_do_snap"
+
 # --- pre-commit ------------------------------------------------------------
 repo="$tmp/repo"
 mkdir -p "$repo" && cd "$repo" || exit 1

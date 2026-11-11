@@ -31,6 +31,12 @@ rodar() {
 
 rodar scripts/guardas/verificar-repositorio.sh
 
+# shellcheck source=scripts/guardas/regras.sh
+source scripts/guardas/regras.sh
+if docker_e_do_snap; then
+  avisar "Docker do snap não é suportado (ADR-013); troque pelo do apt."
+fi
+
 if printf '%s\n' "$mudou" | grep -qE '^(backend|db)/'; then
   if command -v dotnet >/dev/null 2>&1; then
     if docker info >/dev/null 2>&1; then
