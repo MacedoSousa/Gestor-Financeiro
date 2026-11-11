@@ -1,0 +1,20 @@
+# Dispara o gestor-backup.service todo dia às 03:00. Persistent=true: se o PC estava
+# desligado às 03:00, roda assim que ligar.
+#
+# Instalação (como root, a partir de /opt/gestor-financeiro):
+#   sudo cp infra/systemd/gestor-backup.service infra/systemd/gestor-backup.timer \
+#     infra/systemd/gestor-backup-falhou@.service /etc/systemd/system/
+#   sudo cp infra/systemd/gestor-backup.tmpfiles.conf /etc/tmpfiles.d/gestor-backup.conf
+#   sudo systemd-tmpfiles --create /etc/tmpfiles.d/gestor-backup.conf
+#   sudo systemctl daemon-reload
+#   sudo systemctl start gestor-backup.service      # primeiro backup, à mão
+#   sudo systemctl enable --now gestor-backup.timer
+[Unit]
+Description=Gestor Financeiro: backup diário às 03:00
+
+[Timer]
+OnCalendar=*-*-* 03:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target
