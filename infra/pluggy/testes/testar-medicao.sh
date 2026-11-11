@@ -65,6 +65,9 @@ responde_as_outras_perguntas() {
   tem "sinal CREDIT/CREDIT_CARD: DEBIT(-)=0 DEBIT(+)=4 DEBIT(0)=0 CREDIT(-)=1 CREDIT(+)=0 CREDIT(0)=0" || return 1
   tem "categoria 05100000 Credit card payment: 2" || return 1
   tem "data: com hora · fuso Z" || return 1
+  # Hora das datas, por tipo de conta: meia-noite UTC (dia sem hora?), 03:00Z (meia-noite em São Paulo) ou outra.
+  tem "horas BANK/CHECKING_ACCOUNT: 00:00Z=1 03:00Z=1 outras=2" || return 1
+  tem "horas CREDIT/CREDIT_CARD: 00:00Z=1 03:00Z=1 outras=3" || return 1
   tem "valor zero: 1 · descrição vazia: 1" || return 1
   tem "parcelas: 1 com dados de parcela" || return 1
   tem "  billId: nas faturas=2 fora das faturas=0 sem billId=3" || return 1

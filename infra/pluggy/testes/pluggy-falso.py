@@ -10,6 +10,7 @@ Dados (hoje = 2026-11-11 no teste):
 - cartão "c1": valor usado (balance) 1500.00 = confirmadas da fatura aberta (1000.00)
   + pendente (200.00) + parcela futura (300.00) → fórmula (c). A fatura fechada "b1" e o
   pagamento dela não entram. Traz um código de banco sintético em institution.code.
+- horas das datas: em cada conta, uma às 00:00Z, uma às 03:00Z e as outras às 13:00Z.
 - corrente "k1": saldo 12345.67, uma transação "Mercado Sintético", uma de valor zero e uma
   sem descrição; nenhuma pendente. Transações em duas páginas (cursor "after").
 """
@@ -46,8 +47,8 @@ CONTAS = [
 
 TRANSACOES = {
     "k1": [
-        tx("k-1", "2026-11-02T13:00:00.000Z", -250.10, "DEBIT", descricao="Mercado Sintético"),
-        tx("k-2", "2026-11-03T13:00:00.000Z", 0, "DEBIT", descricao="Ajuste sintético"),
+        tx("k-1", "2026-11-02T00:00:00.000Z", -250.10, "DEBIT", descricao="Mercado Sintético"),
+        tx("k-2", "2026-11-03T03:00:00.000Z", 0, "DEBIT", descricao="Ajuste sintético"),
         tx("k-3", "2026-11-04T13:00:00.000Z", 3000.00, "CREDIT", descricao="",
            categoria=("02000000", "Income")),
         tx("k-4", "2026-11-05T13:00:00.000Z", -500.00, "DEBIT", descricao="Pagamento fatura sintética",
@@ -57,8 +58,8 @@ TRANSACOES = {
         tx("c-1", "2026-09-20T13:00:00.000Z", 500.00, "DEBIT", bill="b1"),
         tx("c-2", "2026-10-10T13:00:00.000Z", -500.00, "CREDIT", bill="b1",
            categoria=("05100000", "Credit card payment")),
-        tx("c-3", "2026-11-01T13:00:00.000Z", 1000.00, "DEBIT"),
-        tx("c-4", "2026-11-10T13:00:00.000Z", 200.00, "DEBIT", status="PENDING"),
+        tx("c-3", "2026-11-01T00:00:00.000Z", 1000.00, "DEBIT"),
+        tx("c-4", "2026-11-10T03:00:00.000Z", 200.00, "DEBIT", status="PENDING"),
         tx("c-5", "2026-12-05T13:00:00.000Z", 300.00, "DEBIT", parcela=(2, 3)),
     ],
 }

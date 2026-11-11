@@ -162,6 +162,10 @@ jq -r 'map(.date // "") |
   (if all(test("T[0-9]{2}:[0-9]{2}")) then "com hora" elif any(test("T[0-9]{2}:[0-9]{2}")) then "misto" else "sem hora" end) as $h |
   (if all(test("Z$")) then "Z" elif all(test("[+-][0-9]{2}:?[0-9]{2}$")) then "deslocamento" elif any(test("Z$|[+-][0-9]{2}:?[0-9]{2}$")) then "misto" else "sem fuso" end) as $f |
   "data: \($h) · fuso \($f)"' <<<"$tudo"
+# Hora das datas, por tipo de conta: 00:00Z pode ser "só o dia" (converter para São Paulo recuaria um dia);
+# 03:00Z é meia-noite em São Paulo. Só contagens.
+jq -r 'group_by(.tipo)[] | .[0].tipo as $tipo | map(.date // "") |
+  "horas \($tipo): 00:00Z=\(map(select(test("T00:00:00(\\.0+)?Z$"))) | length) 03:00Z=\(map(select(test("T03:00:00(\\.0+)?Z$"))) | length) outras=\(map(select(test("T0[03]:00:00(\\.0+)?Z$") | not)) | length)"' <<<"$tudo"
 jq -r '"valor zero: \(map(select(.amount == 0)) | length) · descrição vazia: \(map(select(.vazia)) | length)"' <<<"$tudo"
 jq -r '"parcelas: \(map(select(.parcela)) | length) com dados de parcela"' <<<"$tudo"
 if [ "$(jq 'length' <<<"$bancos")" -gt 0 ]; then
