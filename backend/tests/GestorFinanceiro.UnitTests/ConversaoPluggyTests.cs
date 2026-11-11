@@ -41,6 +41,12 @@ public class ConversaoPluggyTests
         Assert.Equal(DateOnly.Parse(esperado, System.Globalization.CultureInfo.InvariantCulture), ConversaoPluggy.DiaDeSaoPaulo(instante));
 
     [Theory]
+    [InlineData("2026-10-10T00:00:00.000Z", "2026-10-10")]
+    [InlineData("2026-10-10", "2026-10-10")]
+    public void Vencimento_e_dia_do_calendario_sem_fuso(string data, string esperado) =>
+        Assert.Equal(DateOnly.Parse(esperado, System.Globalization.CultureInfo.InvariantCulture), ConversaoPluggy.DiaDoCalendario(data));
+
+    [Theory]
     [InlineData("2026-02-30T00:00:00Z")]
     [InlineData("ontem")]
     [InlineData("")]

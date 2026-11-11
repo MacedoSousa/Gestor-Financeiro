@@ -83,7 +83,9 @@ public class RegrasDeArquitetura
         var proibidos = Assembly.Load(moduloB).GetTypes()
             .Where(t => t.FullName is not null && !t.FullName.StartsWith(moduloB + ".Contracts", StringComparison.Ordinal))
             .Select(t => t.Namespace == moduloB ? t.FullName! : t.Namespace)
-            .Where(n => n is not null && n != moduloB)
+            // Só o que é do próprio B: o compilador gera tipos em namespaces de fora (ex.: o [GeneratedRegex] em
+            // System.Text.RegularExpressions.Generated), que todo módulo com regex gerado compartilha.
+            .Where(n => n is not null && n != moduloB && n.StartsWith(moduloB + ".", StringComparison.Ordinal))
             .Select(n => n!)
             .Distinct()
             .ToArray();
@@ -215,6 +217,9 @@ public class RegrasDeArquitetura
     [InlineData("new HttpRequestMessage(HttpMethod.Patch, \"/items/1\")", "HttpMethod.Patch")]
     [InlineData("new HttpRequestMessage(HttpMethod.Put, \"/items/1\")", "HttpMethod.Put")]
     [InlineData("await http.PostAsync(\"/payments\", corpo)", "PostAsync fora de /auth")]
+    [InlineData("await http.PostAsJsonAsync(\"/items\", corpo)", "PostAsync fora de /auth")]
+    [InlineData("await http.PatchAsJsonAsync(\"/items/1\", corpo)", "PatchAsync")]
+    [InlineData("await http.PutAsJsonAsync(\"/items/1\", corpo)", "PutAsync")]
     [InlineData("new HttpRequestMessage(HttpMethod.Post, \"/items\")", "HttpMethod.Post fora de /auth")]
     [InlineData("const string Rota = \"/smart-transfers\";", "/smart-transfers")]
     [InlineData("var r = \"/boletos?x=1\";", "/boletos")]

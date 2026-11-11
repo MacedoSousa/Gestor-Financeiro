@@ -39,4 +39,14 @@ internal static class ConversaoPluggy
 
         return DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(instante, Fuso).DateTime);
     }
+
+    /// <summary>
+    /// Data que é só dia (o vencimento de uma fatura): os 10 primeiros caracteres, sem conversão de fuso. Meia-noite UTC
+    /// convertida para São Paulo cairia no dia anterior.
+    /// </summary>
+    public static DateOnly DiaDoCalendario(string dataIso) =>
+        dataIso.Length >= 10 && DateOnly.TryParseExact(dataIso[..10], "yyyy-MM-dd", CultureInfo.InvariantCulture,
+            DateTimeStyles.None, out var dia)
+            ? dia
+            : throw new FormatException("Data da Pluggy inválida.");
 }

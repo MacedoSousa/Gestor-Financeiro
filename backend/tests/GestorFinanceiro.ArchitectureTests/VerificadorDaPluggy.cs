@@ -12,13 +12,13 @@ internal static class VerificadorDaPluggy
 
     private static readonly (Regex Padrao, string Nome)[] Verbos =
     [
-        (new Regex(@"\bDeleteAsync\s*\("), "DeleteAsync"),
-        (new Regex(@"\bPatchAsync\s*\("), "PatchAsync"),
-        (new Regex(@"\bPutAsync\s*\("), "PutAsync"),
+        (new Regex(@"\bDelete(?:AsJson)?Async\s*\("), "DeleteAsync"),
+        (new Regex(@"\bPatch(?:AsJson)?Async\s*\("), "PatchAsync"),
+        (new Regex(@"\bPut(?:AsJson)?Async\s*\("), "PutAsync"),
         (new Regex(@"\bHttpMethod\.Delete\b"), "HttpMethod.Delete"),
         (new Regex(@"\bHttpMethod\.Patch\b"), "HttpMethod.Patch"),
         (new Regex(@"\bHttpMethod\.Put\b"), "HttpMethod.Put"),
-        (new Regex(@"\bPostAsync\s*\((?!\s*""/auth"")"), "PostAsync fora de /auth"),
+        (new Regex(@"\bPost(?:AsJson)?Async\s*\((?!\s*""/auth"")"), "PostAsync fora de /auth"),
         (new Regex(@"\bHttpMethod\.Post\b(?!\s*,\s*""/auth"")"), "HttpMethod.Post fora de /auth"),
     ];
 
