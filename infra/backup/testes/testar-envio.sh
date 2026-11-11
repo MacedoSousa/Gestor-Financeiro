@@ -80,6 +80,23 @@ pendrive_nao_configurado_avisa_e_segue() {
   [ -f "$REM/diario/gestor-$DATA.tar.age" ]
 }
 
+# Só uma das duas variáveis do pendrive preenchida é erro de configuração, não "nao configurado".
+pendrive_configuracao_incompleta_falha() {
+  local metade
+  for metade in montagem pasta; do
+    preparar 2026-11-10
+    if [ "$metade" = montagem ]; then
+      if enviar diario GF_BACKUP_PENDRIVE_PASTA=; then echo "  só montagem: saiu com 0"; return 1; fi
+    else
+      if enviar diario GF_BACKUP_PENDRIVE_MONTAGEM=; then echo "  só pasta: saiu com 0"; return 1; fi
+    fi
+    grep -q "FALHA pendrive configuracao incompleta" "$T/saida" || { echo "  só $metade"; mostrar; return 1; }
+    ! grep -q "aviso pendrive nao configurado" "$T/saida" || { echo "  só $metade virou aviso"; return 1; }
+    [ -z "$(ls -A "$PEN")" ] || { echo "  só $metade: gravou no pendrive"; return 1; }
+    [ -f "$REM/diario/gestor-$DATA.tar.age" ] || { echo "  só $metade: rclone não recebeu"; return 1; }
+  done
+}
+
 rclone_recebe_e_confere() {
   preparar 2026-11-10
   enviar diario || { mostrar; return 1; }
@@ -231,6 +248,7 @@ mountpoint -q "$MONT" || { echo "FALHA $MONT não é ponto de montagem"; exit 1;
 caso pendrive_montado_recebe_e_confere
 caso pendrive_nao_montado_avisa_e_segue
 caso pendrive_nao_configurado_avisa_e_segue
+caso pendrive_configuracao_incompleta_falha
 caso rclone_recebe_e_confere
 caso rclone_nao_configurado_falha
 caso rclone_inacessivel_falha
