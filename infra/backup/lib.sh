@@ -18,6 +18,13 @@ falhar() {
   exit 1
 }
 
+# Nome aceito para um arquivo de infra/secrets (e para secrets/<nome> dentro do pacote): letra,
+# dígito, "_" ou "-" no início, depois também ".", e nunca "..". Fica de fora sobra de editor
+# (pg_superusuario~, .pg_superusuario.swp). O backup.sh recusa o que o restaurar.sh recusaria.
+nome_de_segredo_valido() {
+  [[ "$1" =~ ^[A-Za-z0-9_-][A-Za-z0-9._-]*$ && "$1" != *..* ]]
+}
+
 aleatorio() {
   od -An -N8 -tx1 /dev/urandom | tr -d ' \n'
 }

@@ -223,6 +223,22 @@ recusa_sem_dek() {
   grep -q "^FALHA .*dek.servico" "$T/stderr" && [ -z "$(find "$dir" -type f 2>/dev/null)" ]
 }
 
+# Sobra de editor em infra/secrets (nome fora do padrão que o restaurar.sh aceita): o backup
+# falha antes do dump, sem pacote, citando só o nome. O README.md continua ignorado.
+recusa_segredo_com_nome_fora_do_padrao() {
+  local dir="$T/b-nome-segredo" r=0 nome
+  for nome in 'pg_superusuario~' '.pg_superusuario.swp'; do
+    printf 'conteudo-de-sobra-xyzzy\n' >"$RAIZ_FALSA/infra/secrets/$nome"
+    rm -rf "$dir"
+    if rodar_backup "$dir" --data 2026-11-10; then echo "  aceitou $nome"; r=1; fi
+    rm -f "$RAIZ_FALSA/infra/secrets/$nome"
+    [ "$r" -eq 0 ] || return 1
+    grep -qxF "FALHA arquivo inesperado em infra/secrets: $nome" "$T/stderr" || { mostrar_stderr; return 1; }
+    ! grep -q 'conteudo-de-sobra-xyzzy' "$T/stderr" || { echo "  conteúdo no log"; return 1; }
+    [ ! -e "$dir" ] || { echo "  criou $dir (passou do ponto do dump)"; return 1; }
+  done
+}
+
 domingo_vai_para_semanal() {
   local dir="$T/b-domingo"
   rodar_backup "$dir" --data 2026-11-08 || { mostrar_stderr; return 1; }
@@ -556,6 +572,7 @@ caso nada_em_claro_sobra
 caso recusa_chave_privada
 caso recusa_destinatarios_sem_age1
 caso recusa_sem_dek
+caso recusa_segredo_com_nome_fora_do_padrao
 caso domingo_vai_para_semanal
 caso rotacao_real_no_domingo
 caso envio_real_no_domingo

@@ -108,9 +108,7 @@ mapfile -t lista_tipos <<<"$tipos"
 membro_regular_valido() {
   case "$1" in
     SHA256SUMS|MANIFESTO|cadeia.txt|gestor.dump|chaves/dek.servico) return 0 ;;
-    secrets/*)
-      local resto="${1#secrets/}"
-      [[ "$resto" =~ ^[A-Za-z0-9_-][A-Za-z0-9._-]*$ && "$resto" != *..* ]] ;;
+    secrets/*) nome_de_segredo_valido "${1#secrets/}" ;;
     *) return 1 ;;
   esac
 }
