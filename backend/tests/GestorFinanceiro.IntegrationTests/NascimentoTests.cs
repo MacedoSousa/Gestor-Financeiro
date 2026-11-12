@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using GestorFinanceiro.IntegrationTests.Infra;
 using GestorFinanceiro.Modules.Contas.Aplicacao;
 using GestorFinanceiro.Modules.Contas.Contracts;
@@ -242,7 +243,9 @@ public class NascimentoTests(PostgresFixture pg)
         Assert.Equal(HttpStatusCode.Forbidden, doBruno.StatusCode);
         Assert.DoesNotContain(itemPluggy, daAna, StringComparison.Ordinal);
         Assert.DoesNotContain("12345", daAna, StringComparison.Ordinal);
-        Assert.DoesNotContain("4821", daAna, StringComparison.Ordinal);
+        // Sem os GUIDs (aleatórios, só hexadecimais), que podem conter "4821" por acaso.
+        var semGuids = Regex.Replace(daAna, "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}", "");
+        Assert.DoesNotContain("4821", semGuids, StringComparison.Ordinal);
         Assert.DoesNotContain("ANA TESTE", daAna, StringComparison.OrdinalIgnoreCase);
     }
 
