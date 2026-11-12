@@ -152,6 +152,24 @@ public class RegrasDeArquitetura
         Assert.True(ofensores.Count == 0, $"DELETE físico encontrado em: {string.Join(", ", ofensores)}");
     }
 
+    /// <summary>
+    /// Nada usa o DataProtection; sem chaves persistidas, tudo que ele protege some a cada reinício.
+    /// AddAuthentication() entra na lista porque o registra por baixo (use AddAuthenticationCore()).
+    /// </summary>
+    [Fact]
+    public void DataProtection_fica_desligado()
+    {
+        var proibido = new Regex(@"\b(IDataProtector|IDataProtectionProvider|AddDataProtection|AddAntiforgery|AddSession|AddCookie)\b|\.AddAuthentication\s*\(");
+        var ofensores = Arquivos("backend/src", "*.cs")
+            .SelectMany(f => File.ReadAllLines(f).Select((l, i) => (f, l, i)))
+            .Where(x => proibido.IsMatch(x.l))
+            .Select(x => $"{Relativo(x.f)}:{x.i + 1}")
+            .ToList();
+
+        Assert.True(ofensores.Count == 0,
+            $"decisão do CEO: DataProtection desligado (D15). Encontrado em: {string.Join(", ", ofensores)}");
+    }
+
     [Fact]
     public void Toda_tabela_criada_e_protegida_pela_auditoria()
     {

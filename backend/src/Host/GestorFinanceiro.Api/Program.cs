@@ -59,8 +59,11 @@ builder.Services.AddSingleton<ICodigoDeInstalacao>(sp => new CodigoDeInstalacaoE
     CofreDoServidor.CaminhoObrigatorio(sp.GetRequiredService<IConfiguration>(), "Seguranca:ArquivoCodigoInstalacao", sp.GetRequiredService<IHostEnvironment>().ContentRootPath),
     sp.GetRequiredService<TimeProvider>(),
     sp.GetRequiredService<ILogger<CodigoDeInstalacaoEmArquivo>>()));
-builder.Services
-    .AddAuthentication(NomesDoLogin.Esquema)
+// Só o núcleo da autenticação: a versão completa registra o DataProtection, que nada aqui usa
+// e que, sem chaves persistidas, mudaria a cada reinício (decisão D15; teste de arquitetura).
+builder.Services.AddAuthenticationCore(o => o.DefaultScheme = NomesDoLogin.Esquema);
+builder.Services.AddWebEncoders(); // o UrlEncoder que o AuthenticationHandler pede
+new AuthenticationBuilder(builder.Services)
     .AddScheme<AuthenticationSchemeOptions, AutenticacaoPorSessao>(NomesDoLogin.Esquema, null);
 builder.Services.AddAuthorization(o =>
     o.DefaultPolicy = new AuthorizationPolicyBuilder(NomesDoLogin.Esquema).RequireAuthenticatedUser().Build());
