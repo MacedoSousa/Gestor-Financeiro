@@ -34,14 +34,15 @@ internal static class EndpointsDeContas
             Guid id, NovaContaDto pedido, ServicoDeContas servico, CancellationToken ct) =>
             Traduzir(await servico.AtualizarAsync(id, pedido, ct), _ => TypedResults.NoContent()))
         .WithName("AtualizarConta")
-        .WithSummary("Atualiza (e arquiva) uma conta. Agência e número nulos mantêm o que está guardado; texto vazio apaga.")
+        .WithSummary("Atualiza (e arquiva) uma conta. Agência e número nulos mantêm o que está guardado; texto vazio apaga. " +
+                     "Em conta ligada ao banco, mudar o saldo inicial dá 409.")
         .ProducesProblem(StatusCodes.Status409Conflict);
 
         grupo.MapDelete("/{id:guid}", async Task<Results<NoContent, ValidationProblem, ProblemHttpResult, NotFound>> (
             Guid id, ServicoDeContas servico, CancellationToken ct) =>
             Traduzir(await servico.ApagarAsync(id, ct), _ => TypedResults.NoContent()))
         .WithName("ApagarConta")
-        .WithSummary("Apaga (soft delete) uma conta sem lançamentos. Com lançamentos dá 409: arquive em vez de apagar.")
+        .WithSummary("Apaga (soft delete) uma conta sem lançamentos. Com lançamentos, ou ligada ao banco, dá 409: arquive em vez de apagar.")
         .ProducesProblem(StatusCodes.Status409Conflict);
 
         return api;
@@ -56,6 +57,8 @@ internal static class EndpointsDeContas
             ResultadoDeConta.NaoEncontrada => TypedResults.NotFound(),
             ResultadoDeConta.ApelidoRepetido => TypedResults.Problem(title: ServicoDeContas.TituloApelidoRepetido, statusCode: StatusCodes.Status409Conflict),
             ResultadoDeConta.EmUso => TypedResults.Problem(title: ServicoDeContas.TituloEmUso, statusCode: StatusCodes.Status409Conflict),
+            ResultadoDeConta.SaldoDoBanco => TypedResults.Problem(title: ServicoDeContas.TituloSaldoDoBanco, statusCode: StatusCodes.Status409Conflict),
+            ResultadoDeConta.Ligada => TypedResults.Problem(title: ServicoDeContas.TituloLigada, statusCode: StatusCodes.Status409Conflict),
             _ => throw new UnreachableException(resultado.GetType().Name),
         };
 }

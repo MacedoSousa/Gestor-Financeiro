@@ -508,10 +508,10 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Atualiza (e arquiva) uma conta. Agência e número nulos mantêm o que está guardado; texto vazio apaga. */
+        /** Atualiza (e arquiva) uma conta. Agência e número nulos mantêm o que está guardado; texto vazio apaga. Em conta ligada ao banco, mudar o saldo inicial dá 409. */
         put: operations["AtualizarConta"];
         post?: never;
-        /** Apaga (soft delete) uma conta sem lançamentos. Com lançamentos dá 409: arquive em vez de apagar. */
+        /** Apaga (soft delete) uma conta sem lançamentos. Com lançamentos, ou ligada ao banco, dá 409: arquive em vez de apagar. */
         delete: operations["ApagarConta"];
         options?: never;
         head?: never;
@@ -986,6 +986,7 @@ export interface components {
             /** Format: int64 */
             limiteCentavos: null | number | string;
             arquivada: boolean;
+            ligada: boolean;
         };
         ContaNoSaldoDto: {
             /** Format: uuid */

@@ -17,6 +17,8 @@ internal abstract record ResultadoDeConta
     public sealed record NaoEncontrada : ResultadoDeConta;
     public sealed record ApelidoRepetido : ResultadoDeConta;
     public sealed record EmUso : ResultadoDeConta;
+    public sealed record SaldoDoBanco : ResultadoDeConta;
+    public sealed record Ligada : ResultadoDeConta;
 }
 
 /// <summary>Casos de uso de contas e cartões. O casal e o autor vêm sempre da sessão.</summary>
@@ -30,6 +32,8 @@ internal sealed class ServicoDeContas(
 {
     internal const string TituloApelidoRepetido = "Já existe uma conta com esse nome.";
     internal const string TituloEmUso = "Conta com lançamentos: arquive em vez de apagar.";
+    internal const string TituloSaldoDoBanco = "Esta conta vem do banco. O saldo inicial é calculado.";
+    internal const string TituloLigada = "Esta conta vem do banco. Arquive para parar a sincronização.";
     private const string IndiceDeApelido = "ux_contas_apelido";
 
     public async Task<IReadOnlyList<ContaDto>> ListarAsync(CancellationToken ct)
@@ -62,6 +66,10 @@ internal sealed class ServicoDeContas(
         var erros = await ValidarAsync(pedido, casalId, conta.Tipo, ct);
         if (erros.Count > 0) return new ResultadoDeConta.Invalido(erros);
 
+        // D3: em conta ligada o saldo inicial é calculado pela importação; apelido, dias, limite e arquivar continuam livres.
+        if (conta.Ligada && (pedido.SaldoInicialCentavos != conta.SaldoInicialCentavos || pedido.SaldoInicialEm != conta.SaldoInicialEm))
+            return new ResultadoDeConta.SaldoDoBanco();
+
         Aplicar(conta, pedido, pedido.Arquivada ?? conta.Arquivada);
         if (pedido.Agencia is not null) conta.DefinirAgencia(pedido.Agencia, cofre);
         if (pedido.Numero is not null) conta.DefinirNumero(pedido.Numero, cofre);
@@ -80,6 +88,7 @@ internal sealed class ServicoDeContas(
 
         var conta = await db.Contas.FirstOrDefaultAsync(c => c.Id == id, ct);
         if (conta is null) return new ResultadoDeConta.NaoEncontrada();
+        if (conta.Ligada) return new ResultadoDeConta.Ligada(); // decisão 7: arquivar para a sincronização; apagar, nunca.
 
         foreach (var verificador in verificadores)
             if (await verificador.EstaEmUsoAsync(id, ct))
@@ -116,7 +125,7 @@ internal sealed class ServicoDeContas(
         }
     }
 
-    private async Task<Dictionary<string, string[]>> ValidarAsync(NovaContaDto p, Guid casalId, TipoDeConta? tipoAtual, CancellationToken ct)
+    internal async Task<Dictionary<string, string[]>> ValidarAsync(NovaContaDto p, Guid casalId, TipoDeConta? tipoAtual, CancellationToken ct)
     {
         var erros = new Dictionary<string, string[]>();
 
@@ -163,7 +172,7 @@ internal sealed class ServicoDeContas(
     }
 
     /// <summary>Só os nomes do enum (sem diferenciar maiúsculas); "2" não vale.</summary>
-    private static bool TentarTipo(string? texto, out TipoDeConta tipo)
+    internal static bool TentarTipo(string? texto, out TipoDeConta tipo)
     {
         tipo = default;
         var nome = Enum.GetNames<TipoDeConta>().FirstOrDefault(n => string.Equals(n, texto?.Trim(), StringComparison.OrdinalIgnoreCase));
@@ -188,5 +197,6 @@ internal sealed class ServicoDeContas(
         c.DiaFechamento,
         c.DiaVencimento,
         c.LimiteCentavos,
-        c.Arquivada);
+        c.Arquivada,
+        c.Ligada);
 }

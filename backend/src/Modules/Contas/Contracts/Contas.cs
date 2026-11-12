@@ -30,6 +30,7 @@ public sealed record NovaContaDto(
 public sealed record TitularDto(Guid UsuarioId, string Apelido);
 
 /// <summary>Conta como a API devolve: agência e número só mascarados.</summary>
+/// <param name="Ligada">Vem do banco (Open Finance): saldo inicial calculado, lançamentos chegam sozinhos e não se apaga.</param>
 public sealed record ContaDto(
     Guid Id,
     string Tipo,
@@ -43,4 +44,5 @@ public sealed record ContaDto(
     int? DiaFechamento,
     int? DiaVencimento,
     long? LimiteCentavos,
-    bool Arquivada);
+    bool Arquivada,
+    bool Ligada);

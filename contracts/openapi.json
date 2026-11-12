@@ -1104,7 +1104,7 @@
         "tags": [
           "Contas"
         ],
-        "summary": "Atualiza (e arquiva) uma conta. Agência e número nulos mantêm o que está guardado; texto vazio apaga.",
+        "summary": "Atualiza (e arquiva) uma conta. Agência e número nulos mantêm o que está guardado; texto vazio apaga. Em conta ligada ao banco, mudar o saldo inicial dá 409.",
         "operationId": "AtualizarConta",
         "parameters": [
           {
@@ -1160,7 +1160,7 @@
         "tags": [
           "Contas"
         ],
-        "summary": "Apaga (soft delete) uma conta sem lançamentos. Com lançamentos dá 409: arquive em vez de apagar.",
+        "summary": "Apaga (soft delete) uma conta sem lançamentos. Com lançamentos, ou ligada ao banco, dá 409: arquive em vez de apagar.",
         "operationId": "ApagarConta",
         "parameters": [
           {
@@ -3174,7 +3174,8 @@
           "diaFechamento",
           "diaVencimento",
           "limiteCentavos",
-          "arquivada"
+          "arquivada",
+          "ligada"
         ],
         "type": "object",
         "properties": {
@@ -3256,6 +3257,9 @@
             "format": "int64"
           },
           "arquivada": {
+            "type": "boolean"
+          },
+          "ligada": {
             "type": "boolean"
           }
         }

@@ -83,6 +83,23 @@ public class ConexoesTests(PostgresFixture pg)
         Assert.Equal(ViolacaoDeUnicidade, await GravarAsync(c, (db, _) => db.Conexoes.Add(Conexao.Criar(c.CasalId, c.Bruno, 1))));
     }
 
+    /// <summary>FK composta (decisão do CEO na E3): o item só aponta para conexão do mesmo casal.</summary>
+    [Fact]
+    public async Task Item_de_casal_diferente_da_conexao_e_recusado()
+    {
+        await using var c = await NovoCasalAsync();
+        var outroCasal = Guid.CreateVersion7();
+        await EscalarAsync<int>(c.Banco, "INSERT INTO identidade.casais (id, nome_familia) VALUES (@id, 'Outra Família') RETURNING 1",
+            ("id", outroCasal));
+        var conexao = Conexao.Criar(c.CasalId, c.Ana, 1);
+        Assert.Null(await GravarAsync(c, (db, _) => db.Conexoes.Add(conexao)));
+
+        var erro = await GravarAsync(c, (db, cofre) =>
+            db.Items.Add(Item.Criar(outroCasal, conexao.Id, ItemSintetico(), "Itaú", EstadoDoItem.Ativo, null, null, cofre)));
+
+        Assert.Equal(PostgresErrorCodes.ForeignKeyViolation, erro);
+    }
+
     [Fact]
     public async Task Segunda_conexao_do_mesmo_conjuge_e_recusada()
     {

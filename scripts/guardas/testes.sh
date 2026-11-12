@@ -63,6 +63,20 @@ espera_falha   "UNIQUE sem índice parcial"        checar_conteudo_de_migracao "
 restricao="$(sql V0011__c.sql "CREATE TABLE boletos.y (id uuid PRIMARY KEY, nome text UNIQUE);" "SELECT audit.proteger('boletos.y');")"
 espera_falha   "UNIQUE dentro do CREATE TABLE"    checar_conteudo_de_migracao "$restricao"
 
+# Exceção estreita (FK composta, decisão do CEO na E3): (casal_id, id) contém a chave primária, então o soft
+# delete não muda nada nela; o Postgres não aceita FK para índice parcial.
+alvo_de_fk="$(sql V0011__g.sql "ALTER TABLE boletos.x ADD CONSTRAINT uq_x_casal_id UNIQUE (casal_id, id);")"
+espera_sucesso "UNIQUE (casal_id, id) para FK composta" checar_conteudo_de_migracao "$alvo_de_fk"
+
+outra_coluna="$(sql V0011__h.sql "ALTER TABLE boletos.x ADD CONSTRAINT uq_x_nome UNIQUE (casal_id, nome);")"
+espera_falha   "UNIQUE (casal_id, coluna de negócio) continua recusado" checar_conteudo_de_migracao "$outra_coluna"
+
+so_id="$(sql V0011__i.sql "ALTER TABLE boletos.x ADD CONSTRAINT uq_x_id UNIQUE (casal_id, id, nome);")"
+espera_falha   "UNIQUE (casal_id, id, mais colunas) continua recusado" checar_conteudo_de_migracao "$so_id"
+
+indice_alvo="$(sql V0011__j.sql "CREATE UNIQUE INDEX ux_x_casal_id ON boletos.x (casal_id, id);")"
+espera_falha   "índice UNIQUE (casal_id, id) sem ADD CONSTRAINT continua recusado" checar_conteudo_de_migracao "$indice_alvo"
+
 sem_schema="$(sql V0011__e.sql "CREATE TABLE sem_schema (id uuid PRIMARY KEY);")"
 espera_falha   "CREATE TABLE sem schema"          checar_conteudo_de_migracao "$sem_schema"
 
