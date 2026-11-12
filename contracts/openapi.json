@@ -2499,6 +2499,71 @@
           }
         }
       }
+    },
+    "/api/v1/integracoes/items/{id}/descoberta": {
+      "get": {
+        "tags": [
+          "Integrações"
+        ],
+        "summary": "O que o banco tem neste item e o sistema ainda não: contas, cartões (com dias e limite sugeridos), aplicações e as contas marcadas \"não importar\". Só lê. Só o titular (senão 403); banco recusou dá 502, Pluggy fora do ar dá 503.",
+        "operationId": "DescobrirContas",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DescobertaDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Bad Gateway",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -2570,6 +2635,34 @@
             "pattern": "^-?(?:0|[1-9]\\d*)$",
             "type": [
               "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          }
+        }
+      },
+      "AplicacaoEncontradaDto": {
+        "required": [
+          "idExterno",
+          "nome",
+          "tipo",
+          "saldoCentavos"
+        ],
+        "type": "object",
+        "properties": {
+          "idExterno": {
+            "type": "string"
+          },
+          "nome": {
+            "type": "string"
+          },
+          "tipo": {
+            "type": "string"
+          },
+          "saldoCentavos": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
               "integer",
               "string"
             ],
@@ -3264,6 +3357,99 @@
           }
         }
       },
+      "ContaEncontradaDto": {
+        "required": [
+          "idExterno",
+          "tipo",
+          "nomeNoBanco",
+          "apelidoSugerido",
+          "titularSugeridoUsuarioId",
+          "diaFechamentoSugerido",
+          "diaVencimentoSugerido",
+          "limiteCentavos",
+          "jaVemDe"
+        ],
+        "type": "object",
+        "properties": {
+          "idExterno": {
+            "type": "string"
+          },
+          "tipo": {
+            "type": "string"
+          },
+          "nomeNoBanco": {
+            "type": "string"
+          },
+          "apelidoSugerido": {
+            "type": "string"
+          },
+          "titularSugeridoUsuarioId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "diaFechamentoSugerido": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "diaVencimentoSugerido": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "limiteCentavos": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "jaVemDe": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "ContaNaoImportadaDto": {
+        "required": [
+          "vinculoId",
+          "idExterno",
+          "tipo",
+          "nomeNoBanco",
+          "apelidoSugerido"
+        ],
+        "type": "object",
+        "properties": {
+          "vinculoId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "idExterno": {
+            "type": "string"
+          },
+          "tipo": {
+            "type": "string"
+          },
+          "nomeNoBanco": {
+            "type": "string"
+          },
+          "apelidoSugerido": {
+            "type": "string"
+          }
+        }
+      },
       "ContaNoSaldoDto": {
         "required": [
           "contaId",
@@ -3342,6 +3528,38 @@
               "string"
             ],
             "format": "date-time"
+          }
+        }
+      },
+      "DescobertaDto": {
+        "required": [
+          "banco",
+          "contas",
+          "aplicacoes",
+          "naoImportadas"
+        ],
+        "type": "object",
+        "properties": {
+          "banco": {
+            "type": "string"
+          },
+          "contas": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ContaEncontradaDto"
+            }
+          },
+          "aplicacoes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AplicacaoEncontradaDto"
+            }
+          },
+          "naoImportadas": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ContaNaoImportadaDto"
+            }
           }
         }
       },

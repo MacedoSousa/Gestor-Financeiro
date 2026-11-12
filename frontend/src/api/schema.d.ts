@@ -800,6 +800,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/integracoes/items/{id}/descoberta": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** O que o banco tem neste item e o sistema ainda não: contas, cartões (com dias e limite sugeridos), aplicações e as contas marcadas "não importar". Só lê. Só o titular (senão 403); banco recusou dá 502, Pluggy fora do ar dá 503. */
+        get: operations["DescobrirContas"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -820,6 +837,13 @@ export interface components {
             fimDoMes: string;
             /** Format: int64 */
             faturaVencidaCentavos?: null | number | string;
+        };
+        AplicacaoEncontradaDto: {
+            idExterno: string;
+            nome: string;
+            tipo: string;
+            /** Format: int64 */
+            saldoCentavos: number | string;
         };
         AporteDaMetaDto: {
             /** Format: uuid */
@@ -988,6 +1012,29 @@ export interface components {
             arquivada: boolean;
             ligada: boolean;
         };
+        ContaEncontradaDto: {
+            idExterno: string;
+            tipo: string;
+            nomeNoBanco: string;
+            apelidoSugerido: string;
+            /** Format: uuid */
+            titularSugeridoUsuarioId: string;
+            /** Format: int32 */
+            diaFechamentoSugerido: null | number | string;
+            /** Format: int32 */
+            diaVencimentoSugerido: null | number | string;
+            /** Format: int64 */
+            limiteCentavos: null | number | string;
+            jaVemDe: null | string;
+        };
+        ContaNaoImportadaDto: {
+            /** Format: uuid */
+            vinculoId: string;
+            idExterno: string;
+            tipo: string;
+            nomeNoBanco: string;
+            apelidoSugerido: string;
+        };
         ContaNoSaldoDto: {
             /** Format: uuid */
             contaId: string;
@@ -1009,6 +1056,12 @@ export interface components {
             criadaEm: string;
             /** Format: date-time */
             ultimoUsoEm: null | string;
+        };
+        DescobertaDto: {
+            banco: string;
+            contas: components["schemas"]["ContaEncontradaDto"][];
+            aplicacoes: components["schemas"]["AplicacaoEncontradaDto"][];
+            naoImportadas: components["schemas"]["ContaNaoImportadaDto"][];
         };
         DescritorDeCredencialDto: {
             id: string;
@@ -3768,6 +3821,62 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    DescobrirContas: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DescobertaDto"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Gateway */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
             };
         };
     };
