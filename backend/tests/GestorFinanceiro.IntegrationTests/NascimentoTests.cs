@@ -103,13 +103,13 @@ public class NascimentoTests(PostgresFixture pg)
         descoberta.GetProperty("contas").EnumerateArray().Single(x => x.GetProperty("idExterno").GetString() == idExterno);
 
     /// <summary>Grava um vínculo direto pelo DbContext, com a identidade que a descoberta calcula.</summary>
-    private static async Task VincularAsync(Ctx c, Guid item, string tipo, ContaPluggy conta)
+    private static async Task VincularAsync(Ctx c, Guid item, string tipo, ContaPluggy conta, Guid? contaId = null, Guid? casal = null)
     {
         await using var escopo = c.Api.Services.CreateAsyncScope();
         var db = escopo.ServiceProvider.GetRequiredService<IntegracoesDbContext>();
         var cofre = escopo.ServiceProvider.GetRequiredService<ICofre>();
-        var casal = await EscalarAsync<Guid>(c.Banco, $"SELECT casal_id FROM integracoes.items WHERE id = '{item}'");
-        db.Vinculos.Add(Vinculo.Criar(casal, item, tipo, conta.Id, Guid.CreateVersion7(), Vinculo.IdentidadeDe(conta, cofre)));
+        casal ??= await EscalarAsync<Guid>(c.Banco, $"SELECT casal_id FROM integracoes.items WHERE id = '{item}'");
+        db.Vinculos.Add(Vinculo.Criar(casal.Value, item, tipo, conta.Id, contaId ?? Guid.CreateVersion7(), Vinculo.IdentidadeDe(conta, cofre)));
         await db.SaveChangesAsync();
     }
 
@@ -234,6 +234,7 @@ public class NascimentoTests(PostgresFixture pg)
         await using var c = await IniciarAsync();
         var (item, itemPluggy) = await ConectarAsync(c, c.Ana, 1);
         c.Pluggy.CadastrarConta(itemPluggy, Corrente);
+        c.Pluggy.CadastrarConta(itemPluggy, CartaoDaAna);
 
         var doBruno = await c.Bruno.GetAsync(RotaDescoberta(item));
         var daAna = await c.Ana.GetStringAsync(RotaDescoberta(item));
@@ -241,6 +242,8 @@ public class NascimentoTests(PostgresFixture pg)
         Assert.Equal(HttpStatusCode.Forbidden, doBruno.StatusCode);
         Assert.DoesNotContain(itemPluggy, daAna, StringComparison.Ordinal);
         Assert.DoesNotContain("12345", daAna, StringComparison.Ordinal);
+        Assert.DoesNotContain("1234", daAna, StringComparison.Ordinal);
+        Assert.DoesNotContain("ANA TESTE", daAna, StringComparison.OrdinalIgnoreCase);
     }
 
     // ------------------------------------------------------------------ Tarefa 3.3: nascimento
@@ -629,5 +632,217 @@ public class NascimentoTests(PostgresFixture pg)
         await EsperarAsync(c.Ana.DeleteAsync($"{RotaConexoes}/{conexao}"), HttpStatusCode.NoContent);
 
         Assert.Equal(0L, await EscalarAsync<long>(c.Banco, "SELECT count(*) FROM integracoes.vinculos WHERE NOT is_deleted"));
+    }
+
+    // ------------------------------------------------------------------ Revisão de segurança da E3: retomada do LIGAR
+
+    /// <summary>O Contas falha ao marcar ligada uma vez (exceção) ou responde que a conta não existe.</summary>
+    private sealed class MarcarFalha(IContasLigadas real, int[] chamadas, bool responderFalso) : IContasLigadas
+    {
+        public Task<ResultadoDaContaLigada> CriarAsync(NovaContaLigada pedido, CancellationToken ct) => real.CriarAsync(pedido, ct);
+
+        public Task<bool> MarcarLigadaAsync(Guid contaId, CancellationToken ct) =>
+            responderFalso ? Task.FromResult(false)
+            : Interlocked.Increment(ref chamadas[0]) == 1 ? throw new InvalidOperationException("falha sintética")
+            : real.MarcarLigadaAsync(contaId, ct);
+
+        public Task DefinirSaldoInicialAsync(Guid contaId, long centavos, DateOnly em, CancellationToken ct) =>
+            real.DefinirSaldoInicialAsync(contaId, centavos, em, ct);
+    }
+
+    private static async Task<Guid> CorrenteManualAsync(Ctx c, string apelido = "Minha corrente")
+    {
+        var r = await EsperarAsync(c.Ana.PostAsJsonAsync("/api/v1/contas", new
+        {
+            tipo = "CORRENTE", apelido, saldoInicialCentavos = 0L, saldoInicialEm = "2026-01-01",
+        }), HttpStatusCode.Created);
+        return Guid.Parse(r.Headers.Location!.ToString().Split('/').Last());
+    }
+
+    private static object LigarA(Guid conta) => new { idExterno = Corrente.Id, acao = "LIGAR", contaExistenteId = conta };
+
+    [Fact]
+    public async Task Retomar_o_LIGAR_que_falhou_completa_a_ligacao()
+    {
+        var chamadas = new int[1];
+        await using var c = await IniciarAsync(s => s.Replace(ServiceDescriptor.Scoped<IContasLigadas>(sp =>
+            new MarcarFalha(ActivatorUtilities.CreateInstance<ContasLigadas>(sp), chamadas, responderFalso: false))));
+        var conta = await CorrenteManualAsync(c);
+        var item = await ItemComContasAsync(c);
+
+        await EsperarAsync(NascerAsync(c.Ana, item, [LigarA(conta)]), HttpStatusCode.InternalServerError);
+        Assert.Contains(Corrente.Id, (await DescobertaAsync(c.Ana, item)).GetProperty("contas").EnumerateArray()
+            .Select(x => x.GetProperty("idExterno").GetString()));
+
+        await EsperarAsync(NascerAsync(c.Ana, item, [LigarA(conta)]), HttpStatusCode.NoContent);
+
+        Assert.Equal("1|true|1", await EscalarAsync<string>(c.Banco,
+            $"SELECT (SELECT count(*) FROM contas.contas) || '|' || (SELECT ligada_em IS NOT NULL FROM contas.contas WHERE id = '{conta}') " +
+            $"|| '|' || (SELECT count(*) FROM integracoes.vinculos WHERE conta_id = '{conta}')"));
+        Assert.DoesNotContain(Corrente.Id, (await DescobertaAsync(c.Ana, item)).GetProperty("contas").EnumerateArray()
+            .Select(x => x.GetProperty("idExterno").GetString()));
+    }
+
+    [Fact]
+    public async Task Criar_sobre_um_LIGAR_pela_metade_e_recusado()
+    {
+        var chamadas = new int[1];
+        await using var c = await IniciarAsync(s => s.Replace(ServiceDescriptor.Scoped<IContasLigadas>(sp =>
+            new MarcarFalha(ActivatorUtilities.CreateInstance<ContasLigadas>(sp), chamadas, responderFalso: false))));
+        var conta = await CorrenteManualAsync(c);
+        var item = await ItemComContasAsync(c);
+        await EsperarAsync(NascerAsync(c.Ana, item, [LigarA(conta)]), HttpStatusCode.InternalServerError);
+
+        var r = await EsperarAsync(NascerAsync(c.Ana, item, [Criar(Corrente.Id, "Itaú Corrente · Ana", c.AnaId)]), HttpStatusCode.Conflict);
+
+        Assert.Equal("Esta conta do banco já está ligada a outra conta.", await TituloAsync(r));
+        Assert.Equal(1L, await EscalarAsync<long>(c.Banco, "SELECT count(*) FROM contas.contas"));
+    }
+
+    [Fact]
+    public async Task Marcar_ligada_de_conta_que_sumiu_nao_responde_sucesso()
+    {
+        await using var c = await IniciarAsync(s => s.Replace(ServiceDescriptor.Scoped<IContasLigadas>(sp =>
+            new MarcarFalha(ActivatorUtilities.CreateInstance<ContasLigadas>(sp), new int[1], responderFalso: true))));
+        var conta = await CorrenteManualAsync(c);
+        var item = await ItemComContasAsync(c);
+
+        var r = await EsperarAsync(NascerAsync(c.Ana, item, [LigarA(conta)]), HttpStatusCode.Conflict);
+
+        Assert.Equal("A conta escolhida já não existe. Atualize a página.", await TituloAsync(r));
+    }
+
+    [Fact]
+    public async Task Vinculo_que_aponta_para_conta_apagada_ganha_conta_nova()
+    {
+        await using var c = await IniciarAsync();
+        var apagada = await CorrenteManualAsync(c, "Vai ser apagada");
+        await EsperarAsync(c.Ana.DeleteAsync($"/api/v1/contas/{apagada}"), HttpStatusCode.NoContent);
+        var item = await ItemComContasAsync(c);
+        await VincularAsync(c, item, "CONTA", Corrente, contaId: apagada);
+
+        await EsperarAsync(NascerAsync(c.Ana, item, [Criar(Corrente.Id, "Itaú Corrente · Ana", c.AnaId)]), HttpStatusCode.NoContent);
+
+        var nova = await EscalarAsync<Guid>(c.Banco, $"SELECT conta_id FROM integracoes.vinculos WHERE id_externo = '{Corrente.Id}' AND NOT is_deleted");
+        Assert.NotEqual(apagada, nova);
+        Assert.True(await EscalarAsync<bool>(c.Banco,
+            $"SELECT ligada_em IS NOT NULL AND NOT is_deleted AND apelido = 'Itaú Corrente · Ana' FROM contas.contas WHERE id = '{nova}'"));
+    }
+
+    [Fact]
+    public async Task Reagrupar_aplicacao_ja_nascida_e_recusado()
+    {
+        await using var c = await IniciarAsync();
+        var (item, itemPluggy) = await ConectarAsync(c, c.Ana, 1);
+        c.Pluggy.CadastrarInvestimento(itemPluggy, new InvestimentoPluggy("cdb-sintetico-1", "FIXED_INCOME", "CDB", "CDB", 1_000));
+        await EsperarAsync(NascerAsync(c.Ana, item, [], [Grupo("cdb-sintetico-1", "CDBs Casa")]), HttpStatusCode.NoContent);
+
+        var r = await EsperarAsync(NascerAsync(c.Ana, item, [], [Grupo("cdb-sintetico-1", "CDBs Carro")]), HttpStatusCode.Conflict);
+
+        Assert.Equal("Esta aplicação já está em outro grupo.", await TituloAsync(r));
+        Assert.Equal(1L, await EscalarAsync<long>(c.Banco, "SELECT count(*) FROM contas.contas"));
+    }
+
+    // ------------------------------------------------------------------ Revisão de segurança da E3: isolamento entre casais
+
+    private sealed record OutroCasal(Guid Casal, Guid Conta, Guid Meta, Guid Item, Guid Vinculo);
+
+    /// <summary>Outro casal, direto no banco (a instalação só cadastra um pela API): conta, meta, conexão, item e vínculo.</summary>
+    private static async Task<OutroCasal> OutroCasalAsync(Ctx c)
+    {
+        var o = new OutroCasal(Guid.CreateVersion7(), Guid.CreateVersion7(), Guid.CreateVersion7(), Guid.CreateVersion7(), Guid.CreateVersion7());
+        var conexao = Guid.CreateVersion7();
+        await EscalarAsync<int>(c.Banco, $"""
+            INSERT INTO identidade.casais (id, nome_familia) VALUES ('{o.Casal}', 'Outra Família');
+            INSERT INTO contas.contas (id, casal_id, tipo, apelido, saldo_inicial_em) VALUES ('{o.Conta}', '{o.Casal}', 'CORRENTE', 'Corrente de outro casal', '2026-01-01');
+            INSERT INTO investimentos.metas (id, casal_id, nome, valor_alvo_centavos, aporte_planejado_centavos, taxa_mensal)
+                VALUES ('{o.Meta}', '{o.Casal}', 'Meta de outro casal', 1000, 0, 0);
+            INSERT INTO integracoes.conexoes (id, casal_id, usuario_id, slot) VALUES ('{conexao}', '{o.Casal}', gen_random_uuid(), 1);
+            INSERT INTO integracoes.items (id, casal_id, conexao_id, item_id_cifrado, item_id_hmac, banco, estado)
+                VALUES ('{o.Item}', '{o.Casal}', '{conexao}', '\x00', '\x01', 'Itaú', 'ATIVO');
+            INSERT INTO integracoes.vinculos (id, casal_id, item_id, tipo, id_externo, nao_importar_em)
+                VALUES ('{o.Vinculo}', '{o.Casal}', '{o.Item}', 'CONTA', 'conta-de-outro-casal', now());
+            SELECT 1;
+            """);
+        return o;
+    }
+
+    private static Task<long> VinculosDoCasalAsync(Ctx c) =>
+        EscalarAsync<long>(c.Banco, "SELECT count(*) FROM integracoes.vinculos v JOIN identidade.casais k ON k.id = v.casal_id WHERE k.nome_familia = 'Família Teste'");
+
+    [Fact]
+    public async Task Item_de_outro_casal_nao_existe_para_a_descoberta_nem_para_o_nascimento()
+    {
+        await using var c = await IniciarAsync();
+        var o = await OutroCasalAsync(c);
+
+        await EsperarAsync(c.Ana.GetAsync(RotaDescoberta(o.Item)), HttpStatusCode.NotFound);
+        await EsperarAsync(NascerAsync(c.Ana, o.Item, [Criar("conta-de-outro-casal", "Qualquer")]), HttpStatusCode.NotFound);
+
+        Assert.Equal(1L, await EscalarAsync<long>(c.Banco, "SELECT count(*) FROM integracoes.vinculos"));
+    }
+
+    [Fact]
+    public async Task Vinculo_de_outro_casal_nao_existe_para_a_inclusao()
+    {
+        await using var c = await IniciarAsync();
+        var o = await OutroCasalAsync(c);
+
+        await EsperarAsync(c.Ana.PostAsJsonAsync($"/api/v1/integracoes/vinculos/{o.Vinculo}/inclusao", new { acao = "CRIAR", apelido = "Minha" }),
+            HttpStatusCode.NotFound);
+
+        Assert.True(await EscalarAsync<bool>(c.Banco, $"SELECT nao_importar_em IS NOT NULL AND conta_id IS NULL FROM integracoes.vinculos WHERE id = '{o.Vinculo}'"));
+    }
+
+    [Fact]
+    public async Task Ligar_a_conta_de_outro_casal_e_recusado()
+    {
+        await using var c = await IniciarAsync();
+        var o = await OutroCasalAsync(c);
+        var item = await ItemComContasAsync(c);
+
+        await EsperarAsync(NascerAsync(c.Ana, item, [LigarA(o.Conta)]), HttpStatusCode.BadRequest);
+
+        Assert.Equal(0L, await VinculosDoCasalAsync(c));
+        Assert.False(await EscalarAsync<bool>(c.Banco, $"SELECT ligada_em IS NOT NULL FROM contas.contas WHERE id = '{o.Conta}'"));
+    }
+
+    [Fact]
+    public async Task Meta_de_outro_casal_e_recusada_antes_de_criar_qualquer_coisa()
+    {
+        await using var c = await IniciarAsync();
+        var o = await OutroCasalAsync(c);
+        var (item, itemPluggy) = await ConectarAsync(c, c.Ana, 1);
+        c.Pluggy.CadastrarInvestimento(itemPluggy, new InvestimentoPluggy("cdb-sintetico-1", "FIXED_INCOME", "CDB", "CDB", 1_000));
+
+        await EsperarAsync(NascerAsync(c.Ana, item, [], [Grupo("cdb-sintetico-1", "CDBs Casa", o.Meta)]), HttpStatusCode.BadRequest);
+
+        Assert.Equal("0|1|0", await EscalarAsync<string>(c.Banco,
+            "SELECT (SELECT count(*) FROM investimentos.metas_contas) || '|' || (SELECT count(*) FROM contas.contas) || '|' || " +
+            "(SELECT count(*) FROM integracoes.vinculos WHERE tipo = 'INVESTIMENTO')"));
+    }
+
+    [Fact]
+    public async Task Titular_fora_do_casal_e_recusado_antes_de_gravar()
+    {
+        await using var c = await IniciarAsync();
+        var item = await ItemComContasAsync(c);
+
+        await EsperarAsync(NascerAsync(c.Ana, item, [Criar(Corrente.Id, "Itaú Corrente · X", Guid.CreateVersion7())]), HttpStatusCode.BadRequest);
+
+        Assert.Equal("0|0", await EscalarAsync<string>(c.Banco,
+            "SELECT (SELECT count(*) FROM integracoes.vinculos) || '|' || (SELECT count(*) FROM contas.contas)"));
+    }
+
+    [Fact]
+    public async Task Vinculo_com_casal_diferente_do_item_e_recusado_pelo_banco()
+    {
+        await using var c = await IniciarAsync();
+        var o = await OutroCasalAsync(c);
+        var (item, _) = await ConectarAsync(c, c.Ana, 1);
+
+        var erro = await Assert.ThrowsAsync<Microsoft.EntityFrameworkCore.DbUpdateException>(() => VincularAsync(c, item, "CONTA", Corrente, casal: o.Casal));
+
+        Assert.Equal(PostgresErrorCodes.ForeignKeyViolation, (erro.InnerException as PostgresException)?.SqlState);
     }
 }

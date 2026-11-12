@@ -291,4 +291,26 @@ public class ContasLigadasTests(PostgresFixture pg)
         Assert.Equal(1L, await EscalarAsync<long>(c.Banco,
             $"SELECT count(*) FROM investimentos.metas_contas WHERE conta_id = '{grupo}' AND meta_id = '{meta}' AND NOT is_deleted"));
     }
+
+    /// <summary>Revisão de segurança da E3: o id de uma conta manual, apagada ou de outro casal não vira "Pronta".</summary>
+    [Fact]
+    public async Task Id_de_conta_manual_apagada_ou_de_outro_casal_nao_e_Pronta()
+    {
+        await using var c = await IniciarAsync();
+        var manual = await CriarManualAsync(c.Cliente, "Manual");
+        var apagada = await CriarManualAsync(c.Cliente, "Apagada");
+        Assert.Equal(HttpStatusCode.NoContent, (await c.Cliente.DeleteAsync($"/api/v1/contas/{apagada}")).StatusCode);
+        var deOutro = Guid.CreateVersion7();
+        var outroCasal = Guid.CreateVersion7();
+        await EscalarAsync<int>(c.Banco, $"""
+            INSERT INTO identidade.casais (id, nome_familia) VALUES ('{outroCasal}', 'Outra Família');
+            INSERT INTO contas.contas (id, casal_id, tipo, apelido, saldo_inicial_em, ligada_em) VALUES ('{deOutro}', '{outroCasal}', 'CORRENTE', 'De outro', '2026-01-01', now());
+            SELECT 1;
+            """);
+
+        foreach (var id in new[] { manual, apagada, deOutro })
+            Assert.Equal(new ResultadoDaContaLigada.IdEmUso(), await CriarLigadaAsync(c, Corrente(id, $"Nova {id:N}")));
+
+        Assert.False(await EscalarAsync<bool>(c.Banco, $"SELECT ligada_em IS NOT NULL FROM contas.contas WHERE id = '{manual}'"));
+    }
 }

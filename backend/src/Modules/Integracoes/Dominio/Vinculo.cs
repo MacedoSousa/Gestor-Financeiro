@@ -70,6 +70,16 @@ internal sealed class Vinculo : Entidade, ICasalScoped
         NaoImportarEm = null;
     }
 
+    /// <summary>
+    /// Troca a conta de um vínculo cuja conta nunca chegou a existir no casal (o id ficou indisponível, ou o LIGAR mudou de
+    /// alvo antes de concluir). Quem chama confere isso.
+    /// </summary>
+    public void TrocarConta(Guid contaId)
+    {
+        ContaId = contaId;
+        NaoImportarEm = null;
+    }
+
     /// <summary>CONTA para conta bancária, CARTAO para cartão de crédito.</summary>
     public static string TipoDe(ContaPluggy conta) =>
         conta.Tipo == "CREDIT" ? TipoDeVinculo.Cartao : TipoDeVinculo.Conta;

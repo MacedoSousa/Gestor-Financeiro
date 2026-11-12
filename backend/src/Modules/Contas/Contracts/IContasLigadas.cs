@@ -19,6 +19,12 @@ public abstract record ResultadoDaContaLigada
     public sealed record ApelidoRepetido(string Sugestao) : ResultadoDaContaLigada;
 
     public sealed record Invalida(IReadOnlyDictionary<string, string[]> Erros) : ResultadoDaContaLigada;
+
+    /// <summary>
+    /// O id já pertence a uma conta que não é esta conta ligada: manual, apagada ou de outro casal. Nada foi gravado; quem
+    /// chama escolhe outro id.
+    /// </summary>
+    public sealed record IdEmUso : ResultadoDaContaLigada;
 }
 
 /// <summary>
@@ -27,7 +33,10 @@ public abstract record ResultadoDaContaLigada
 /// </summary>
 public interface IContasLigadas
 {
-    /// <summary>Cria a conta já ligada. Idempotente pelo <see cref="NovaContaLigada.ContaId"/>.</summary>
+    /// <summary>
+    /// Cria a conta já ligada. Idempotente pelo <see cref="NovaContaLigada.ContaId"/>: devolve <c>Pronta</c> só se a conta com
+    /// esse id existe no casal e é ligada; qualquer outro dono do id dá <c>IdEmUso</c>.
+    /// </summary>
     Task<ResultadoDaContaLigada> CriarAsync(NovaContaLigada pedido, CancellationToken ct);
 
     /// <summary>Marca como ligada uma conta que já existe. Falso se ela não existe no casal.</summary>

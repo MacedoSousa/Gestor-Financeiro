@@ -24,6 +24,7 @@ internal sealed class Nascimento(
     Descoberta descoberta,
     IContasLigadas contasLigadas,
     IMetasDeContas metas,
+    IConsultaDeMetas metasDoCasal,
     IConsultaDeContas consultaDeContas,
     IConsultaDeUsuarios usuarios,
     ICofre cofre,
@@ -39,6 +40,8 @@ internal sealed class Nascimento(
     internal const string TituloSoNaoImportada = "Esta conta não está marcada como \"não importar\".";
     internal const string TituloJaVemDeOutraConexao = "Esta conta já vem de outra conexão.";
     internal const string TituloTenteDeNovo = "Outra confirmação deste banco estava em andamento. Tente de novo.";
+    internal const string TituloContaSumiu = "A conta escolhida já não existe. Atualize a página.";
+    internal const string TituloOutroGrupo = "Esta aplicação já está em outro grupo.";
     internal static string TituloJaVemDe(string nome) => $"Esta conta já vem da conexão de {nome}.";
     internal static string TituloMeta(string grupo) => $"Não deu para ligar o grupo {grupo} à meta escolhida.";
 
@@ -92,7 +95,7 @@ internal sealed class Nascimento(
     private async Task<ResultadoDeNascimento> ConfirmarAsync(AcessoAoItem a, LeituraDoBanco leitura,
         IReadOnlyList<ContaConfirmadaDto> contas, IReadOnlyList<AplicacaoConfirmadaDto> aplicacoes, CancellationToken ct)
     {
-        var erros = await ValidarAsync(leitura, contas, aplicacoes, ct);
+        var erros = await ValidarAsync(a.Item.CasalId, leitura, contas, aplicacoes, ct);
         if (erros.Count > 0) return new ResultadoDeNascimento.Invalido(erros);
 
         var tarefas = new List<Tarefa>();
@@ -114,6 +117,7 @@ internal sealed class Nascimento(
         var vinculos = await db.Vinculos.Where(v => v.ItemId == a.Item.Id).ToListAsync(ct);
         var deOutrosItems = await descoberta.IdentidadesDeOutrosItemsAsync(a.Item.Id, ct);
         var doBanco = leitura.Contas.ToDictionary(c => c.Id, StringComparer.Ordinal);
+        var doCasal = (await consultaDeContas.ListarAsync(ct)).ToDictionary(c => c.Id);
         var agora = relogio.GetUtcNow();
 
         foreach (var confirmada in contas)
@@ -135,8 +139,9 @@ internal sealed class Nascimento(
                 return new ResultadoDeNascimento.Recusado(nome is null ? TituloJaVemDeOutraConexao : TituloJaVemDe(nome), 409);
             }
 
-            var destino = confirmada.Acao == Ligar ? confirmada.ContaExistenteId!.Value : vinculo?.ContaId ?? Guid.CreateVersion7();
-            if (confirmada.Acao == Ligar && await db.Vinculos.AnyAsync(v => v.ContaId == destino && v.Id != (vinculo == null ? Guid.Empty : vinculo.Id), ct))
+            var ligar = confirmada.Acao == Ligar;
+            var destino = ligar ? confirmada.ContaExistenteId!.Value : vinculo?.ContaId ?? Guid.CreateVersion7();
+            if (ligar && await db.Vinculos.AnyAsync(v => v.ContaId == destino && v.Id != (vinculo == null ? Guid.Empty : vinculo.Id), ct))
                 return new ResultadoDeNascimento.Recusado(TituloContaJaRecebe, 409);
 
             if (vinculo is null)
@@ -144,23 +149,32 @@ internal sealed class Nascimento(
             else if (vinculo.ContaId is null)
                 vinculo.DefinirConta(destino);
             else if (vinculo.ContaId != destino)
+            {
+                // A conta do vínculo existe no casal: ele já está ligado a ela (ou um LIGAR ficou pela metade); não muda de
+                // alvo. Se ela nunca chegou a existir, o LIGAR pode escolher outra.
+                if (doCasal.ContainsKey(vinculo.ContaId.Value) || !ligar) return new ResultadoDeNascimento.Recusado(TituloJaTemConta, 409);
+                vinculo.TrocarConta(destino);
+            }
+            else if (!ligar && doCasal.TryGetValue(destino, out var atual) && !atual.Ligada)
+            {
+                // CRIAR sobre um LIGAR pela metade: a pessoa escolhe "Ligar" de novo, explicitamente.
                 return new ResultadoDeNascimento.Recusado(TituloJaTemConta, 409);
+            }
 
-            tarefas.Add(confirmada.Acao == Ligar
+            tarefas.Add(ligar
                 ? new Tarefa.MarcarLigada(destino)
                 : new Tarefa.CriarConta(conta.Id, NovaConta(a, conta, confirmada, destino)));
         }
 
-        GravarAplicacoes(a, leitura, aplicacoes, vinculos, tarefas);
-        return new ResultadoDeNascimento.Feito();
+        return GravarAplicacoes(a, leitura, aplicacoes, vinculos, doCasal, tarefas) ?? new ResultadoDeNascimento.Feito();
     }
 
     /// <summary>
     /// Cada grupo distinto (nome sem caixa e sem espaços em volta) é uma conta INVESTIMENTO; as aplicações do grupo apontam
     /// para ela. Saldo inicial = soma das aplicações, no dia do nascimento (São Paulo). Sem grupo, a aplicação aguarda.
     /// </summary>
-    private void GravarAplicacoes(AcessoAoItem a, LeituraDoBanco leitura, IReadOnlyList<AplicacaoConfirmadaDto> aplicacoes,
-        List<Vinculo> vinculos, List<Tarefa> tarefas)
+    private ResultadoDeNascimento? GravarAplicacoes(AcessoAoItem a, LeituraDoBanco leitura, IReadOnlyList<AplicacaoConfirmadaDto> aplicacoes,
+        List<Vinculo> vinculos, IReadOnlyDictionary<Guid, ContaResumo> doCasal, List<Tarefa> tarefas)
     {
         var doBanco = leitura.Aplicacoes.ToDictionary(ap => ap.Id, StringComparer.Ordinal);
         Vinculo? Existente(string id) => vinculos.FirstOrDefault(v => v.Tipo == TipoDeVinculo.Investimento && v.IdExterno == id);
@@ -172,7 +186,12 @@ internal sealed class Nascimento(
         {
             var membros = grupo.ToList();
             var nome = membros[0].Grupo!.Nome!.Trim();
-            var contaId = membros.Select(m => Existente(m.IdExterno!)?.ContaId).FirstOrDefault(c => c is not null) ?? Guid.CreateVersion7();
+            // Aplicação já nascida não troca de grupo: nem misturada com outra conta, nem levada para um grupo de outro nome.
+            var jaTem = membros.Select(m => Existente(m.IdExterno!)?.ContaId).OfType<Guid>().Distinct().ToList();
+            if (jaTem.Count > 1 || (jaTem.Count == 1 && doCasal.TryGetValue(jaTem[0], out var daConta)
+                                    && !string.Equals(daConta.Apelido, nome, StringComparison.OrdinalIgnoreCase)))
+                return new ResultadoDeNascimento.Recusado(TituloOutroGrupo, 409);
+            var contaId = jaTem.Count == 1 ? jaTem[0] : Guid.CreateVersion7();
             foreach (var m in membros)
             {
                 var vinculo = Existente(m.IdExterno!);
@@ -185,6 +204,7 @@ internal sealed class Nascimento(
                 ConversaoPluggy.DiaDeSaoPaulo(relogio.GetUtcNow()), null, null, null);
             tarefas.Add(new Tarefa.CriarGrupo(nome, pedido, membros.Select(m => m.Grupo!.MetaId).FirstOrDefault(id => id is not null)));
         }
+        return null;
     }
 
     private static NovaContaLigada NovaConta(AcessoAoItem a, ContaPluggy conta, ContaConfirmadaDto c, Guid contaId)
@@ -202,18 +222,39 @@ internal sealed class Nascimento(
         switch (tarefa)
         {
             case Tarefa.CriarConta t:
-                return Traduzir(await contasLigadas.CriarAsync(t.Pedido, ct), t.IdExterno);
+                return Traduzir(await CriarAsync(t.Pedido, ct), t.IdExterno);
             case Tarefa.MarcarLigada t:
-                await contasLigadas.MarcarLigadaAsync(t.ContaId, ct);
-                return null;
+                return await contasLigadas.MarcarLigadaAsync(t.ContaId, ct) ? null : new ResultadoDeNascimento.Recusado(TituloContaSumiu, 409);
             case Tarefa.CriarGrupo t:
-                if (Traduzir(await contasLigadas.CriarAsync(t.Pedido, ct), null) is { } recusa) return recusa;
+                if (Traduzir(await CriarAsync(t.Pedido, ct), null) is { } recusa) return recusa;
                 if (t.MetaId is { } meta && !await metas.LigarContaAMetaAsync(t.Pedido.ContaId, meta, ct))
                     return new ResultadoDeNascimento.Recusado(TituloMeta(t.Nome), 409);
                 return null;
             default:
                 throw new InvalidOperationException(tarefa.GetType().Name);
         }
+    }
+
+    /// <summary>
+    /// Cria a conta pelo contrato. Se o id do vínculo ficou indisponível (a conta dele foi apagada, por exemplo), troca o id
+    /// nos vínculos, na trava do casal, e tenta uma vez com o id novo.
+    /// </summary>
+    private async Task<ResultadoDaContaLigada> CriarAsync(NovaContaLigada pedido, CancellationToken ct)
+    {
+        var resultado = await contasLigadas.CriarAsync(pedido, ct);
+        if (resultado is not ResultadoDaContaLigada.IdEmUso) return resultado;
+
+        var novo = Guid.CreateVersion7();
+        var casal = atual.CasalId ?? throw new InvalidOperationException("Nascimento sem casal.");
+        var troca = await NaTravaDoCasalAsync(casal, async () =>
+        {
+            foreach (var v in await db.Vinculos.Where(v => v.ContaId == pedido.ContaId).ToListAsync(ct)) v.TrocarConta(novo);
+            return new ResultadoDeNascimento.Feito();
+        }, ct);
+        if (troca is not ResultadoDeNascimento.Feito) throw new InvalidOperationException("Não deu para trocar o id da conta.");
+
+        resultado = await contasLigadas.CriarAsync(pedido with { ContaId = novo }, ct);
+        return resultado is ResultadoDaContaLigada.IdEmUso ? throw new InvalidOperationException("Id novo também indisponível.") : resultado;
     }
 
     private static ResultadoDeNascimento? Traduzir(ResultadoDaContaLigada resultado, string? idExterno) => resultado switch
@@ -227,10 +268,15 @@ internal sealed class Nascimento(
 
     // ------------------------------------------------------------------ validação
 
-    private async Task<Dictionary<string, string[]>> ValidarAsync(LeituraDoBanco leitura, IReadOnlyList<ContaConfirmadaDto> contas,
+    private async Task<Dictionary<string, string[]>> ValidarAsync(Guid casal, LeituraDoBanco leitura, IReadOnlyList<ContaConfirmadaDto> contas,
         IReadOnlyList<AplicacaoConfirmadaDto> aplicacoes, CancellationToken ct)
     {
         var erros = new Dictionary<string, string[]>();
+        // Titular e meta são conferidos antes de gravar qualquer coisa: o que vem do cliente tem de ser do casal da sessão.
+        var membros = (await usuarios.ListarDoCasalAsync(casal, ct)).Select(u => u.UsuarioId).ToHashSet();
+        var metasDoPainel = aplicacoes.Any(ap => ap.Grupo?.MetaId is not null)
+            ? (await metasDoCasal.PainelAsync(ct)).Metas.Select(m => m.Id).ToHashSet()
+            : [];
         var doBanco = leitura.Contas.ToDictionary(c => c.Id, StringComparer.Ordinal);
         var vistas = new HashSet<string>(StringComparer.Ordinal);
 
@@ -249,6 +295,9 @@ internal sealed class Nascimento(
             {
                 case Criar when c.Apelido?.Trim() is not { Length: > 0 and <= NomeMaximo }:
                     erros[$"{chave}.apelido"] = [$"O apelido deve ter de 1 a {NomeMaximo} caracteres."];
+                    break;
+                case Criar when c.TitularUsuarioId is { } titular && !membros.Contains(titular):
+                    erros[$"{chave}.titularUsuarioId"] = ["O titular precisa ser um dos cônjuges do casal."];
                     break;
                 case Criar or NaoImportar:
                     break;
@@ -276,6 +325,8 @@ internal sealed class Nascimento(
             else if (!vistas.Add(ap.IdExterno)) erros[$"{chave}.idExterno"] = ["Aplicação repetida na confirmação."];
             if (ap.Grupo is not null && ap.Grupo.Nome?.Trim() is not { Length: > 0 and <= NomeMaximo })
                 erros[$"{chave}.grupo.nome"] = [$"O nome do grupo deve ter de 1 a {NomeMaximo} caracteres."];
+            if (ap.Grupo?.MetaId is { } meta && !metasDoPainel.Contains(meta))
+                erros[$"{chave}.grupo.metaId"] = ["A meta escolhida não existe."];
         }
 
         return erros;

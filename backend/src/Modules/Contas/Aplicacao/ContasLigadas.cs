@@ -16,6 +16,7 @@ internal sealed class ContasLigadas(ContasDbContext db, IUsuarioAtual atual, Ser
     : IContasLigadas
 {
     private const string IndiceDeApelido = "ux_contas_apelido";
+    private const string ChavePrimaria = "contas_pkey";
     private const int ApelidoMaximo = 60;
 
     public async Task<ResultadoDaContaLigada> CriarAsync(NovaContaLigada pedido, CancellationToken ct)
@@ -23,7 +24,7 @@ internal sealed class ContasLigadas(ContasDbContext db, IUsuarioAtual atual, Ser
         ArgumentNullException.ThrowIfNull(pedido);
         var casalId = atual.CasalId ?? throw new InvalidOperationException("Conta ligada sem casal.");
 
-        if (await db.Contas.AnyAsync(c => c.Id == pedido.ContaId, ct)) return new ResultadoDaContaLigada.Pronta(pedido.ContaId);
+        if (await JaExisteAsync(pedido.ContaId, ct) is { } existente) return existente;
 
         var dto = new NovaContaDto(pedido.Tipo, pedido.Apelido, pedido.Instituicao, pedido.TitularUsuarioId, null, null,
             pedido.SaldoInicialCentavos, pedido.SaldoInicialEm, pedido.DiaFechamento, pedido.DiaVencimento, pedido.LimiteCentavos);
@@ -45,14 +46,25 @@ internal sealed class ContasLigadas(ContasDbContext db, IUsuarioAtual atual, Ser
             await db.SaveChangesAsync(ct);
             return new ResultadoDaContaLigada.Pronta(conta.Id);
         }
-        catch (DbUpdateException e) when (e.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation } pg)
+        catch (DbUpdateException e) when (e.InnerException is PostgresException
+        {
+            SqlState: PostgresErrorCodes.UniqueViolation, ConstraintName: IndiceDeApelido or ChavePrimaria,
+        } pg)
         {
             db.ChangeTracker.Clear();
-            // Outra chamada com o mesmo id gravou antes: a conta está pronta. Apelido tomado no meio: devolve a sugestão.
+            // Apelido tomado no meio: devolve a sugestão. Id tomado: é desta conta ligada (outra chamada gravou antes) ou de
+            // uma conta que o filtro não mostra (apagada, de outro casal); nunca "Pronta" sem conferir.
             return pg.ConstraintName == IndiceDeApelido
                 ? new ResultadoDaContaLigada.ApelidoRepetido(await SugestaoAsync(apelido, ct))
-                : new ResultadoDaContaLigada.Pronta(conta.Id);
+                : await JaExisteAsync(conta.Id, ct) ?? new ResultadoDaContaLigada.IdEmUso();
         }
+    }
+
+    /// <summary>A conta com este id no casal: ligada = pronta; manual = id em uso. Nula se o filtro não a mostra.</summary>
+    private async Task<ResultadoDaContaLigada?> JaExisteAsync(Guid id, CancellationToken ct)
+    {
+        var conta = await db.Contas.AsNoTracking().FirstOrDefaultAsync(c => c.Id == id, ct);
+        return conta is null ? null : conta.Ligada ? new ResultadoDaContaLigada.Pronta(id) : new ResultadoDaContaLigada.IdEmUso();
     }
 
     public async Task<bool> MarcarLigadaAsync(Guid contaId, CancellationToken ct)

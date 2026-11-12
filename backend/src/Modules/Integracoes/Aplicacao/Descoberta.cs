@@ -99,7 +99,8 @@ internal sealed partial class Descoberta(
     private async Task<DescobertaDto> MontarAsync(AcessoAoItem a, LeituraDoBanco leitura, CancellationToken ct)
     {
         var vinculos = await db.Vinculos.AsNoTracking().Where(v => v.ItemId == a.Item.Id).ToListAsync(ct);
-        var existentes = (await contas.ListarAsync(ct)).Select(c => c.Id).ToHashSet();
+        // "Nascida" = a conta existe no casal e já é ligada; um LIGAR pela metade (conta ainda manual) volta a ser perguntado.
+        var existentes = (await contas.ListarAsync(ct)).Where(c => c.Ligada).Select(c => c.Id).ToHashSet();
         var apelidos = (await usuarios.ListarDoCasalAsync(a.Item.CasalId, ct)).ToDictionary(u => u.UsuarioId, u => u.Apelido);
         var deOutrosItems = await IdentidadesDeOutrosItemsAsync(a.Item.Id, ct);
         var dono = apelidos.GetValueOrDefault(a.Conexao.UsuarioId);
