@@ -21,7 +21,6 @@
       "Read(./backups/**)",
       "Read(./infra/data/**)",
       "Edit(./infra/secrets/**)",
-      "Write(./infra/secrets/**)",
       "Bash(git push --force:*)",
       "Bash(git push -f:*)",
       "Bash(psql:*)",
