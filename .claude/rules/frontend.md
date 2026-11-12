@@ -19,7 +19,7 @@ paths:
 Animação aqui serve para orientar (o que mudou, o que está carregando, o que respondeu ao clique), nunca para enfeitar número.
 
 - **Só CSS** (`transition`, `@keyframes`) com os tokens de movimento de `tokens.css` (`--mov-rapido`, `--mov-medio`, `--mov-lento`, `--curva`). Nenhuma duração acima de 320 ms; nada em laço, exceto indicador de carregamento.
-- **`prefers-reduced-motion: reduce` desliga tudo** (regra global em `app.css`). Todo componente funciona e se entende sem animação.
+- **`prefers-reduced-motion: reduce` desliga tudo:** a regra global de `prefers-reduced-motion` nasce no `app.css` com o primeiro PR que tiver animação (hoje o front não tem nenhuma). Todo componente funciona e se entende sem animação.
 - **Dinheiro não anima.** Nada de contagem subindo (count-up) nem número trocando aos poucos: o valor na tela e o lido pelo leitor de tela são sempre o real. Pode animar a barra de progresso, a opacidade de entrada de uma seção e o estado de um botão.
 - **Só `transform` e `opacity`.** Nada que mude o tamanho do layout ou faça número pular de lugar.
 - **Um único destaque verde-água por tela** continua valendo: brilho, aurora, gradiente animado ou glow não criam um segundo destaque.
