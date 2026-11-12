@@ -81,7 +81,8 @@ Próximos passos (a API em container roda como o usuário 'app', uid 1654):
      na pasta /opt/gestor-financeiro, com sudo, feito pela pessoa (nunca por agente), num terminal
      normal, fora de sudo -i (lá o ~ vira /root). Slot vazio = não configurado. Faça de a) a g) de uma
      vez, longe das 03:00 (backup) e das 04:00 (reinício automático). Nesta ordem:
-     a) Depois do merge do PR da etapa 2, atualize o código:
+     a) Depois do merge do PR da etapa 2, anote o commit atual (é o ponto de volta do código) e atualize:
+          sudo git -C /opt/gestor-financeiro rev-parse --short HEAD
           sudo git -C /opt/gestor-financeiro pull
      b) Backup antes de migrar. O start espera o backup terminar; depois, entre as últimas linhas do
         journal tem de aparecer "backup ok: <arquivo>". Se o start der erro ou o "backup ok" não
@@ -109,9 +110,15 @@ Próximos passos (a API em container roda como o usuário 'app', uid 1654):
           sudo docker compose -f /opt/gestor-financeiro/infra/docker-compose.yml run --rm api --migrar
         Só se o --migrar terminar sem erro (última linha: "migrações em dia."): suba a api e o web novos:
           sudo docker compose -f /opt/gestor-financeiro/infra/docker-compose.yml up -d api web
-        Se o --migrar der erro, pare aqui e religue a api antiga: o start não recria o container, então
-        ela volta com a imagem antiga; o backup do item b) é o ponto de volta do banco:
-          sudo docker compose -f /opt/gestor-financeiro/infra/docker-compose.yml start api
+        Se o --migrar der erro, pare aqui e religue a api e o web antigos: o start não recria os
+        containers, então eles voltam com as imagens antigas; o backup do item b) é o ponto de volta do banco:
+          sudo docker compose -f /opt/gestor-financeiro/infra/docker-compose.yml start api web
+        Até resolver, não rode nenhum up nem reinicie o PC (nem deixe o reinício das 04:00 acontecer): o
+        código e as imagens novos continuam em /opt, e o up do boot subiria a api nova sobre o banco sem a
+        migração. Para voltar de vez ao código antigo, com o commit anotado no item a):
+          sudo git -C /opt/gestor-financeiro checkout <commit anotado no item a>
+          sudo docker compose -f /opt/gestor-financeiro/infra/docker-compose.yml build api web
+        Depois leve o erro do --migrar ao CEO, sem colar nenhum valor de chave.
      g) Confira: api e web "Up" (o compose não tem healthcheck para os dois) e a api respondendo
         {"status":"ok",...} pela rede interna; se o wget recusar a conexão, a api ainda está subindo:
         espere uns 10 s e repita:

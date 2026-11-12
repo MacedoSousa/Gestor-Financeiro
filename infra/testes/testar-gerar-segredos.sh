@@ -205,7 +205,7 @@ passo_7_backup_antes_da_migracao() {
 # da migração; se a migração falhar, a pessoa para e religa a api antiga (start não recria o container), e a nova
 # não sobe sem a migração.
 passo_7_migracao_com_a_api_parada_e_parada_se_falhar() {
-  local stop migrar condicao up start
+  local stop migrar condicao up start erro anotar pull voltar
   passo_7 migracao || return 1
   stop="$(linha_de "$COMPOSE_OPT stop api")"
   migrar="$(linha_de "$COMPOSE_OPT run --rm api --migrar")"
@@ -213,9 +213,27 @@ passo_7_migracao_com_a_api_parada_e_parada_se_falhar() {
   up="$(linha_de "$COMPOSE_OPT up -d api web")"
   [ -n "$stop" ] && [ -n "$migrar" ] && [ -n "$condicao" ] && [ -n "$up" ] || { echo "  falta stop, migração, condição ou subida"; return 1; }
   [ "$stop" -lt "$migrar" ] && [ "$migrar" -lt "$condicao" ] && [ "$condicao" -lt "$up" ] || { echo "  ordem stop → migração → condição → subida"; return 1; }
-  grep -qF "Se o --migrar der erro, pare aqui e religue a api antiga:" "$T/passo7" || { echo "  não manda parar se a migração falhar"; return 1; }
-  start="$(linha_de "$COMPOSE_OPT start api")"
-  [ -n "$start" ] && [ "$start" -gt "$migrar" ] || { echo "  sem o start da api antiga depois da migração"; return 1; }
+  erro="$(linha_de "Se o --migrar der erro, pare aqui e religue a api e o web antigos:")"
+  [ -n "$erro" ] || { echo "  não manda parar se a migração falhar"; return 1; }
+  start="$(linha_de "$COMPOSE_OPT start api web")"
+  [ -n "$start" ] && [ "$start" -gt "$erro" ] || { echo "  sem o start da api e do web antigos depois da frase do erro"; return 1; }
+  # Código e imagens novos continuam em /opt: o próximo "up" (o do boot, inclusive o reinício das 04:00) subiria a
+  # api nova sobre o banco não migrado. Até resolver, nada de up nem de reiniciar; para voltar de vez, o commit
+  # anotado antes do pull e o build.
+  grep -qF "Até resolver, não rode nenhum up nem reinicie o PC" "$T/passo7" || { echo "  sem o aviso de não subir nem reiniciar"; return 1; }
+  anotar="$(linha_de "sudo git -C /opt/gestor-financeiro rev-parse --short HEAD")"
+  pull="$(linha_de "sudo git -C /opt/gestor-financeiro pull")"
+  [ -n "$anotar" ] && [ "$anotar" -lt "$pull" ] || { echo "  sem anotar o commit antes do pull"; return 1; }
+  voltar="$(linha_de "sudo git -C /opt/gestor-financeiro checkout <commit anotado no item a>")"
+  [ -n "$voltar" ] && [ "$voltar" -gt "$start" ] || { echo "  sem o checkout do commit anotado depois do start"; return 1; }
+  [ "$(linha_de "$COMPOSE_OPT build api web")" -lt "$voltar" ] && grep -n -F "$COMPOSE_OPT build api web" "$T/passo7" | cut -d: -f1 | awk -v v="$voltar" '$1 > v' | grep -q . \
+    || { echo "  sem o build depois do checkout de volta"; return 1; }
+}
+
+# De a) a g) de uma vez, longe do backup das 03:00 e do reinício das 04:00.
+passo_7_longe_do_backup_e_do_reinicio() {
+  passo_7 horario || return 1
+  grep -qF "longe das 03:00 (backup) e das 04:00 (reinício automático)" "$T/passo7" || { echo "  sem o aviso de horário"; return 1; }
 }
 
 # Os originais de 11/11 só são apagados (shred) depois de o stat mostrar a cópia certa no slot 1.
@@ -268,6 +286,7 @@ caso passo_7_copia_o_client_secret_para_o_slot_1
 caso passo_7_backup_antes_da_migracao
 caso passo_7_shred_so_depois_do_stat
 caso passo_7_migracao_com_a_api_parada_e_parada_se_falhar
+caso passo_7_longe_do_backup_e_do_reinicio
 caso pluggy_existente_nao_e_tocado
 caso segunda_execucao_mantem
 caso pasta_com_outro_modo_falha
