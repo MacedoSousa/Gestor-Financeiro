@@ -114,6 +114,12 @@ segredos_da_pluggy_nascem_vazios() {
   # Os próximos passos ensinam a gravar pelo terminal, sem eco e sem deixar o valor no histórico.
   grep -qF "read -rs v; printf '%s' \"\$v\" | sudo tee infra/secrets/pluggy_1_client_id >/dev/null; unset v" "$T/saida" \
     || { echo "  sem o comando de gravação nos próximos passos"; return 1; }
+  # Instalação que já existia: rodar o script antes do "up" (o compose exige os quatro arquivos) e os arquivos de
+  # 11/11 (pluggy_client_*) viram o slot 1 (D23), sem o valor passar pela tela.
+  grep -qF "Instalação que já existia: depois do git pull, rode este script de novo ANTES do docker compose up" "$T/saida" \
+    || { echo "  sem o aviso para a instalação que já existia"; return 1; }
+  grep -qF "sudo install -m 0444 ~/Gestor-Financeiro/infra/secrets/pluggy_client_id infra/secrets/pluggy_1_client_id" "$T/saida" \
+    || { echo "  sem a cópia dos arquivos de 11/11 para o slot 1"; return 1; }
 }
 
 # Um segredo da Pluggy já preenchido (valor sintético) não é tocado: mesmo inode, mesmo sha, mesmo modo.

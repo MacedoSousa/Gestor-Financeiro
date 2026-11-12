@@ -84,6 +84,11 @@ Próximos passos (a API em container roda como o usuário 'app', uid 1654):
        read -rs v; printf '%s' "\$v" | sudo tee infra/secrets/pluggy_2_client_id >/dev/null; unset v
        read -rs v; printf '%s' "\$v" | sudo tee infra/secrets/pluggy_2_client_secret >/dev/null; unset v
      Depois: docker compose -f infra/docker-compose.yml up -d api
+     Instalação que já existia: depois do git pull, rode este script de novo ANTES do docker compose up
+     (a api exige os quatro arquivos; ele só cria os que faltam). As chaves gravadas em 11/11
+     (pluggy_client_*, no clone ~/Gestor-Financeiro) viram o slot 1 de quem as criou (D23):
+       sudo install -m 0444 ~/Gestor-Financeiro/infra/secrets/pluggy_client_id infra/secrets/pluggy_1_client_id
+       sudo install -m 0444 ~/Gestor-Financeiro/infra/secrets/pluggy_client_secret infra/secrets/pluggy_1_client_secret
 
 Instalações anteriores: um dek.recuperacao antigo e o código em papel que veio com ele estão
 obsoletos (não são mais lidos). Guarde ou destrua de propósito; não confunda com o código novo.

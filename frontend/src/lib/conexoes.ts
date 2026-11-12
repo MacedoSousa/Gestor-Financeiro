@@ -30,11 +30,15 @@ export function estadoDoItem(estado: string, motivo: string | null | undefined):
   }
 }
 
-/** "2026-11-14" → "Consentimento até 14/11/2026" (data do dia, sem passar por fuso). */
-export function textoDoConsentimento(dia: string | null | undefined): string | null {
+/**
+ * "2026-11-14" → "Consentimento até 14/11/2026" (data do dia, sem passar por fuso). Se o rótulo do estado já fala de
+ * consentimento, fica só "até 14/11/2026".
+ */
+export function textoDoConsentimento(dia: string | null | undefined, estado: string): string | null {
   if (!dia) return null;
   const [ano, mes, d] = dia.split("-");
-  return `Consentimento até ${d}/${mes}/${ano}`;
+  const data = `${d}/${mes}/${ano}`;
+  return estado.startsWith("CONSENTIMENTO_") ? `até ${data}` : `Consentimento até ${data}`;
 }
 
 export const rotuloDoSlot = (slot: number) => `Slot ${slot} · arquivos pluggy_${slot}_*`;

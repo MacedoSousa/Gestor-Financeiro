@@ -45,11 +45,15 @@ describe("estadoDoItem", () => {
 
 describe("textoDoConsentimento", () => {
   it("data do dia, sem fuso", () => {
-    expect(textoDoConsentimento("2026-11-14")).toBe("Consentimento até 14/11/2026");
+    expect(textoDoConsentimento("2026-11-14", "ATIVO")).toBe("Consentimento até 14/11/2026");
+  });
+  it("quando o estado já fala de consentimento, não repete a palavra", () => {
+    expect(textoDoConsentimento("2026-11-14", "CONSENTIMENTO_VENCENDO")).toBe("até 14/11/2026");
+    expect(textoDoConsentimento("2026-11-01", "CONSENTIMENTO_VENCIDO")).toBe("até 01/11/2026");
   });
   it("sem data, sem texto", () => {
-    expect(textoDoConsentimento(null)).toBeNull();
-    expect(textoDoConsentimento(undefined)).toBeNull();
+    expect(textoDoConsentimento(null, "ATIVO")).toBeNull();
+    expect(textoDoConsentimento(undefined, "ERRO")).toBeNull();
   });
 });
 

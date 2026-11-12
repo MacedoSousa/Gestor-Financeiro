@@ -1,4 +1,4 @@
-import { useId, useState, type FormEvent } from "react";
+import { useEffect, useId, useRef, useState, type FormEvent, type RefObject } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { ErroDeApi } from "../api/autenticacao";
 import { n } from "../api/formulario";
@@ -8,7 +8,6 @@ import {
   BANCO_MAXIMO,
   estadoDoItem,
   ITEM_ID_MAXIMO,
-  rotuloDoSlot,
   separarConexoes,
   textoDoConsentimento,
   validarCadastro,
@@ -44,9 +43,27 @@ function useTentativa() {
   return { erro, tentativa, ocupado, tentar };
 }
 
+/** Depois de validar no navegador: o foco vai ao primeiro campo com erro (rádio do slot, id do item ou banco). */
+function focarPrimeiroErro(form: RefObject<HTMLFormElement | null>) {
+  requestAnimationFrame(() =>
+    form.current
+      ?.querySelector<HTMLElement>('fieldset[aria-invalid="true"] input:not(:disabled), input[aria-invalid="true"]')
+      ?.focus(),
+  );
+}
+
+/** "Chaves no slot 1 (arquivos pluggy_1_*)": só o nome dos arquivos em fonte mono. */
+function ChavesNoSlot({ slot }: { slot: number }) {
+  return (
+    <>
+      slot {slot} (arquivos <span className="num">pluggy_{slot}_*</span>)
+    </>
+  );
+}
+
 function EstadoDoBanco({ item }: { item: ItemDaConexao }) {
   const aparencia = estadoDoItem(item.estado, item.motivo);
-  const consentimento = textoDoConsentimento(item.consentimentoVenceEm);
+  const consentimento = textoDoConsentimento(item.consentimentoVenceEm, item.estado);
   const classeDoPonto = aparencia.tom === "normal" ? "ponto" : `ponto ${aparencia.tom}`;
   return (
     <div className="item-texto">
@@ -65,7 +82,7 @@ function EstadoDoBanco({ item }: { item: ItemDaConexao }) {
 function EscolhaDoSlot({ slots, valor, aoMudar, erro }: { slots: Slot[]; valor: number | null; aoMudar: (s: number) => void; erro?: string }) {
   const id = useId();
   return (
-    <fieldset className="escolha" aria-describedby={erro ? `${id}-erro` : `${id}-nota`}>
+    <fieldset className="escolha" aria-invalid={erro ? true : undefined} aria-describedby={erro ? `${id}-nota ${id}-erro` : `${id}-nota`}>
       <legend className="campo-rotulo">Em qual slot estão as suas chaves?</legend>
       <span id={`${id}-nota`} className="cartao-nota">
         Cada cônjuge grava as próprias chaves do Meu Pluggy num slot do servidor. Escolha o seu.
@@ -74,26 +91,28 @@ function EscolhaDoSlot({ slots, valor, aoMudar, erro }: { slots: Slot[]; valor: 
         const numero = n(s.slot);
         const aviso = avisoDoSlot({ slot: numero, configurado: s.configurado, emUso: s.emUso });
         return (
-          <label key={numero} className="campo-check opcao-slot">
-            <input
-              type="radio"
-              name={`${id}-slot`}
-              value={numero}
-              checked={valor === numero}
-              disabled={aviso !== null}
-              aria-describedby={aviso ? `${id}-aviso-${numero}` : undefined}
-              onChange={() => aoMudar(numero)}
-            />
-            <span>
-              Estas chaves estão nos arquivos <span className="num">pluggy_{numero}_*</span>
-              <span className="sr-only"> ({rotuloDoSlot(numero)})</span>
-              {aviso && (
-                <span id={`${id}-aviso-${numero}`} className="cartao-nota" style={{ display: "block" }}>
-                  {aviso}
-                </span>
-              )}
-            </span>
-          </label>
+          <div key={numero}>
+            <label className="campo-check opcao-slot">
+              <input
+                type="radio"
+                name={`${id}-slot`}
+                value={numero}
+                checked={valor === numero}
+                disabled={aviso !== null}
+                aria-describedby={aviso ? `${id}-aviso-${numero}` : undefined}
+                onChange={() => aoMudar(numero)}
+              />
+              <span>
+                Estas chaves estão nos arquivos <span className="num">pluggy_{numero}_*</span>
+                <span className="sr-only"> (slot {numero})</span>
+              </span>
+            </label>
+            {aviso && (
+              <span id={`${id}-aviso-${numero}`} className="cartao-nota aviso-do-slot">
+                {aviso}
+              </span>
+            )}
+          </div>
         );
       })}
       {erro && (
@@ -106,9 +125,10 @@ function EscolhaDoSlot({ slots, valor, aoMudar, erro }: { slots: Slot[]; valor: 
 }
 
 /** Cadastro da própria conexão com o primeiro banco. O servidor consulta o banco antes de gravar. */
-function NovaConexao({ slots, aoConcluir }: { slots: Slot[]; aoConcluir: (banco: string) => void }) {
+function NovaConexao({ slots, aoConcluir }: { slots: Slot[]; aoConcluir: (aviso: string) => void }) {
   const acoes = useAcoesDeConexoes();
   const { erro, tentativa, ocupado, tentar } = useTentativa();
+  const form = useRef<HTMLFormElement>(null);
   const [slot, setSlot] = useState<number | null>(null);
   const [itemId, setItemId] = useState("");
   const [banco, setBanco] = useState("");
@@ -119,13 +139,16 @@ function NovaConexao({ slots, aoConcluir }: { slots: Slot[]; aoConcluir: (banco:
     e.preventDefault();
     const encontrados = validarCadastro({ slot, itemId, banco });
     setErros(encontrados);
-    if (Object.keys(encontrados).length > 0 || slot === null) return;
+    if (Object.keys(encontrados).length > 0 || slot === null) {
+      focarPrimeiroErro(form);
+      return;
+    }
     const nome = banco.trim();
-    if (await tentar(async () => void (await acoes.conectar(slot, itemId, banco)))) aoConcluir(nome);
+    if (await tentar(async () => void (await acoes.conectar(slot, itemId, banco)))) aoConcluir(`Conexão criada. ${nome} foi aceito pelo banco.`);
   }
 
   return (
-    <form className="bloco-form" noValidate onSubmit={(e) => void enviar(e)} aria-labelledby="titulo-sua-conexao">
+    <form ref={form} className="bloco-form" noValidate onSubmit={(e) => void enviar(e)} aria-labelledby="titulo-sua-conexao">
       {nenhumSlot && (
         <p className="faixa-aviso">
           Nenhum slot está livre com as chaves gravadas. Quem administra o servidor grava as chaves pelo terminal (passo 7 do
@@ -154,25 +177,42 @@ function NovaConexao({ slots, aoConcluir }: { slots: Slot[]; aoConcluir: (banco:
   );
 }
 
-/** Mais um banco na própria conexão. */
-function NovoBanco({ conexao, aoConcluir, aoCancelar }: { conexao: Conexao; aoConcluir: (banco: string) => void; aoCancelar: () => void }) {
+/** Mais um banco na própria conexão. Ao abrir, o foco vai para o primeiro campo. */
+function NovoBanco({ conexao, aoConcluir, aoCancelar }: { conexao: Conexao; aoConcluir: (aviso: string) => void; aoCancelar: () => void }) {
   const acoes = useAcoesDeConexoes();
   const { erro, tentativa, ocupado, tentar } = useTentativa();
+  const form = useRef<HTMLFormElement>(null);
   const [itemId, setItemId] = useState("");
   const [banco, setBanco] = useState("");
   const [erros, setErros] = useState<ErrosDoCadastro>({});
+
+  useEffect(() => {
+    form.current?.querySelector<HTMLInputElement>("input")?.focus();
+  }, []);
 
   async function enviar(e: FormEvent) {
     e.preventDefault();
     const encontrados = validarCadastro({ itemId, banco });
     setErros(encontrados);
-    if (Object.keys(encontrados).length > 0) return;
+    if (Object.keys(encontrados).length > 0) {
+      focarPrimeiroErro(form);
+      return;
+    }
     const nome = banco.trim();
-    if (await tentar(async () => void (await acoes.acrescentarBanco(conexao.id, itemId, banco)))) aoConcluir(nome);
+    if (await tentar(async () => void (await acoes.acrescentarBanco(conexao.id, itemId, banco)))) aoConcluir(`${nome} entrou na sua conexão.`);
   }
 
   return (
-    <form className="confirmacao" noValidate onSubmit={(e) => void enviar(e)} aria-label="Acrescentar banco">
+    <form
+      ref={form}
+      className="confirmacao"
+      noValidate
+      onSubmit={(e) => void enviar(e)}
+      onKeyDown={(e) => {
+        if (e.key === "Escape" && !ocupado) aoCancelar();
+      }}
+      aria-label="Acrescentar banco"
+    >
       <Campo
         rotulo="Id do item no Meu Pluggy"
         valor={itemId}
@@ -199,12 +239,25 @@ function NovoBanco({ conexao, aoConcluir, aoCancelar }: { conexao: Conexao; aoCo
 
 type Confirmando = { tipo: "banco"; item: ItemDaConexao } | { tipo: "conexao" } | null;
 
-/** A conexão de quem está na sessão: bancos, acrescentar, tirar e apagar (só o titular; D21). */
-function SuaConexao({ conexao, aoAvisar }: { conexao: Conexao; aoAvisar: (texto: string) => void }) {
+/**
+ * A conexão de quem está na sessão: bancos, acrescentar, tirar e apagar (só o titular; D21). A confirmação recebe o foco
+ * quando aparece e fecha com Esc; concluir ou cancelar devolve o foco ao título da seção (`aoVoltar`).
+ */
+function SuaConexao({ conexao, aoAvisar, aoVoltar }: { conexao: Conexao; aoAvisar: (texto: string) => void; aoVoltar: () => void }) {
   const acoes = useAcoesDeConexoes();
   const { erro, tentativa, ocupado, tentar } = useTentativa();
   const [acrescentando, setAcrescentando] = useState(false);
   const [confirmando, setConfirmando] = useState<Confirmando>(null);
+  const caixa = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (confirmando) caixa.current?.focus();
+  }, [confirmando]);
+
+  function cancelar() {
+    setConfirmando(null);
+    aoVoltar();
+  }
 
   async function confirmar() {
     const alvo = confirmando;
@@ -221,7 +274,7 @@ function SuaConexao({ conexao, aoAvisar }: { conexao: Conexao; aoAvisar: (texto:
   return (
     <>
       <p className="cartao-nota" style={{ margin: 0 }}>
-        Chaves no <span className="num">{rotuloDoSlot(n(conexao.slot))}</span>
+        Chaves no <ChavesNoSlot slot={n(conexao.slot)} />
         {conexao.slotConfigurado ? "" : " · os arquivos estão vazios no servidor"}
       </p>
       {conexao.items.length === 0 ? (
@@ -246,7 +299,16 @@ function SuaConexao({ conexao, aoAvisar }: { conexao: Conexao; aoAvisar: (texto:
       )}
 
       {confirmando && (
-        <div className="confirmacao" role="group" aria-labelledby="texto-confirmar-conexao">
+        <div
+          ref={caixa}
+          className="confirmacao"
+          role="group"
+          tabIndex={-1}
+          aria-labelledby="texto-confirmar-conexao"
+          onKeyDown={(e) => {
+            if (e.key === "Escape" && !ocupado) cancelar();
+          }}
+        >
           <p id="texto-confirmar-conexao" className="confirmacao-texto">
             {confirmando.tipo === "banco"
               ? `Tirar ${confirmando.item.banco} da sua conexão? O sistema para de ler este banco; o que já entrou fica.`
@@ -257,7 +319,7 @@ function SuaConexao({ conexao, aoAvisar }: { conexao: Conexao; aoAvisar: (texto:
             <button type="button" className="botao-perigo" disabled={ocupado} onClick={() => void confirmar()}>
               {confirmando.tipo === "banco" ? "Tirar o banco" : "Apagar a conexão"}
             </button>
-            <button type="button" className="botao-secundario" disabled={ocupado} onClick={() => setConfirmando(null)}>
+            <button type="button" className="botao-secundario" disabled={ocupado} onClick={cancelar}>
               Cancelar
             </button>
           </div>
@@ -267,10 +329,13 @@ function SuaConexao({ conexao, aoAvisar }: { conexao: Conexao; aoAvisar: (texto:
       {acrescentando ? (
         <NovoBanco
           conexao={conexao}
-          aoCancelar={() => setAcrescentando(false)}
-          aoConcluir={(banco) => {
+          aoCancelar={() => {
             setAcrescentando(false);
-            aoAvisar(`${banco} entrou na sua conexão.`);
+            aoVoltar();
+          }}
+          aoConcluir={(aviso) => {
+            setAcrescentando(false);
+            aoAvisar(aviso);
           }}
         />
       ) : (
@@ -295,7 +360,7 @@ function ConexaoDoConjuge({ conexao }: { conexao: Conexao | null }) {
   return (
     <>
       <p className="cartao-nota" style={{ margin: 0 }}>
-        Só {conexao.apelido} altera esta conexão. Chaves no <span className="num">{rotuloDoSlot(n(conexao.slot))}</span>.
+        Só {conexao.apelido} altera esta conexão. Chaves no <ChavesNoSlot slot={n(conexao.slot)} />.
       </p>
       {conexao.items.length === 0 ? (
         <p className="cartao-nota">Nenhum banco nesta conexão.</p>
@@ -325,7 +390,20 @@ function Carregando() {
 export function Conexoes() {
   const conexoes = useConexoes();
   const [aviso, setAviso] = useState<string>();
+  const [voltas, setVoltas] = useState(0);
+  const titulo = useRef<HTMLHeadingElement>(null);
   const { sua, outra } = separarConexoes(conexoes.data?.conexoes ?? []);
+
+  // Depois de concluir ou cancelar, o que tinha o foco some: ele volta ao título da seção (2.4.3).
+  useEffect(() => {
+    if (voltas > 0) titulo.current?.focus();
+  }, [voltas]);
+
+  const voltar = () => setVoltas((v) => v + 1);
+  const avisar = (texto: string) => {
+    setAviso(texto);
+    voltar();
+  };
 
   return (
     <>
@@ -356,13 +434,13 @@ export function Conexoes() {
       {conexoes.data && (
         <>
           <section className="cartao" aria-labelledby="titulo-sua-conexao">
-            <h2 id="titulo-sua-conexao" className="cartao-rotulo" style={{ margin: 0 }}>
+            <h2 id="titulo-sua-conexao" ref={titulo} tabIndex={-1} className="cartao-rotulo" style={{ margin: 0 }}>
               Sua conexão
             </h2>
             {sua ? (
-              <SuaConexao conexao={sua} aoAvisar={setAviso} />
+              <SuaConexao conexao={sua} aoAvisar={avisar} aoVoltar={voltar} />
             ) : (
-              <NovaConexao slots={conexoes.data.slots} aoConcluir={(banco) => setAviso(`Conexão criada. ${banco} foi aceito pelo banco.`)} />
+              <NovaConexao slots={conexoes.data.slots} aoConcluir={avisar} />
             )}
           </section>
 

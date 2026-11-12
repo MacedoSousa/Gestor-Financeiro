@@ -342,6 +342,37 @@ public class ConexoesTests(PostgresFixture pg)
     }
 
     [Fact]
+    public async Task Pluggy_sem_resposta_no_tempo_tambem_e_503()
+    {
+        await using var t = await NovoCasalComApiAsync();
+        // Tempo do HttpClient esgotado: TaskCanceledException sem o cancelamento do pedido.
+        t.Pluggy.Falha = new TaskCanceledException("tempo esgotado");
+
+        var r = await CadastrarAsync(t.Ana, 1, ItemSintetico());
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, r.StatusCode);
+        Assert.Equal(TituloPluggyFora, await TituloAsync(r));
+        Assert.Equal(0L, await ContarAsync(t.C, "conexoes"));
+    }
+
+    [Fact]
+    public async Task Item_de_outra_conexao_nao_e_apagado_pela_sua()
+    {
+        await using var t = await NovoCasalComApiAsync();
+        var daAna = ItemSintetico();
+        var doBruno = ItemSintetico();
+        t.Pluggy.Cadastrar(IdSlot1, daAna);
+        t.Pluggy.Cadastrar(IdSlot2, doBruno);
+        var conexaoDaAna = (await JsonAsync(await CadastrarAsync(t.Ana, 1, daAna))).GetProperty("id").GetGuid();
+        var itemDoBruno = Assert.Single((await JsonAsync(await CadastrarAsync(t.Bruno, 2, doBruno)))
+            .GetProperty("items").EnumerateArray()).GetProperty("id").GetGuid();
+
+        // A Ana é titular da conexão da rota, mas o item é da conexão do Bruno.
+        Assert.Equal(HttpStatusCode.NotFound, (await t.Ana.DeleteAsync($"{Rota}/{conexaoDaAna}/items/{itemDoBruno}")).StatusCode);
+        Assert.Equal(2L, await ContarAsync(t.C, "items"));
+    }
+
+    [Fact]
     public async Task Item_aceito_guarda_estado_e_consentimento()
     {
         await using var t = await NovoCasalComApiAsync();
