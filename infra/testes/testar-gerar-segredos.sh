@@ -148,9 +148,15 @@ passo_7_roda_em_opt_com_sudo_e_na_ordem() {
     echo "  comando com caminho relativo:"; grep -E '(^|[ =])infra/' "$T/passo7" | sed 's/^/  | /'; return 1
   fi
   if grep -E '^\s+(docker|git) ' "$T/passo7" >/dev/null; then echo "  docker ou git sem sudo"; return 1; fi
-  # Gravação pelo terminal, sem eco e sem deixar o valor no histórico, nos dois slots.
-  grep -qF "read -rs v; printf '%s' \"\$v\" | sudo tee /opt/gestor-financeiro/infra/secrets/pluggy_2_client_id >/dev/null; unset v" "$T/passo7" \
-    || { echo "  sem o comando de gravação do slot 2"; return 1; }
+  # Gravação pelo terminal, sem eco e sem deixar o valor no histórico. O read mostra um aviso: sem ele, a senha do
+  # sudo pedida logo depois poderia ser digitada no read e gravada no arquivo de segredo.
+  grep -qF "read -rsp 'valor (não aparece): ' v; printf '%s' \"\$v\" | sudo tee /opt/gestor-financeiro/infra/secrets/pluggy_2_client_id >/dev/null; unset v" "$T/passo7" \
+    || { echo "  sem o comando de gravação do slot 2 (com aviso no read)"; return 1; }
+  if grep -E 'read -rs v' "$T/passo7" >/dev/null; then echo "  read sem aviso"; return 1; fi
+  # Quem exige os quatro arquivos é o compose (a api trata ausente como slot não configurado).
+  grep -qF "o compose exige os quatro" "$T/passo7" || { echo "  não diz que é o compose que exige os quatro"; return 1; }
+  grep -qF "Na instalação que já existe, só o passo 7 (os passos 1 a 6 são da primeira instalação)." "$T/saida" \
+    || { echo "  sem o aviso de que só o passo 7 vale na instalação existente"; return 1; }
   grep -qF "Depois de regravar as chaves de um slot, reinicie a api (a chave temporária fica em cache por até 110 min)." "$T/passo7" \
     || { echo "  sem o aviso de reiniciar a api"; return 1; }
   grep -qF "sudo docker compose -f /opt/gestor-financeiro/infra/docker-compose.yml restart api" "$T/passo7" \

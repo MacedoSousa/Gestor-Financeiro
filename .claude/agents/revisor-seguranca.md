@@ -44,4 +44,4 @@ As sugestões do revisor sobre o próprio revisor (e sobre o testador-de-telas) 
 - **Recusado pelo CEO (D10):** `git fetch` antes do `git diff origin/main...HEAD --stat` do testador-de-telas (achado 2 da revisão da D9).
 - **Ideia (revisão da D10, achado 1):** numa worktree o comando que gera o arquivo falha ao gravar `.git/revisao.diff` (lá `.git` é arquivo), e o revisor para com "arquivo não existe" em vez de "Rode o revisor no clone principal.". Ele para do mesmo jeito; só a mensagem sai errada. Correção possível: conferir a worktree antes da checagem do arquivo.
 - **Ideia (revisão da D10, achado 2):** a skill `revisao-cruzada` sugere `superpowers:using-git-worktrees`, e este agente recusa worktree. Trabalho feito numa worktree tem de ser revisado no clone principal, com a branch dela em checkout.
-- **Risco aceito pelo CEO (D11; revisão da D10, achado 3):** `Bash(sudo:*)` no deny só barra comandos que começam com `sudo`; `env sudo …` e `bash -c 'sudo …'` passam.
+- **Risco aceito pelo CEO (D11; revisão da D10, achado 3):** `Bash(sudo:*)` no deny casa só o prefixo `sudo`; um `sudo` chamado por outro comando não é barrado.
