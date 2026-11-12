@@ -152,6 +152,50 @@ public class RegrasDeArquitetura
         Assert.True(ofensores.Count == 0, $"DELETE físico encontrado em: {string.Join(", ", ofensores)}");
     }
 
+    /// <summary>
+    /// Nada usa o DataProtection; sem chaves persistidas, tudo que ele protege some a cada reinício.
+    /// AddAuthentication() entra na lista porque o registra por baixo (use AddAuthenticationCore()).
+    /// </summary>
+    private static readonly Regex UsoDoDataProtection = new(
+        @"\b(\w*DataProtector|I?DataProtectionProvider|AddDataProtection|AddAntiforgery|AddSession|AddCookie)\b"
+        + @"|Microsoft\.AspNetCore\.DataProtection|\.AddAuthentication\s*\(");
+
+    [Fact]
+    public void DataProtection_fica_desligado()
+    {
+        var ofensores = Arquivos("backend/src", "*.cs")
+            .SelectMany(f => File.ReadAllLines(f).Select((l, i) => (f, l, i)))
+            .Where(x => UsoDoDataProtection.IsMatch(x.l))
+            .Select(x => $"{Relativo(x.f)}:{x.i + 1}")
+            .ToList();
+
+        Assert.True(ofensores.Count == 0,
+            $"decisão do CEO: DataProtection desligado (D15). Encontrado em: {string.Join(", ", ofensores)}");
+    }
+
+    [Theory]
+    [InlineData("builder.Services.AddDataProtection();")]
+    [InlineData("services.AddAuthentication(\"x\")")]
+    [InlineData("    .AddAuthentication (o => { })")]
+    [InlineData("services.AddAntiforgery();")]
+    [InlineData("services.AddSession();")]
+    [InlineData(".AddCookie(\"c\")")]
+    [InlineData("internal sealed class X(IDataProtector p)")]
+    [InlineData("ITimeLimitedDataProtector p")]
+    [InlineData("internal sealed class X(IDataProtectionProvider p)")]
+    [InlineData("var p = DataProtectionProvider.Create(\"gf\");")]
+    [InlineData("using Microsoft.AspNetCore.DataProtection;")]
+    public void Verificador_de_DataProtection_acusa(string codigo) =>
+        Assert.Matches(UsoDoDataProtection, codigo);
+
+    [Theory]
+    [InlineData("builder.Services.AddAuthenticationCore(o => o.DefaultScheme = \"x\");")]
+    [InlineData("new AuthenticationBuilder(builder.Services).AddScheme<A, B>(\"x\", null);")]
+    [InlineData("resposta.Cookies.Append(\"c\", token, opcoes);")]
+    [InlineData("// a versão completa registra o DataProtection")]
+    public void Verificador_de_DataProtection_aceita(string codigo) =>
+        Assert.DoesNotMatch(UsoDoDataProtection, codigo);
+
     [Fact]
     public void Toda_tabela_criada_e_protegida_pela_auditoria()
     {
