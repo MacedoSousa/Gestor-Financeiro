@@ -18,6 +18,17 @@ infra/secrets/*
 !infra/secrets/README.md
 *.key
 *.pem
+# App Android: assinatura e caminho local do SDK
+*.jks
+*.keystore
+*.p12
+*.pfx
+*.bks
+*.pepk
+keystore.properties
+local.properties
+*service-account*.json
+*conta-de-servico*.json
 chave-servico*
 
 # Dados locais

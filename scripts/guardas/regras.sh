@@ -15,8 +15,47 @@ eh_caminho_de_segredo() {
     infra/secrets/README.md|*/infra/secrets/README.md) return 1 ;;
     infra/secrets/*|*/infra/secrets/*|.env|*/.env|.env.*|*/.env.*|backups/*|*/backups/*|infra/data/*|*/infra/data/*) return 0 ;;
     *.key|*.pem|*.dump|*chave-servico*) return 0 ;;
+    # App Android: keystores, senha da assinatura, chaves do adb/emulador e do Gradle do usuário.
+    *.jks|*.keystore|*.p12|*.pfx|*.bks|*.pepk|keystore.properties|*/keystore.properties) return 0 ;;
+    .android|.android/*|*/.android|*/.android/*) return 0 ;;
+    .gradle/gradle.properties|*/.gradle/gradle.properties) return 0 ;;
+    # Chave JSON de conta de serviço (Play Console, Google Cloud) pelo nome; pelo conteúdo, ver abaixo.
+    *service-account*.json|*service_account*.json|*conta-de-servico*.json|*conta_de_servico*.json) return 0 ;;
   esac
   return 1
+}
+
+# Lê um JSON no stdin; devolve 0 se for chave de conta de serviço, seja qual for o nome do arquivo.
+eh_json_de_conta_de_servico() {
+  grep -qE '"type"[[:space:]]*:[[:space:]]*"service_account"|"private_key"[[:space:]]*:'
+}
+
+# Palavras de um comando de shell, uma por linha, sem aspas (separa também em ; & | ( ) < > =).
+palavras_do_comando() {
+  printf '%s\n' "$1" | tr -s ' \t;&|()<>=' '\n' | tr -d "\"'"
+}
+
+# Comando que o agente vai rodar pelo Bash (hook PreToolUse). Falha se citar caminho de segredo
+# ou, quando chama o gradlew, se usar o que roda código de fora ou despeja senha:
+# --scan (envia o ambiente para fora), -I/--init-script, properties e signingReport.
+checar_comando_bash() {
+  local comando="$1" palavra gradle=0 falhou=0
+  printf '%s' "$comando" | grep -qE '(^|[;&|([:space:]])([^[:space:];&|()]*/)?gradlew([[:space:];&|)]|$)' && gradle=1
+  while IFS= read -r palavra; do
+    [ -z "$palavra" ] && continue
+    if eh_caminho_de_segredo "$palavra"; then
+      echo "Bloqueado: o comando cita $palavra, que guarda segredo (regra 5 do CLAUDE.md)." >&2
+      falhou=1
+    fi
+    if [ "$gradle" -eq 1 ]; then
+      case "$palavra" in
+        --scan|-I|-I*|--init-script|properties|*:properties|signingReport|*:signingReport)
+          echo "Bloqueado: gradlew com '$palavra' (roda código de fora, envia o ambiente ou despeja senha)." >&2
+          falhou=1 ;;
+      esac
+    fi
+  done < <(palavras_do_comando "$comando")
+  return "$falhou"
 }
 
 # Código e SQL de produção (testes podem citar os padrões proibidos para verificá-los).
