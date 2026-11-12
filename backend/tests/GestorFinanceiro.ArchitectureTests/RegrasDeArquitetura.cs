@@ -83,7 +83,9 @@ public class RegrasDeArquitetura
         var proibidos = Assembly.Load(moduloB).GetTypes()
             .Where(t => t.FullName is not null && !t.FullName.StartsWith(moduloB + ".Contracts", StringComparison.Ordinal))
             .Select(t => t.Namespace == moduloB ? t.FullName! : t.Namespace)
-            .Where(n => n is not null && n != moduloB)
+            // Só o que é do próprio B: o compilador gera tipos em namespaces de fora (ex.: o [GeneratedRegex] em
+            // System.Text.RegularExpressions.Generated), que todo módulo com regex gerado compartilha.
+            .Where(n => n is not null && n != moduloB && n.StartsWith(moduloB + ".", StringComparison.Ordinal))
             .Select(n => n!)
             .Distinct()
             .ToArray();
@@ -194,6 +196,105 @@ public class RegrasDeArquitetura
 
         Assert.True(linhas.Count == 0, $"UNIQUE sem 'WHERE NOT is_deleted' em: {string.Join(", ", linhas)}");
     }
+
+    // ---------------------------------------------------------------- Pluggy só de leitura (ADR-015)
+
+    [Fact]
+    public void Cliente_da_Pluggy_so_le()
+    {
+        var ofensores = Arquivos("backend/src/Modules/Integracoes", "*.cs")
+            .SelectMany(f => VerificadorDaPluggy.Violacoes(File.ReadAllText(f)).Select(v => $"{Relativo(f)}: {v}"))
+            .ToList();
+
+        Assert.True(ofensores.Count == 0, $"A Pluggy é só leitura (POST só em /auth): {string.Join("; ", ofensores)}");
+    }
+
+    [Theory]
+    [InlineData("await http.DeleteAsync(\"/items/1\")", "DeleteAsync")]
+    [InlineData("await http.PatchAsync(\"/items/1\", corpo)", "PatchAsync")]
+    [InlineData("await http.PutAsync(\"/items/1\", corpo)", "PutAsync")]
+    [InlineData("new HttpRequestMessage(HttpMethod.Delete, \"/items/1\")", "HttpMethod.Delete")]
+    [InlineData("new HttpRequestMessage(HttpMethod.Patch, \"/items/1\")", "HttpMethod.Patch")]
+    [InlineData("new HttpRequestMessage(HttpMethod.Put, \"/items/1\")", "HttpMethod.Put")]
+    [InlineData("await http.PostAsync(\"/payments\", corpo)", "PostAsync fora de /auth")]
+    [InlineData("await http.PostAsJsonAsync(\"/items\", corpo)", "PostAsync fora de /auth")]
+    [InlineData("await http.PatchAsJsonAsync(\"/items/1\", corpo)", "PatchAsync")]
+    [InlineData("await http.PutAsJsonAsync(\"/items/1\", corpo)", "PutAsync")]
+    [InlineData("new HttpRequestMessage(HttpMethod.Post, \"/items\")", "HttpMethod.Post fora de /auth")]
+    [InlineData("const string Rota = \"/smart-transfers\";", "/smart-transfers")]
+    [InlineData("var r = \"/boletos?x=1\";", "/boletos")]
+    [InlineData("var r = \"/boleto-connections\";", "/boleto-connections")]
+    [InlineData("var r = \"/pix-biometric\";", "/pix-biometric")]
+    [InlineData("var r = \"/payments/requests\";", "/payments")]
+    public void Verificador_da_Pluggy_acusa(string codigo, string esperado)
+    {
+        Assert.Contains(esperado, VerificadorDaPluggy.Violacoes(codigo));
+    }
+
+    [Theory]
+    [InlineData("await http.PostAsync(\"/auth\", corpo)")]
+    [InlineData("new HttpRequestMessage(HttpMethod.Post, \"/auth\")")]
+    [InlineData("await http.GetAsync($\"/v2/transactions?accountId={id}\")")]
+    [InlineData("new HttpRequestMessage(HttpMethod.Get, \"/items/1\")")]
+    public void Verificador_da_Pluggy_aceita_leitura(string codigo)
+    {
+        Assert.Empty(VerificadorDaPluggy.Violacoes(codigo));
+    }
+
+    // ---------------------------------------------------------------- códigos de categoria da Pluggy (decisão 13)
+
+    private const string TabelaDeCategorias = "backend/src/Modules/Lancamentos/Contracts/CategoriasDoBanco.cs";
+
+    [Fact]
+    public void Codigos_de_categoria_da_Pluggy_so_na_tabela()
+    {
+        // Um código de categoria da Pluggy é um texto de 8 dígitos entre aspas; só a tabela pode tê-lo.
+        var codigo = new Regex("\"[0-9]{8}\"");
+        var ofensores = Arquivos("backend/src", "*.cs")
+            .Where(f => Relativo(f) != TabelaDeCategorias && codigo.IsMatch(File.ReadAllText(f)))
+            .Select(Relativo)
+            .ToList();
+
+        Assert.True(File.Exists(Path.Combine(RaizDoRepositorio(), TabelaDeCategorias)), $"Falta a tabela {TabelaDeCategorias}.");
+        Assert.True(ofensores.Count == 0, $"Código de categoria da Pluggy fora de {TabelaDeCategorias}: {string.Join(", ", ofensores)}");
+    }
+
+    // ---------------------------------------------------------------- filtros (regra 9, D6 e D27)
+
+    [Fact]
+    public void IgnoreQueryFilters_so_nos_lugares_permitidos()
+    {
+        var ofensores = Arquivos("backend/src", "*.cs")
+            .SelectMany(f => VerificadorDeFiltros.Violacoes(Relativo(f), File.ReadAllText(f)))
+            .ToList();
+
+        Assert.True(ofensores.Count == 0, $"IgnoreQueryFilters fora dos lugares permitidos (regra 9): {string.Join("; ", ofensores)}");
+    }
+
+    [Theory]
+    [InlineData("backend/src/Modules/Contas/Aplicacao/X.cs", "db.Contas.IgnoreQueryFilters([Filtros.Casal])")]
+    [InlineData("backend/src/Modules/Contas/Aplicacao/X.cs", "db.Contas.IgnoreQueryFilters([Filtros.SoftDelete])")]
+    [InlineData("backend/src/Modules/Identidade/Aplicacao/ServicoDeSessoes.cs", "db.Sessoes.IgnoreQueryFilters()")]
+    [InlineData("backend/src/Modules/Identidade/Aplicacao/ServicoDeSessoes.cs", "db.Sessoes.IgnoreQueryFilters([Filtros.SoftDelete])")]
+    [InlineData("backend/src/Modules/Lancamentos/Aplicacao/Importacao.cs", "db.Transacoes.IgnoreQueryFilters([Filtros.Casal])")]
+    [InlineData("backend/src/Modules/Lancamentos/Aplicacao/Importacao.cs", "db.Transacoes.IgnoreQueryFilters([Filtros.SoftDelete, Filtros.Casal])")]
+    [InlineData("backend/src/Modules/Lancamentos/Aplicacao/Outro.cs", "db.Transacoes.IgnoreQueryFilters([Filtros.SoftDelete])")]
+    public void Verificador_de_filtros_acusa(string arquivo, string codigo)
+    {
+        Assert.NotEmpty(VerificadorDeFiltros.Violacoes(arquivo, codigo));
+    }
+
+    [Theory]
+    [InlineData("backend/src/Modules/Identidade/Aplicacao/PrimeiroAcesso.cs", "db.Usuarios.IgnoreQueryFilters([Filtros.Casal])")]
+    [InlineData("backend/src/Modules/Lancamentos/Aplicacao/Importacao.cs", "db.Transacoes.IgnoreQueryFilters([Filtros.SoftDelete])")]
+    [InlineData("backend/src/Modules/Contas/Aplicacao/X.cs", "db.Contas.Where(c => c.Arquivada)")]
+    public void Verificador_de_filtros_aceita_os_lugares_permitidos(string arquivo, string codigo)
+    {
+        Assert.Empty(VerificadorDeFiltros.Violacoes(arquivo, codigo));
+    }
+
+    private static string Relativo(string caminho) =>
+        Path.GetRelativePath(RaizDoRepositorio(), caminho).Replace(Path.DirectorySeparatorChar, '/');
 
     private static IEnumerable<string> Arquivos(string relativo, string padrao)
     {

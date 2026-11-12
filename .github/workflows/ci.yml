@@ -109,10 +109,14 @@ jobs:
 
       # find em vez de infra/backup/**/*.sh: sem globstar, ** não pega infra/backup/*.sh.
       - name: shellcheck
-        run: find infra/backup infra/testes infra/scripts -name '*.sh' -print0 | xargs -0 shellcheck -x
+        run: find infra/backup infra/testes infra/scripts infra/pluggy -name '*.sh' -print0 | xargs -0 shellcheck -x
 
       - name: Testes do backup (Postgres descartável em docker)
         run: infra/backup/testes/rodar-todos.sh
+
+      # Pluggy falsa (127.0.0.1) com dados sintéticos; nunca a Pluggy de verdade.
+      - name: Medição da Pluggy (servidor falso)
+        run: infra/pluggy/testes/testar-medicao.sh
 
       - name: Segredos do gerar-segredos.sh (pasta 0700, segredos 0444)
         run: infra/testes/testar-gerar-segredos.sh

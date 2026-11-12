@@ -136,6 +136,20 @@ As chaves vêm de `infra/secrets/pluggy_<slot>_*`.
   - Usam o resultado: a Tarefa 3.2 (código do banco), a 4.5 (fórmula do cartão) e a 6.2 (ids das categorias).
   - As tarefas 4.2 e 4.3 podem andar antes do resultado (decisão 9).
 
+**Resultado da medição** (rodada pela pessoa em 11/11, ~20h55; item do Itaú e um segundo banco com corrente e dois cartões; só estrutura):
+- **Datas:** a corrente tem hora real em todas as transações. No cartão, 30 estão às 03:00Z e o resto em outras horas. Nenhuma está às 00:00Z, nos dois bancos. A conversão para o dia de São Paulo está certa.
+- **Sinal:** na corrente, DEBIT é negativo e CREDIT é positivo. No cartão, DEBIT é positivo (compra) e CREDIT é negativo (pagamento ou estorno). O segundo banco confirma a corrente.
+- **Categorias do Itaú presentes:**
+  - `05100000` Credit card payment, `03000000` Investments, `03020000` Fixed income, `03060000` Proceeds interests and dividends;
+  - `04000000` Same person transfer, `05010000` Transfer - Bank Slip, `15030000` Tax on financial operations, `15010000` Income taxes;
+  - 4 transações sem categoria.
+
+  O segundo banco tem 7 transações `04000000` entre contas da mesma pessoa em bancos diferentes.
+- **Banco:** nenhum campo traz o código do banco; `bankData.transferNumber` existe nos dois bancos, e o conector é sempre `MeuPluggy`.
+- **Cartão:** nenhuma das fórmulas (a) a (d) fecha o saldo; a diferença passa de 10%. Há 184 transações dentro de faturas pelo `billId` e 32 sem `billId` (as pendentes).
+- **Segundo banco:** tem dois cartões sem transação no ano, um com 11 faturas e outro sem nenhuma.
+- As decisões do CEO sobre este resultado estão em "Decisões do CEO" (11/11 21h).
+
 ### Tarefa 1.1: Teste de arquitetura "só leitura na Pluggy"
 
 **Arquivos:**
@@ -190,7 +204,7 @@ As chaves vêm de `infra/secrets/pluggy_<slot>_*`.
   internal sealed record CredenciaisPluggy(int Slot, string ClientId, string ClientSecret);
   internal sealed record ItemPluggy(string Id, string Status, string? ExecutionStatus, DateTimeOffset? ConsentimentoVenceEm, DateTimeOffset? AtualizadoEm);
   internal sealed record ContaPluggy(string Id, string Tipo, string? Subtipo, string Nome, string? Numero, string? AgenciaEConta,
-      string? CodigoDoBanco /* campo medido na Tarefa 1.0; nulo se a Pluggy não trouxer */, long SaldoCentavos, long? LimiteCentavos, string? Portador, string? FinalDoCartao);
+      long SaldoCentavos, long? LimiteCentavos, string? Portador, string? FinalDoCartao);
   internal sealed record TransacaoPluggy(string Id, DateOnly Data, long ValorCentavos, string Tipo /* DEBIT|CREDIT */, string Status /* POSTED|PENDING */,
       string? Descricao, string? CategoriaId, string? Categoria, int? Parcela, int? Parcelas, string? FaturaId);
   internal sealed record FaturaPluggy(string Id, DateOnly Vencimento, DateOnly? Fechamento, long TotalCentavos);
@@ -370,13 +384,13 @@ public interface IMetasDeContas { Task<bool> LigarContaAMetaAsync(Guid contaId, 
 - Teste: `backend/tests/GestorFinanceiro.IntegrationTests/NascimentoTests.cs`
 
 **Migração (V0013), `integracoes.vinculos`:**
-- colunas: `id`, `casal_id`, `item_id REFERENCES integracoes.items` (D18), `tipo text CHECK (tipo IN ('CONTA','CARTAO','INVESTIMENTO'))`, `id_externo text NOT NULL` (em claro, D7), `conta_id uuid NULL` (nulo = aplicação aguardando grupo), `identidade_hmac bytea NULL`, `historico_desde date NULL`, `importado_ate date NULL` (último dia coberto pela importação do vínculo; decisão 7), `diferenca_centavos bigint NULL`, `diferencas_seguidas smallint NOT NULL DEFAULT 0`;
+- colunas: `id`, `casal_id`, `item_id REFERENCES integracoes.items` (D18), `tipo text CHECK (tipo IN ('CONTA','CARTAO','INVESTIMENTO'))`, `id_externo text NOT NULL` (em claro, D7), `conta_id uuid NULL` (nulo = aplicação aguardando grupo), `identidade_hmac bytea NULL`, `historico_desde date NULL`, `importado_ate date NULL` (último dia coberto pela importação do vínculo; decisão 7), `diferenca_centavos bigint NULL`, `diferencas_seguidas smallint NOT NULL DEFAULT 0`, `faturas_divergentes jsonb NULL` (decisão 12), `nao_importar_em timestamptz NULL` (conta encontrada marcada "não importar"; decisão 16);
 - `ux_vinculos_externo (item_id, tipo, id_externo) WHERE NOT is_deleted`;
 - `ux_vinculos_identidade (casal_id, identidade_hmac) WHERE NOT is_deleted AND identidade_hmac IS NOT NULL`;
 - `audit.proteger`.
 - `identidade_hmac`, com `ICofre.IndiceCego(…, "integracoes.identidade")`:
-  - conta: `"<CodigoDoBanco ou vazio>|<AgenciaEConta>"`;
-  - cartão: `"<CodigoDoBanco ou vazio>|<FinalDoCartao>|<Portador normalizado>"` (portador por HMAC, decisão 6);
+  - conta: `ConversaoPluggy.TransferNumberNormalizado(AgenciaEConta)`, ou seja, o `bankData.transferNumber` só com os dígitos, sem código do banco (decisão 11);
+  - cartão: `"<FinalDoCartao>|<Portador normalizado>"` (portador por HMAC, decisão 6);
   - investimento: nulo.
 - O nome do banco digitado na tela do item **nunca** entra no `identidade_hmac`; ele serve só ao apelido (decisão 1).
 
@@ -407,12 +421,15 @@ public interface IMetasDeContas { Task<bool> LigarContaAMetaAsync(Guid contaId, 
 **Interfaces:**
 - `POST /integracoes/items/{id}/nascimento` com o corpo:
   ```
-  { contas: [{ idExterno, acao: "CRIAR"|"LIGAR"|"IGNORAR", contaExistenteId?, apelido, titularUsuarioId?, diaFechamento?, diaVencimento? }],
+  { contas: [{ idExterno, acao: "CRIAR"|"LIGAR"|"NAO_IMPORTAR", contaExistenteId?, apelido, titularUsuarioId?, diaFechamento?, diaVencimento? }],
     aplicacoes: [{ idExterno, grupo: { nome, metaId? } | null }] }
   ```
   Só o dono da conexão (D21).
 - Cada conta: o vínculo é gravado primeiro com um `conta_id` novo (Guid v7), e depois `IContasLigadas.CriarAsync` é chamado com esse id. O mesmo id torna a retomada idempotente.
 - Aplicações: cada grupo distinto vira **uma** conta `INVESTIMENTO`, e cada aplicação vira um vínculo com o mesmo `conta_id`. Com `metaId`, chama `IMetasDeContas.LigarContaAMetaAsync`. Aplicação `null` fica com `conta_id` nulo, aguardando grupo.
+- `NAO_IMPORTAR` (decisão 16): grava o vínculo com `conta_id` nulo e `nao_importar_em = agora`. Não vira conta, não sincroniza e não é perguntada de novo: a `Descoberta` a lista à parte, como "não importada", e não como conta encontrada.
+  - "Conexões" mostra as contas não importadas com "Incluir". `POST /integracoes/vinculos/{id}/inclusao` recebe os mesmos campos de `CRIAR`/`LIGAR`, limpa `nao_importar_em` e segue como um nascimento normal. A primeira sincronização importa o histórico desde 2026-01-01.
+  - É diferente da conta que já vem da outra conexão (`JaVemDe`), que é ignorada pela trava e nem vira vínculo.
 - O saldo inicial provisório é 0 em `2026-01-01`. A conta corrente e o cartão são recalculados na etapa 4. O grupo de investimento é a soma dos saldos das aplicações, na data do nascimento.
 
 - [ ] **Passo 1:** testes que falham:
@@ -423,9 +440,12 @@ public interface IMetasDeContas { Task<bool> LigarContaAMetaAsync(Guid contaId, 
   - `Dois_CDBs_no_mesmo_grupo_viram_uma_conta`;
   - `Grupo_com_meta_liga_a_conta_a_meta`;
   - `Ligar_a_conta_existente_marca_ligada`;
-  - `Outro_conjuge_recebe_403`.
+  - `Outro_conjuge_recebe_403`;
+  - `Nao_importar_registra_e_nao_pergunta_de_novo`: segunda descoberta lista a conta como não importada, não como encontrada;
+  - `Conta_nao_importada_nao_vira_conta_nem_sincroniza`;
+  - `Incluir_depois_cria_a_conta_ligada`.
 - [ ] **Passo 2:** rodar → FALHA.
-- [ ] **Passo 3:** implementar o back. Depois, o front com a lista "Encontramos N contas, M cartões e K investimentos no <banco>. Criar?", com apelido, titular e grupo editáveis. Regerar o cliente.
+- [ ] **Passo 3:** implementar o back. Depois, o front com a lista "Encontramos N contas, M cartões e K investimentos no <banco>. Criar?", com apelido, titular e grupo editáveis, e "não importar" em cada conta. Regerar o cliente.
 - [ ] **Passo 4:** `--filter NascimentoTests` e `npm --prefix frontend run check` → PASSA. Commit "Integracoes: nascimento de contas ligadas".
 
 **Pronto quando:**
@@ -480,7 +500,7 @@ public interface IImportacaoDeLancamentos
 ```
 
 **Regras:**
-- Natureza pelo sinal: menor que 0 → `DESPESA`, maior que 0 → `RECEITA`. Todo item novo nasce `A_REVISAR`, com `categoria_id` nulo; a sugestão vem na etapa 5.
+- O valor chega já no sinal do sistema: a `Sincronizacao` usa `ConversaoPluggy.ValorNoSistema(tipoDaConta, valor)`, decisão 10. Natureza pelo sinal: menor que 0 → `DESPESA`, maior que 0 → `RECEITA`. Todo item novo nasce `A_REVISAR`, com `categoria_id` nulo; a sugestão vem na etapa 5.
 - A chave é procurada **também entre as apagadas**, com `IgnoreQueryFilters([Filtros.SoftDelete])` só dentro de `Importacao.cs` (regra 9, exceção D6). Apagada → ignorada, conta em `Ignorados`, nada é recriado.
 - Atualização: muda `data`, `valor`, `confirmacao` e `parcela`. A `descricao` só é atualizada enquanto `A_REVISAR`. Categoria e descrição de linha `REVISADA` são do casal e nunca mudam.
 - Pendente que sumiu do lote, com definitiva **única** (mesma conta, mesmo valor, data até 3 dias, descrição parecida): a definitiva recebe a categoria e a revisão da pendente, e a pendente vai para soft delete. Sem par único, fica como está e conta em `PendentesSemPar`. Na etapa 6, ela vai para "A conferir".
@@ -535,15 +555,20 @@ public interface IImportacaoDeLancamentos
 - Teste: `backend/tests/GestorFinanceiro.IntegrationTests/SincronizacaoTests.cs`
 
 **Regras:**
+- Vínculo "não importar" (`nao_importar_em` preenchido, decisão 16) não sincroniza. Ao ser incluído, faz a primeira importação desde `historico_desde`.
 - Vínculo cuja conta está **arquivada** (`ContaResumo.Arquivada`) não sincroniza: nada é lido nem importado, o histórico fica e `importado_ate` não anda (decisão 7).
 - Por vínculo CONTA ou CARTAO, desde `historico_desde` na primeira importação; depois, desde `max(historico_desde, importado_ate − 10 dias)`. Assim, ao desarquivar, a próxima sincronização importa o período que ficou de fora. Ao terminar, `importado_ate` = hoje. lê `/v2/transactions`, mapeia e chama `ImportarAsync`. Cada vínculo é uma chamada; a falha num vínculo não desfaz os outros.
 - `historico_desde`: 2026-01-01, ou a data mais antiga recebida se o banco entregar menos. A tela mostra "Histórico desde DD/MM".
 - Saldo inicial, depois da **primeira** importação do vínculo: `DefinirSaldoInicialAsync(conta, saldoBanco − soma das confirmadas importadas até hoje, historico_desde)`.
-  - Para cartão, use a fórmula medida na Tarefa 1.0, com "saldo do sistema = −(valor usado)" (D3).
-- Conferência a cada sincronização: se o saldo do sistema hoje (`IConsultaDeSaldos`) diferir do esperado pela fórmula, grava `diferenca_centavos` e incrementa `diferencas_seguidas`; se bater, zera.
+  - Só para CONTA (corrente e poupança). O cartão não usa o saldo do banco (decisão 12); o saldo dele no sistema é o calculado pelas transações.
+  - Saldo inicial do cartão importado, em `historico_desde`: −(total da fatura do banco que fechou antes do início do histórico e vence depois dele); sem essa fatura, 0 (CEO 11/11 21h50). Sem isso, o pagamento em janeiro da fatura de dezembro, que entra como crédito no cartão, deixaria o saldo do cartão positivo.
+- Conferência de saldo a cada sincronização, só para CONTA: se o saldo do sistema hoje (`IConsultaDeSaldos`) diferir do esperado pela fórmula, grava `diferenca_centavos` e incrementa `diferencas_seguidas`; se bater, zera.
   - A tela mostra "Diferença de R$ X com o banco" só com `diferencas_seguidas >= 2`. Nada é ajustado.
 - Item: `ultima_tentativa_em` sempre; `ultima_sincronizacao_em` só com sucesso.
-- Faturas (D2): para cada fatura do banco (`ListarFaturasAsync`) com vencimento já calculado pelo sistema, compara o `TotalCentavos` com o total do sistema daquele vencimento. A diferença aparece em Conexões ("Fatura de <mês>: diferença de R$ X com o banco"). Nada muda no calendário nem na regra C7.
+- Faturas do cartão (decisão 12; substitui a fórmula do saldo da D3 e a comparação com o total calculado pelo sistema): `ConferenciaDasFaturas.Diferencas(faturas do banco, transações do vínculo, historico_desde)`, já feita na etapa 1.
+  - Para cada fatura do banco, o total informado é comparado com a soma das transações com aquele `billId`; pendentes, sem `billId`, não entram.
+  - Cada diferença é guardada por fatura no vínculo (coluna `faturas_divergentes jsonb NULL` em V0013: id da fatura → diferença e sincronizações seguidas). Ela aparece em Conexões ("Fatura de <mês>: diferença de R$ X com o banco") só se persistir em 2 sincronizações seguidas.
+  - Nada muda no calendário nem na regra C7.
 - Aplicação nova num item já nascido: vira vínculo com `conta_id` nulo e aparece em Conexões para escolher o grupo, pelo mesmo `POST …/nascimento` (só `aplicacoes`). Até lá, não entra em nenhum grupo.
 
 - [ ] **Passo 1:** testes que falham:
@@ -554,7 +579,9 @@ public interface IImportacaoDeLancamentos
   - `Sincronizacao_seguinte_usa_a_janela_de_10_dias`;
   - `Conta_arquivada_nao_sincroniza_e_mantem_o_historico`;
   - `Desarquivar_importa_o_periodo_que_ficou_de_fora`;
-  - `Fatura_do_banco_diferente_aparece_em_conexoes_sem_mudar_a_fatura`;
+  - `Fatura_do_banco_diferente_so_aparece_na_segunda_sincronizacao_e_nao_muda_a_fatura`;
+  - `Cartao_com_fatura_de_dezembro_paga_em_janeiro_nao_fica_positivo`: fatura sintética que fecha em 2025-12-28 e vence em 2026-01-05 com R$ 800,00; pagamento de R$ 800,00 importado em 2026-01-05 → saldo inicial −80000 em 2026-01-01 e saldo 0 depois do pagamento;
+  - `Cartao_sem_fatura_anterior_nasce_com_saldo_inicial_zero_e_sem_conferencia_de_saldo`;
   - `Aplicacao_nova_espera_o_grupo`.
 - [ ] **Passo 2:** rodar → FALHA. Implementar. Rodar → PASSA.
 - [ ] **Passo 3:** front: o selo, "Histórico desde DD/MM" e a diferença em Conexões; os lançamentos com o selo "a confirmar" e o estado "a revisar" no extrato. `npm --prefix frontend run check`. Commit "Integracoes: importação do histórico e saldo inicial".
@@ -661,12 +688,23 @@ Task<Guid?> CriarParManualAsync(Guid transacaoImportadaId, Guid contaManualId, C
 
 **Regras:**
 - Transferência: saída numa conta ligada e entrada noutra conta ligada do casal, mesmo |valor|, datas até 1 dia útil, **par único** → `ParearComoTransferenciaAsync`. Sem par único → item `TRANSFERENCIA_SEM_PAR`.
-- Pagamento de fatura (D10): saída da corrente com `categoria_externa` = id de "pagamento de fatura" (medido na Tarefa 1.0) e crédito no cartão ligado do mesmo valor, até 1 dia útil → par.
+  - O pareamento e o reconhecimento por categoria valem **entre items e conexões diferentes do mesmo casal** (decisão 15): dois bancos do mesmo cônjuge, ou contas dos dois cônjuges. A busca do par é por casal, nunca por item.
+  - Como cada item sincroniza na sua vez (job por conexão, "Atualizar agora"), uma saída sem par só vira item `TRANSFERENCIA_SEM_PAR` depois de 2 dias úteis da data. Um item aberto que ganha par único depois é resolvido sozinho, com a resolução "pareado automaticamente" (CEO 11/11 21h50).
+- Os papéis vêm de `CategoriasDoBanco.Papel(categoria_externa)` (`Lancamentos.Contracts`), a única tabela de códigos (decisão 13). O teste de arquitetura `Codigos_de_categoria_da_Pluggy_so_na_tabela` recusa os códigos em outro arquivo.
+- Pagamento de fatura (D10): saída da corrente com papel `PagamentoDeFatura` e crédito no cartão ligado do mesmo valor, até 1 dia útil → par.
   - Cartão não ligado → item, e a resolução cria o lado do cartão (`CriarParManualAsync`).
-- Aplicação e resgate (D12): transação da corrente com `categoria_externa` de investimento (medida na Tarefa 1.0) → item `APORTE_OU_RESGATE`, com o grupo sugerido pelas regras de descrição.
+- Aplicação e resgate (D12): transação da corrente com papel `Aplicacao` ou `ResgateOuRendimento` → item `APORTE_OU_RESGATE`, com o grupo sugerido pelas regras de descrição.
+- `MesmaTitularidade` reforça o par de transferência: é candidata mesmo sem a outra perna na mesma data. Sem par único, vai para "A conferir".
+- `Boleto` fica guardado para o bloco Boletos. `Iof` e `ImpostoDeRenda` são sugestão de categoria na revisão (etapa 5) e na resolução `IR_IOF_TAXA`.
+- Sem papel (`Nenhum`, inclusive sem categoria): nada automático, só as regras de descrição e "A conferir".
+- Os papéis sem regra própria (`MesmaTitularidade`, `Boleto`, `Iof`, `ImpostoDeRenda`) seguem como descrito acima (CEO 11/11 21h50).
 
 - [ ] **Passo 1:** testes que falham:
   - `Transferencia_entre_ligadas_vira_par_nunca_gasto_e_receita`;
+  - `Transferencia_entre_items_diferentes_do_casal_vira_par`: corrente do item A, conta do item B, mesma pessoa (decisão 15);
+  - `Mesma_titularidade_entre_items_diferentes_vira_par`: categoria `04000000` nos dois lados, em items diferentes;
+  - `Sem_par_so_vai_para_a_conferir_depois_de_2_dias_uteis`;
+  - `Item_sem_par_que_ganha_par_depois_se_resolve_sozinho`;
   - `Dois_candidatos_vao_para_a_conferir`;
   - `Pagamento_de_fatura_usa_as_duas_pernas_do_banco`;
   - `Pagamento_de_fatura_nao_conta_como_gasto`;
@@ -803,3 +841,18 @@ Decisões sobre o "Para o CEO" da primeira versão deste plano (PR #30). Elas va
 7. **Arquivar conta ligada** (CEO 11/11 19h). Desliga a sincronização do vínculo e mantém o histórico. Desarquivar religa e importa o período que ficou de fora. Apagar continua recusado. → Tarefas 3.1, 3.2 (`importado_ate`) e 4.5.
 8. **Reconhecimento pela categoria da Pluggy** (CEO 11/11 19h), com "A conferir" como reserva: confirmado. → Tarefa 6.2.
 9. **Medição** (CEO 11/11 19h). O `medir-saldos.sh`, incluindo de onde vem o banco, é o primeiro commit do PR da etapa 1 e é rodado pela pessoa. As tarefas 4.2 e 4.3 podem andar antes do resultado. → Tarefa 1.0.
+
+### Sobre o resultado da medição (CEO 11/11 21h)
+
+10. **Sinal** (CEO 11/11 21h). O conversor normaliza o sinal por tipo de conta: na corrente, o da Pluggy já é o do sistema; no cartão, DEBIT positivo é gasto e CREDIT negativo é pagamento ou estorno, então o sinal se inverte. → `ConversaoPluggy.ValorNoSistema` (etapa 1) e Tarefa 4.3.
+11. **Trava de conta repetida** (CEO 11/11 21h). HMAC do `transferNumber` normalizado (só os dígitos), sem código do banco: a Pluggy não o traz. `ContaPluggy.CodigoDoBanco` sai do modelo. Substitui a parte do código na decisão 1; o nome digitado continua fora da trava. → `ConversaoPluggy.TransferNumberNormalizado` (etapa 1) e Tarefa 3.2.
+12. **Conferência do cartão por fatura** (CEO 11/11 21h). Substitui a fórmula do saldo da D3, que a medição mostrou não fechar. Para cada fatura do banco, o total informado é comparado com a soma das transações com aquele `billId`. A diferença aparece em "Conexões" se persistir por duas sincronizações. Pendentes (sem `billId`) não entram. O saldo do cartão no sistema continua sendo o calculado pelas transações. Só é conferida a fatura que vence a partir de dois meses depois do início do histórico, para não acusar compras de antes do histórico (CEO 11/11 21h50). → `ConferenciaDasFaturas` (etapa 1) e Tarefa 4.5.
+13. **Reconhecimento por categoria** (CEO 11/11 21h). Usa os códigos medidos: `05100000` pagamento de fatura, `03000000` e `03020000` aplicação, `03060000` resgate ou rendimento, `04000000` mesma titularidade, `05010000` boleto, `15030000` IOF e `15010000` IR. A tabela fica num lugar só, com teste. → `Lancamentos.Contracts.CategoriasDoBanco` (etapa 1) e Tarefa 6.2.
+14. **Aviso na espera da medição** (CEO 11/11 21h). Antes da espera, o `medir-saldos.sh` imprime "aguardando 60 s para a segunda leitura do saldo...": a pessoa achou que ele tinha travado. → Tarefa 1.0.
+15. **Transferência entre items** (CEO 11/11 21h, medição do segundo banco: 7 transações `04000000` entre contas da mesma pessoa em bancos diferentes). O pareamento de transferência (D9) e o reconhecimento por categoria funcionam entre items do mesmo casal, não só dentro de um item, com teste de duas contas de items diferentes. → Tarefa 6.2.
+16. **"Não importar"** (CEO 11/11 21h, medição do segundo banco: dois cartões sem transação no ano). Na tela de confirmação, cada conta encontrada pode ser marcada "não importar". Ela fica registrada como ignorada: não vira conta nem é perguntada de novo a cada sincronização. Pode ser incluída depois em "Conexões". → Tarefas 3.2 (`nao_importar_em`), 3.3 e 4.5.
+
+### Confirmações e ajuste (CEO 11/11 21h50)
+
+17. **Confirmadas** as três decisões do Dev: as faturas dos 2 primeiros meses ficam fora da conferência (12); a transferência sem par vai para "A conferir" depois de 2 dias úteis e se resolve sozinha (15); os papéis sem regra própria seguem como descritos (13).
+18. **Saldo inicial do cartão** (CEO 11/11 21h50). É −(total da fatura do banco que fechou antes do início do histórico e vence depois dele); sem essa fatura, 0. Motivo: o pagamento em janeiro da fatura de dezembro deixaria o cartão positivo. → Tarefa 4.5, teste `Cartao_com_fatura_de_dezembro_paga_em_janeiro_nao_fica_positivo`.
