@@ -8,6 +8,7 @@ import {
   avisoDoSlot,
   BANCO_MAXIMO,
   ESCOLHA_DE_BANCO_VAZIA,
+  limparErrosDoBanco,
   estadoDoItem,
   ITEM_ID_MAXIMO,
   nomeDoBancoEscolhido,
@@ -71,11 +72,14 @@ function EscolhaDoBanco({
   valor,
   aoMudar,
   erros,
+  aoTrocarEscolha,
 }: {
   bancos: readonly Banco[];
   valor: EscolhaDeBanco;
   aoMudar: (e: EscolhaDeBanco) => void;
   erros: ErrosDoBanco;
+  /** Trocar o banco no select limpa os erros do banco (o do select não pode ir para o código do "Outro"). */
+  aoTrocarEscolha: () => void;
 }) {
   const outro = valor.escolha === OUTRO_BANCO;
   const opcoes = [
@@ -88,7 +92,10 @@ function EscolhaDoBanco({
       <CampoSelecao
         rotulo="Banco"
         valor={valor.escolha}
-        aoMudar={(escolha) => aoMudar({ ...valor, escolha })}
+        aoMudar={(escolha) => {
+          aoTrocarEscolha();
+          aoMudar({ ...valor, escolha });
+        }}
         opcoes={opcoes}
         erro={outro ? undefined : erros.codigoBanco}
       />
@@ -233,7 +240,7 @@ function NovaConexao({ slots, bancos, aoConcluir }: { slots: Slot[]; bancos: rea
         maxLength={ITEM_ID_MAXIMO}
         classeEntrada="num"
       />
-      <EscolhaDoBanco bancos={bancos} valor={banco} aoMudar={setBanco} erros={erros} />
+      <EscolhaDoBanco bancos={bancos} valor={banco} aoMudar={setBanco} erros={erros} aoTrocarEscolha={() => setErros(limparErrosDoBanco)} />
       <Alerta mensagem={erro} tentativa={tentativa} />
       <div>
         <button type="submit" className="botao-primario" disabled={ocupado || nenhumSlot}>
@@ -301,7 +308,7 @@ function NovoBanco({
         maxLength={ITEM_ID_MAXIMO}
         classeEntrada="num"
       />
-      <EscolhaDoBanco bancos={bancos} valor={banco} aoMudar={setBanco} erros={erros} />
+      <EscolhaDoBanco bancos={bancos} valor={banco} aoMudar={setBanco} erros={erros} aoTrocarEscolha={() => setErros(limparErrosDoBanco)} />
       <Alerta mensagem={erro} tentativa={tentativa} />
       <div className="acoes-linha">
         <button type="submit" className="botao-primario" disabled={ocupado}>
@@ -365,7 +372,7 @@ function EscolherBanco({
         Qual é o banco de “{item.banco}”? O código separa contas de bancos diferentes com a mesma agência e conta. Escolhido uma
         vez, não muda.
       </p>
-      <EscolhaDoBanco bancos={bancos} valor={banco} aoMudar={setBanco} erros={erros} />
+      <EscolhaDoBanco bancos={bancos} valor={banco} aoMudar={setBanco} erros={erros} aoTrocarEscolha={() => setErros(limparErrosDoBanco)} />
       <Alerta mensagem={erro} tentativa={tentativa} />
       <div className="acoes-linha">
         <button type="submit" className="botao-primario" disabled={ocupado}>

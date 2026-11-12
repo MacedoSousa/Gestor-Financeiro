@@ -77,6 +77,17 @@ export function validarBanco(e: EscolhaDeBanco): ErrosDoBanco {
   return erros;
 }
 
+/**
+ * Ao trocar a escolha do banco, os erros dela saem: o "Escolha o banco." do select não pode cair no campo de código que
+ * aparece com "Outro". Os outros erros do formulário ficam.
+ */
+export function limparErrosDoBanco<T extends ErrosDoBanco>(erros: T): Omit<T, "codigoBanco" | "banco"> {
+  const resto: Partial<T> = { ...erros };
+  delete resto.codigoBanco;
+  delete resto.banco;
+  return resto as Omit<T, "codigoBanco" | "banco">;
+}
+
 /** O nome que o servidor vai gravar: o da lista quando o código está nela, senão o digitado. */
 export function nomeDoBancoEscolhido(e: EscolhaDeBanco, bancos: readonly { codigo: string; nome: string }[]): string {
   const { codigoBanco, banco } = pedidoDoBanco(e);

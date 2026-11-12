@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   avisoDoSlot,
   estadoDoItem,
+  limparErrosDoBanco,
   nomeDoBancoEscolhido,
   OUTRO_BANCO,
   pedidoDoBanco,
@@ -116,6 +117,11 @@ describe("escolha do banco (D18)", () => {
       codigoBanco: "O código do banco tem 3 dígitos.",
       banco: "O nome do banco tem no máximo 60 caracteres.",
     });
+  });
+
+  it("trocar a escolha limpa os erros do banco (o do select não passa para o código do Outro) e mantém os outros", () => {
+    expect(limparErrosDoBanco({ itemId: "x", codigoBanco: "Escolha o banco.", banco: "Informe o nome do banco." })).toEqual({ itemId: "x" });
+    expect(limparErrosDoBanco({})).toEqual({});
   });
 
   it("nome para a mensagem de sucesso: o da lista ou o digitado", () => {
