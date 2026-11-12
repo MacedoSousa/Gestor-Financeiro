@@ -13,7 +13,12 @@
       "Bash(scripts/verificar.sh:*)",
       "Bash(scripts/guardas/verificar-repositorio.sh:*)",
       "Bash(scripts/guardas/testes.sh:*)",
-      "mcp__playwright__browser_console_messages"
+      "mcp__playwright__browser_console_messages",
+      "Bash(./gradlew:*)",
+      "Bash(adb:*)",
+      "Bash(emulator:*)",
+      "Bash(sdkmanager:*)",
+      "Bash(avdmanager:*)"
     ],
     "deny": [
       "Read(./.env)",
@@ -31,7 +36,10 @@
       "Bash(rm -rf:*)",
       "Bash(sudo:*)",
       "Bash(git commit --no-verify:*)",
-      "Bash(git commit -n:*)"
+      "Bash(git commit -n:*)",
+      "Read(**/*.jks)",
+      "Read(**/*.keystore)",
+      "Read(**/keystore.properties)"
     ]
   },
   "hooks": {
