@@ -236,6 +236,12 @@ confere_bash "hook Bash barra ler keystore.properties" 2 '{"tool_name":"Bash","t
 confere_bash "hook Bash barra ler ~/.android"      2 '{"tool_name":"Bash","tool_input":{"command":"ls -la ~/.android/"}}'
 confere_bash "hook Bash deixa git status"          0 '{"tool_name":"Bash","tool_input":{"command":"git status"}}'
 confere_bash "hook Bash deixa entrada sem comando" 0 '{"tool_name":"Bash","tool_input":{}}'
+confere_bash "hook Bash barra entrada malformada"  2 'nao-e-json'
+# Sem jq no PATH o hook tem de bloquear, nunca deixar passar.
+mkdir -p "$tmp/sem-jq"
+for f in bash cat grep tr dirname; do ln -sf "$(command -v "$f")" "$tmp/sem-jq/$f"; done
+sem_jq="$(printf '%s' '{"tool_input":{"command":"git status"}}' | CLAUDE_PROJECT_DIR="$raiz" PATH="$tmp/sem-jq" "$tmp/sem-jq/bash" "$hook_bash" >/dev/null 2>&1; echo $?)"
+if [ "$sem_jq" = "2" ]; then ok "hook Bash barra quando falta o jq"; else falha "hook Bash barra quando falta o jq (saída $sem_jq)"; fi
 
 echo ""
 echo "$passou passaram, $falhou falharam"
