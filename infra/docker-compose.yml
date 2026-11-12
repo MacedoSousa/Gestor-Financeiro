@@ -123,9 +123,12 @@ services:
 
 networks:
   # Caddy, API, gateway e OCR. A API precisa de saída para Pluggy e Gemini.
+  # IPs fixos (web .2, api .10) ficam em .2–.127; o Docker só dá IP automático em .128–.255,
+  # senão o duckdns pode pegar o .2 do web conforme a ordem de subida (D16). O gateway fica
+  # explícito no .1 de sempre: com ip_range e sem gateway, o Docker usaria o .128.
   app:
     ipam:
-      config: [{ subnet: 172.30.0.0/24 }]
+      config: [{ subnet: 172.30.0.0/24, ip_range: 172.30.0.128/25, gateway: 172.30.0.1 }]
   # Só API ↔ Postgres; sem saída para a internet.
   dados:
     internal: true

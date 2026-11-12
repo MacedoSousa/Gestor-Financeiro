@@ -121,6 +121,10 @@ jobs:
       - name: Segredos do gerar-segredos.sh (pasta 0700, segredos 0444)
         run: infra/testes/testar-gerar-segredos.sh
 
+      # D16: duckdns, whatsapp e ocr (IP automático) sobem antes e não tomam o IP fixo de web e api.
+      - name: Faixa de IP da rede app
+        run: infra/testes/testar-faixa-de-ip.sh
+
       # Constrói a api e sobe o compose real (postgres e api) num projeto aleatório, do zero.
       - name: O compose real sobe do zero
         run: infra/testes/testar-subida.sh
