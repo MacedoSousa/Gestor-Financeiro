@@ -1,5 +1,8 @@
+using GestorFinanceiro.Modules.Integracoes.Infra;
 using GestorFinanceiro.Modules.Integracoes.Pluggy;
+using GestorFinanceiro.SharedKernel.Persistencia;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
@@ -14,6 +17,12 @@ public static class IntegracoesModule
     public static IServiceCollection AddIntegracoes(this IServiceCollection services, string conexao)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(conexao);
+
+        services.AddDbContext<IntegracoesDbContext>((sp, o) => o
+            .UseNpgsql(conexao, n => n.MigrationsHistoryTable("__ef_historico", "integracoes"))
+            .AddInterceptors(
+                sp.GetRequiredService<SoftDeleteInterceptor>(),
+                sp.GetRequiredService<ContextoAuditoriaInterceptor>()));
 
         // Pluggy, só de leitura (ADR-015). Url e PastaDeSegredos na seção "Pluggy" da configuração.
         services.AddOptions<OpcoesDaPluggy>().BindConfiguration("Pluggy");
