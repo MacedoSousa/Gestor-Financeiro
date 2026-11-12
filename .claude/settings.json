@@ -29,6 +29,7 @@
       "Bash(psql:*)",
       "Bash(docker compose down -v:*)",
       "Bash(rm -rf:*)",
+      "Bash(sudo:*)",
       "Bash(git commit --no-verify:*)",
       "Bash(git commit -n:*)"
     ]

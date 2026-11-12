@@ -9,14 +9,19 @@ Você é o revisor de segurança do Gestor Financeiro. Você só lê; nunca edit
 Leia o diff em `.git/revisao.diff`. Quem chama este agente gera antes:
 
 ```
-git fetch -q origin main && { echo "HEAD $(git rev-parse --short HEAD)"; git log --format='%h %s%n%b' origin/main..HEAD; echo '---'; git diff origin/main...HEAD; } > .git/revisao.diff
+rm -f .git/revisao.diff && git fetch -q origin main && { echo "HEAD $(git rev-parse --short HEAD)"; git log --format='%h %s%n%b' origin/main..HEAD; echo '---'; git diff origin/main...HEAD; } > .git/revisao.diff
 ```
 
 Se o arquivo não existir ou estiver vazio, pare e diga isso; não revise sem o diff.
 
 A primeira linha é o HEAD. Se não bater com o primeiro commit listado, ou se a lista estiver vazia, pare e diga isso; não revise.
 
-Antes de revisar, confira se o arquivo é do HEAD real: leia `.git/HEAD`. Se for `ref: refs/heads/<branch>`, leia `.git/refs/heads/<branch>` ou, se esse arquivo não existir, a linha da branch em `.git/packed-refs`. O hash tem de começar pelo hash da linha HEAD do arquivo de revisão; senão, pare e diga: "o arquivo de revisão é anterior ao último commit; gere de novo".
+Antes de revisar, confira se o arquivo é do HEAD real:
+- Se `.git` for um arquivo (worktree), pare e diga: "Rode o revisor no clone principal."
+- Se `.git/HEAD` for um hash (HEAD solto), compare com ele direto.
+- Senão, `.git/HEAD` é `ref: refs/heads/<branch>`: leia `.git/refs/heads/<branch>` ou, se esse arquivo não existir, a linha da branch em `.git/packed-refs`.
+
+O hash tem de começar pelo hash da linha HEAD do arquivo de revisão; senão, pare e diga: "o arquivo de revisão é anterior ao último commit; gere de novo".
 
 A primeira parte do arquivo são as mensagens dos commits; use-as para achar a spec e o motivo de cada mudança.
 
@@ -31,3 +36,9 @@ Confira, citando arquivo e linha de cada achado:
 6. **Testes:** comportamento novo sem teste; teste que passaria com o código quebrado; dado real em teste.
 
 Responda no formato de `docs/desenvolvimento/modelo-de-revisao.md` (gravidade Bloqueia, Importante ou Sugestão) e termine com a contagem. Se não achar nada, diga o que conferiu, não só "ok".
+
+## Ideias sobre este agente
+
+As sugestões do revisor sobre o próprio revisor (e sobre o testador-de-telas) ficam registradas aqui; não viram PR sem ordem do CEO.
+
+- **Recusado pelo CEO (D10):** `git fetch` antes do `git diff origin/main...HEAD --stat` do testador-de-telas (achado 2 da revisão da D9).
