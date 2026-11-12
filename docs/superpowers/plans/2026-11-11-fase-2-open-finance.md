@@ -560,7 +560,8 @@ public interface IImportacaoDeLancamentos
 - Por vínculo CONTA ou CARTAO, desde `historico_desde` na primeira importação; depois, desde `max(historico_desde, importado_ate − 10 dias)`. Assim, ao desarquivar, a próxima sincronização importa o período que ficou de fora. Ao terminar, `importado_ate` = hoje. lê `/v2/transactions`, mapeia e chama `ImportarAsync`. Cada vínculo é uma chamada; a falha num vínculo não desfaz os outros.
 - `historico_desde`: 2026-01-01, ou a data mais antiga recebida se o banco entregar menos. A tela mostra "Histórico desde DD/MM".
 - Saldo inicial, depois da **primeira** importação do vínculo: `DefinirSaldoInicialAsync(conta, saldoBanco − soma das confirmadas importadas até hoje, historico_desde)`.
-  - Só para CONTA (corrente e poupança). O cartão não tem saldo inicial calculado pelo banco (decisão 12): nasce com 0 em `historico_desde`, e o saldo do cartão no sistema é o calculado pelas transações.
+  - Só para CONTA (corrente e poupança). O cartão não usa o saldo do banco (decisão 12); o saldo dele no sistema é o calculado pelas transações.
+  - Saldo inicial do cartão importado, em `historico_desde`: −(total da fatura do banco que fechou antes do início do histórico e vence depois dele); sem essa fatura, 0 (CEO 11/11 21h50). Sem isso, o pagamento em janeiro da fatura de dezembro, que entra como crédito no cartão, deixaria o saldo do cartão positivo.
 - Conferência de saldo a cada sincronização, só para CONTA: se o saldo do sistema hoje (`IConsultaDeSaldos`) diferir do esperado pela fórmula, grava `diferenca_centavos` e incrementa `diferencas_seguidas`; se bater, zera.
   - A tela mostra "Diferença de R$ X com o banco" só com `diferencas_seguidas >= 2`. Nada é ajustado.
 - Item: `ultima_tentativa_em` sempre; `ultima_sincronizacao_em` só com sucesso.
@@ -579,7 +580,8 @@ public interface IImportacaoDeLancamentos
   - `Conta_arquivada_nao_sincroniza_e_mantem_o_historico`;
   - `Desarquivar_importa_o_periodo_que_ficou_de_fora`;
   - `Fatura_do_banco_diferente_so_aparece_na_segunda_sincronizacao_e_nao_muda_a_fatura`;
-  - `Cartao_nasce_com_saldo_inicial_zero_e_sem_conferencia_de_saldo`;
+  - `Cartao_com_fatura_de_dezembro_paga_em_janeiro_nao_fica_positivo`: fatura sintética que fecha em 2025-12-28 e vence em 2026-01-05 com R$ 800,00; pagamento de R$ 800,00 importado em 2026-01-05 → saldo inicial −80000 em 2026-01-01 e saldo 0 depois do pagamento;
+  - `Cartao_sem_fatura_anterior_nasce_com_saldo_inicial_zero_e_sem_conferencia_de_saldo`;
   - `Aplicacao_nova_espera_o_grupo`.
 - [ ] **Passo 2:** rodar → FALHA. Implementar. Rodar → PASSA.
 - [ ] **Passo 3:** front: o selo, "Histórico desde DD/MM" e a diferença em Conexões; os lançamentos com o selo "a confirmar" e o estado "a revisar" no extrato. `npm --prefix frontend run check`. Commit "Integracoes: importação do histórico e saldo inicial".
@@ -687,7 +689,7 @@ Task<Guid?> CriarParManualAsync(Guid transacaoImportadaId, Guid contaManualId, C
 **Regras:**
 - Transferência: saída numa conta ligada e entrada noutra conta ligada do casal, mesmo |valor|, datas até 1 dia útil, **par único** → `ParearComoTransferenciaAsync`. Sem par único → item `TRANSFERENCIA_SEM_PAR`.
   - O pareamento e o reconhecimento por categoria valem **entre items e conexões diferentes do mesmo casal** (decisão 15): dois bancos do mesmo cônjuge, ou contas dos dois cônjuges. A busca do par é por casal, nunca por item.
-  - Como cada item sincroniza na sua vez (job por conexão, "Atualizar agora"), uma saída sem par só vira item `TRANSFERENCIA_SEM_PAR` depois de 2 dias úteis da data. Um item aberto que ganha par único depois é resolvido sozinho, com a resolução "pareado automaticamente" (decisão do Dev, a confirmar).
+  - Como cada item sincroniza na sua vez (job por conexão, "Atualizar agora"), uma saída sem par só vira item `TRANSFERENCIA_SEM_PAR` depois de 2 dias úteis da data. Um item aberto que ganha par único depois é resolvido sozinho, com a resolução "pareado automaticamente" (CEO 11/11 21h50).
 - Os papéis vêm de `CategoriasDoBanco.Papel(categoria_externa)` (`Lancamentos.Contracts`), a única tabela de códigos (decisão 13). O teste de arquitetura `Codigos_de_categoria_da_Pluggy_so_na_tabela` recusa os códigos em outro arquivo.
 - Pagamento de fatura (D10): saída da corrente com papel `PagamentoDeFatura` e crédito no cartão ligado do mesmo valor, até 1 dia útil → par.
   - Cartão não ligado → item, e a resolução cria o lado do cartão (`CriarParManualAsync`).
@@ -695,6 +697,7 @@ Task<Guid?> CriarParManualAsync(Guid transacaoImportadaId, Guid contaManualId, C
 - `MesmaTitularidade` reforça o par de transferência: é candidata mesmo sem a outra perna na mesma data. Sem par único, vai para "A conferir".
 - `Boleto` fica guardado para o bloco Boletos. `Iof` e `ImpostoDeRenda` são sugestão de categoria na revisão (etapa 5) e na resolução `IR_IOF_TAXA`.
 - Sem papel (`Nenhum`, inclusive sem categoria): nada automático, só as regras de descrição e "A conferir".
+- Os papéis sem regra própria (`MesmaTitularidade`, `Boleto`, `Iof`, `ImpostoDeRenda`) seguem como descrito acima (CEO 11/11 21h50).
 
 - [ ] **Passo 1:** testes que falham:
   - `Transferencia_entre_ligadas_vira_par_nunca_gasto_e_receita`;
@@ -843,8 +846,13 @@ Decisões sobre o "Para o CEO" da primeira versão deste plano (PR #30). Elas va
 
 10. **Sinal** (CEO 11/11 21h). O conversor normaliza o sinal por tipo de conta: na corrente, o da Pluggy já é o do sistema; no cartão, DEBIT positivo é gasto e CREDIT negativo é pagamento ou estorno, então o sinal se inverte. → `ConversaoPluggy.ValorNoSistema` (etapa 1) e Tarefa 4.3.
 11. **Trava de conta repetida** (CEO 11/11 21h). HMAC do `transferNumber` normalizado (só os dígitos), sem código do banco: a Pluggy não o traz. `ContaPluggy.CodigoDoBanco` sai do modelo. Substitui a parte do código na decisão 1; o nome digitado continua fora da trava. → `ConversaoPluggy.TransferNumberNormalizado` (etapa 1) e Tarefa 3.2.
-12. **Conferência do cartão por fatura** (CEO 11/11 21h). Substitui a fórmula do saldo da D3, que a medição mostrou não fechar. Para cada fatura do banco, o total informado é comparado com a soma das transações com aquele `billId`. A diferença aparece em "Conexões" se persistir por duas sincronizações. Pendentes (sem `billId`) não entram. O saldo do cartão no sistema continua sendo o calculado pelas transações. Só é conferida a fatura que vence a partir de dois meses depois do início do histórico, para não acusar compras de antes do histórico (decisão do Dev, a confirmar). → `ConferenciaDasFaturas` (etapa 1) e Tarefa 4.5.
+12. **Conferência do cartão por fatura** (CEO 11/11 21h). Substitui a fórmula do saldo da D3, que a medição mostrou não fechar. Para cada fatura do banco, o total informado é comparado com a soma das transações com aquele `billId`. A diferença aparece em "Conexões" se persistir por duas sincronizações. Pendentes (sem `billId`) não entram. O saldo do cartão no sistema continua sendo o calculado pelas transações. Só é conferida a fatura que vence a partir de dois meses depois do início do histórico, para não acusar compras de antes do histórico (CEO 11/11 21h50). → `ConferenciaDasFaturas` (etapa 1) e Tarefa 4.5.
 13. **Reconhecimento por categoria** (CEO 11/11 21h). Usa os códigos medidos: `05100000` pagamento de fatura, `03000000` e `03020000` aplicação, `03060000` resgate ou rendimento, `04000000` mesma titularidade, `05010000` boleto, `15030000` IOF e `15010000` IR. A tabela fica num lugar só, com teste. → `Lancamentos.Contracts.CategoriasDoBanco` (etapa 1) e Tarefa 6.2.
 14. **Aviso na espera da medição** (CEO 11/11 21h). Antes da espera, o `medir-saldos.sh` imprime "aguardando 60 s para a segunda leitura do saldo...": a pessoa achou que ele tinha travado. → Tarefa 1.0.
 15. **Transferência entre items** (CEO 11/11 21h, medição do segundo banco: 7 transações `04000000` entre contas da mesma pessoa em bancos diferentes). O pareamento de transferência (D9) e o reconhecimento por categoria funcionam entre items do mesmo casal, não só dentro de um item, com teste de duas contas de items diferentes. → Tarefa 6.2.
 16. **"Não importar"** (CEO 11/11 21h, medição do segundo banco: dois cartões sem transação no ano). Na tela de confirmação, cada conta encontrada pode ser marcada "não importar". Ela fica registrada como ignorada: não vira conta nem é perguntada de novo a cada sincronização. Pode ser incluída depois em "Conexões". → Tarefas 3.2 (`nao_importar_em`), 3.3 e 4.5.
+
+### Confirmações e ajuste (CEO 11/11 21h50)
+
+17. **Confirmadas** as três decisões do Dev: as faturas dos 2 primeiros meses ficam fora da conferência (12); a transferência sem par vai para "A conferir" depois de 2 dias úteis e se resolve sozinha (15); os papéis sem regra própria seguem como descritos (13).
+18. **Saldo inicial do cartão** (CEO 11/11 21h50). É −(total da fatura do banco que fechou antes do início do histórico e vence depois dele); sem essa fatura, 0. Motivo: o pagamento em janeiro da fatura de dezembro deixaria o cartão positivo. → Tarefa 4.5, teste `Cartao_com_fatura_de_dezembro_paga_em_janeiro_nao_fica_positivo`.
