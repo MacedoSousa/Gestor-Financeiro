@@ -125,18 +125,31 @@ passo_7() {
 # Número da linha (no passo 7) do primeiro comando que contém o texto; vazio se não houver.
 linha_de() { grep -nF -- "$1" "$T/passo7" | head -1 | cut -d: -f1; }
 
-# D23 e D28: o passo 7 é para a instalação de verdade, feito pela pessoa, em /opt, com sudo, nesta ordem:
-# git pull → gerar-segredos.sh (cria os pluggy_* vazios) → cópia dos arquivos de 11/11 para o slot 1 → stat → api.
+COMPOSE_OPT="sudo docker compose -f /opt/gestor-financeiro/infra/docker-compose.yml"
+SHRED_11_11="sudo shred -fu ~/Gestor-Financeiro/infra/secrets/pluggy_client_id ~/Gestor-Financeiro/infra/secrets/pluggy_client_secret"
+
+# D12: o passo 7 é o roteiro completo para pôr a etapa no ar em /opt, feito pela pessoa, com sudo, nesta ordem:
+# pull → backup → gerar-segredos.sh → cópia das chaves de 11/11 para o slot 1 → stat → shred dos originais →
+# build → migração → subida → conferência.
 passo_7_roda_em_opt_com_sudo_e_na_ordem() {
   local esperado num anterior=0
   passo_7 ordem || return 1
   grep -qF "na pasta /opt/gestor-financeiro, com sudo" "$T/passo7" || { echo "  não diz onde roda"; return 1; }
+  grep -qF "fora de sudo -i" "$T/passo7" || { echo "  não avisa para rodar fora de sudo -i"; return 1; }
+  grep -qF "Depois do merge do PR da etapa 2" "$T/passo7" || { echo "  não diz que é depois do merge"; return 1; }
   for esperado in \
     "sudo git -C /opt/gestor-financeiro pull" \
+    "sudo systemctl start gestor-backup.service" \
+    "sudo journalctl -u gestor-backup -n 5 --no-pager" \
     "sudo /opt/gestor-financeiro/infra/scripts/gerar-segredos.sh" \
     "sudo install -m 444 -o root ~/Gestor-Financeiro/infra/secrets/pluggy_client_id /opt/gestor-financeiro/infra/secrets/pluggy_1_client_id" \
     "sudo stat -c '%n %U %a %s' /opt/gestor-financeiro/infra/secrets/pluggy_1_client_id" \
-    "sudo docker compose -f /opt/gestor-financeiro/infra/docker-compose.yml up -d api"; do
+    "$SHRED_11_11" \
+    "$COMPOSE_OPT build api web" \
+    "$COMPOSE_OPT run --rm api --migrar" \
+    "$COMPOSE_OPT up -d api web" \
+    "$COMPOSE_OPT ps api web" \
+    "$COMPOSE_OPT exec -T postgres wget -q -O - http://api:8080/api/v1/saude"; do
     num="$(linha_de "$esperado")"
     [ -n "$num" ] || { echo "  falta: $esperado"; return 1; }
     [ "$num" -gt "$anterior" ] || { echo "  fora de ordem: $esperado"; return 1; }
@@ -150,9 +163,14 @@ passo_7_roda_em_opt_com_sudo_e_na_ordem() {
   if grep -E '^\s+(docker|git) ' "$T/passo7" >/dev/null; then echo "  docker ou git sem sudo"; return 1; fi
   # Gravação pelo terminal, sem eco e sem deixar o valor no histórico. O read mostra um aviso: sem ele, a senha do
   # sudo pedida logo depois poderia ser digitada no read e gravada no arquivo de segredo.
-  grep -qF "read -rsp 'valor (não aparece): ' v; printf '%s' \"\$v\" | sudo tee /opt/gestor-financeiro/infra/secrets/pluggy_2_client_id >/dev/null; unset v" "$T/passo7" \
-    || { echo "  sem o comando de gravação do slot 2 (com aviso no read)"; return 1; }
+  # O echo depois do read quebra a linha: o pedido de senha do sudo não aparece colado no aviso.
+  for f in pluggy_2_client_id pluggy_2_client_secret; do
+    grep -qF "read -rsp 'valor (não aparece): ' v; echo; printf '%s' \"\$v\" | sudo tee /opt/gestor-financeiro/infra/secrets/$f >/dev/null; unset v" "$T/passo7" \
+      || { echo "  sem o comando de gravação de $f (aviso no read, echo e tee sem eco)"; return 1; }
+  done
   if grep -E 'read -rs v' "$T/passo7" >/dev/null; then echo "  read sem aviso"; return 1; fi
+  if grep -F "read -rsp" "$T/passo7" | grep -vqF "v; echo; printf"; then echo "  read sem echo depois"; return 1; fi
+  grep -qF "$COMPOSE_OPT restart api" "$T/passo7" || { echo "  sem o restart da api"; return 1; }
   # Quem exige os quatro arquivos é o compose (a api trata ausente como slot não configurado).
   grep -qF "o compose exige os quatro" "$T/passo7" || { echo "  não diz que é o compose que exige os quatro"; return 1; }
   grep -qF "Na instalação que já existe, só o passo 7 (os passos 1 a 6 são da primeira instalação)." "$T/saida" \
@@ -161,6 +179,34 @@ passo_7_roda_em_opt_com_sudo_e_na_ordem() {
     || { echo "  sem o aviso de reiniciar a api"; return 1; }
   grep -qF "sudo docker compose -f /opt/gestor-financeiro/infra/docker-compose.yml restart api" "$T/passo7" \
     || { echo "  sem o comando de reiniciar a api"; return 1; }
+}
+
+# Backup antes de mexer no banco: o backup (e a conferência do "backup ok") vem antes da migração e da subida,
+# e o passo manda parar se ele não terminar bem.
+passo_7_backup_antes_da_migracao() {
+  local backup journal migrar
+  passo_7 backup || return 1
+  backup="$(linha_de "sudo systemctl start gestor-backup.service")"
+  journal="$(linha_de "sudo journalctl -u gestor-backup -n 5 --no-pager")"
+  migrar="$(linha_de "$COMPOSE_OPT run --rm api --migrar")"
+  [ -n "$backup" ] && [ -n "$journal" ] && [ -n "$migrar" ] || { echo "  falta backup, journal ou migração"; return 1; }
+  [ "$backup" -lt "$journal" ] && [ "$journal" -lt "$migrar" ] || { echo "  backup depois da migração"; return 1; }
+  [ "$migrar" -lt "$(linha_de "$COMPOSE_OPT up -d api web")" ] || { echo "  subida antes da migração"; return 1; }
+  grep -qF "backup ok" "$T/passo7" || { echo "  não diz o que conferir no journal"; return 1; }
+  grep -qiF "pare" "$T/passo7" || { echo "  não manda parar se o backup falhar"; return 1; }
+}
+
+# Os originais de 11/11 só são apagados (shred) depois de o stat mostrar a cópia certa no slot 1.
+passo_7_shred_so_depois_do_stat() {
+  local stat condicao shred
+  passo_7 shred || return 1
+  stat="$(linha_de "sudo stat -c '%n %U %a %s' /opt/gestor-financeiro/infra/secrets/pluggy_1_client_id")"
+  condicao="$(linha_de "Só se o stat mostrar root 444 e tamanho maior que 0 nos dois do slot 1")"
+  shred="$(linha_de "$SHRED_11_11")"
+  [ -n "$stat" ] && [ -n "$condicao" ] && [ -n "$shred" ] || { echo "  falta stat, condição ou shred"; return 1; }
+  [ "$stat" -lt "$condicao" ] && [ "$condicao" -lt "$shred" ] || { echo "  shred antes do stat ou sem a condição"; return 1; }
+  [ "$(grep -cF "shred" "$T/passo7")" -ge 1 ] && ! grep -F "shred" "$T/passo7" | grep -qF "/opt/" \
+    || { echo "  shred tocando /opt"; return 1; }
 }
 
 # O client_secret de 11/11 também vai para o slot 1 (não para o 2), com o mesmo dono e modo, e é conferido.
@@ -196,6 +242,8 @@ caso pasta_0700_e_segredos_0444_menos_a_chave
 caso segredos_da_pluggy_nascem_vazios
 caso passo_7_roda_em_opt_com_sudo_e_na_ordem
 caso passo_7_copia_o_client_secret_para_o_slot_1
+caso passo_7_backup_antes_da_migracao
+caso passo_7_shred_so_depois_do_stat
 caso pluggy_existente_nao_e_tocado
 caso segunda_execucao_mantem
 caso pasta_com_outro_modo_falha
