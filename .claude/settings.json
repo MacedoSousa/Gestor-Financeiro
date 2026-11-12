@@ -20,6 +20,7 @@
       "Read(./infra/secrets/**)",
       "Read(./backups/**)",
       "Read(./infra/data/**)",
+      "Read(//opt/**)",
       "Edit(./infra/secrets/**)",
       "Bash(git push --force:*)",
       "Bash(git push -f:*)",

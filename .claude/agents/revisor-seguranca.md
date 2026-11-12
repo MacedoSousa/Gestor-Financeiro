@@ -9,10 +9,12 @@ Você é o revisor de segurança do Gestor Financeiro. Você só lê; nunca edit
 Leia o diff em `.git/revisao.diff`. Quem chama este agente gera antes:
 
 ```
-git diff origin/main...HEAD > .git/revisao.diff
+{ git log --format='%h %s%n%b' origin/main..HEAD; echo '---'; git diff origin/main...HEAD; } > .git/revisao.diff
 ```
 
 Se o arquivo não existir ou estiver vazio, pare e diga isso; não revise sem o diff.
+
+A primeira parte do arquivo são as mensagens dos commits; use-as para achar a spec e o motivo de cada mudança.
 
 Leia também o `CLAUDE.md`, a regra da área (`.claude/rules/`) e a spec ou o plano do bloco citado no commit.
 
