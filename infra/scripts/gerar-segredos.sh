@@ -79,7 +79,8 @@ Próximos passos (a API em container roda como o usuário 'app', uid 1654):
   Na instalação que já existe, só o passo 7 (os passos 1 a 6 são da primeira instalação).
   7. Open Finance (Meu Pluggy): roteiro para pôr a etapa 2 no ar. Roda na instalação de verdade:
      na pasta /opt/gestor-financeiro, com sudo, feito pela pessoa (nunca por agente), num terminal
-     normal, fora de sudo -i (lá o ~ vira /root). Slot vazio = não configurado. Nesta ordem:
+     normal, fora de sudo -i (lá o ~ vira /root). Slot vazio = não configurado. Faça de a) a g) de uma
+     vez, longe das 03:00 (backup) e das 04:00 (reinício automático). Nesta ordem:
      a) Depois do merge do PR da etapa 2, atualize o código:
           sudo git -C /opt/gestor-financeiro pull
      b) Backup antes de migrar. O start espera o backup terminar; depois, entre as últimas linhas do
@@ -95,15 +96,25 @@ Próximos passos (a API em container roda como o usuário 'app', uid 1654):
           sudo install -m 444 -o root ~/Gestor-Financeiro/infra/secrets/pluggy_client_secret /opt/gestor-financeiro/infra/secrets/pluggy_1_client_secret
         Confira: dono root, modo 444, tamanho maior que 0 nos dois do slot 1 (no slot 2, 0 até gravar):
           sudo stat -c '%n %U %a %s' /opt/gestor-financeiro/infra/secrets/pluggy_1_client_id /opt/gestor-financeiro/infra/secrets/pluggy_1_client_secret /opt/gestor-financeiro/infra/secrets/pluggy_2_client_id /opt/gestor-financeiro/infra/secrets/pluggy_2_client_secret
-     e) Só se o stat mostrar root 444 e tamanho maior que 0 nos dois do slot 1: apague os originais do
-        clone, que ficam ao alcance dos agentes (o -f libera a escrita num arquivo 0444):
+     e) Confira que as cópias são iguais aos originais (o cmp não mostra o conteúdo; iguais = só "iguais"):
+          sudo cmp ~/Gestor-Financeiro/infra/secrets/pluggy_client_id /opt/gestor-financeiro/infra/secrets/pluggy_1_client_id && sudo cmp ~/Gestor-Financeiro/infra/secrets/pluggy_client_secret /opt/gestor-financeiro/infra/secrets/pluggy_1_client_secret && echo iguais
+        Só se o stat mostrar root 444 e tamanho maior que 0 nos dois do slot 1 e o cmp responder só
+        "iguais": apague os originais do clone, que ficam ao alcance dos agentes (o -f libera a escrita
+        num arquivo 0444):
           sudo shred -fu ~/Gestor-Financeiro/infra/secrets/pluggy_client_id ~/Gestor-Financeiro/infra/secrets/pluggy_client_secret
-     f) Construa a api e o web, aplique as migrações e suba os dois com o código e os segredos novos:
+     f) Construa a api e o web. A api tem IP fixo no compose: pare a antiga antes de migrar (com ela de
+        pé, o run falha com "Address already in use"). Depois aplique as migrações:
           sudo docker compose -f /opt/gestor-financeiro/infra/docker-compose.yml build api web
+          sudo docker compose -f /opt/gestor-financeiro/infra/docker-compose.yml stop api
           sudo docker compose -f /opt/gestor-financeiro/infra/docker-compose.yml run --rm api --migrar
+        Só se o --migrar terminar sem erro (última linha: "migrações em dia."): suba a api e o web novos:
           sudo docker compose -f /opt/gestor-financeiro/infra/docker-compose.yml up -d api web
+        Se o --migrar der erro, pare aqui e religue a api antiga: o start não recria o container, então
+        ela volta com a imagem antiga; o backup do item b) é o ponto de volta do banco:
+          sudo docker compose -f /opt/gestor-financeiro/infra/docker-compose.yml start api
      g) Confira: api e web "Up" (o compose não tem healthcheck para os dois) e a api respondendo
-        {"status":"ok",...} pela rede interna:
+        {"status":"ok",...} pela rede interna; se o wget recusar a conexão, a api ainda está subindo:
+        espere uns 10 s e repita:
           sudo docker compose -f /opt/gestor-financeiro/infra/docker-compose.yml ps api web
           sudo docker compose -f /opt/gestor-financeiro/infra/docker-compose.yml exec -T postgres wget -q -O - http://api:8080/api/v1/saude
      O outro cônjuge (slot 2), ou quem trocar as chaves de um slot, grava pelo terminal: um comando por

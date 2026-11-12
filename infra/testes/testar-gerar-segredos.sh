@@ -127,6 +127,7 @@ linha_de() { grep -nF -- "$1" "$T/passo7" | head -1 | cut -d: -f1; }
 
 COMPOSE_OPT="sudo docker compose -f /opt/gestor-financeiro/infra/docker-compose.yml"
 SHRED_11_11="sudo shred -fu ~/Gestor-Financeiro/infra/secrets/pluggy_client_id ~/Gestor-Financeiro/infra/secrets/pluggy_client_secret"
+CMP_11_11="sudo cmp ~/Gestor-Financeiro/infra/secrets/pluggy_client_id /opt/gestor-financeiro/infra/secrets/pluggy_1_client_id && sudo cmp ~/Gestor-Financeiro/infra/secrets/pluggy_client_secret /opt/gestor-financeiro/infra/secrets/pluggy_1_client_secret && echo iguais"
 
 # D12: o passo 7 é o roteiro completo para pôr a etapa no ar em /opt, feito pela pessoa, com sudo, nesta ordem:
 # pull → backup → gerar-segredos.sh → cópia das chaves de 11/11 para o slot 1 → stat → shred dos originais →
@@ -144,8 +145,10 @@ passo_7_roda_em_opt_com_sudo_e_na_ordem() {
     "sudo /opt/gestor-financeiro/infra/scripts/gerar-segredos.sh" \
     "sudo install -m 444 -o root ~/Gestor-Financeiro/infra/secrets/pluggy_client_id /opt/gestor-financeiro/infra/secrets/pluggy_1_client_id" \
     "sudo stat -c '%n %U %a %s' /opt/gestor-financeiro/infra/secrets/pluggy_1_client_id" \
+    "$CMP_11_11" \
     "$SHRED_11_11" \
     "$COMPOSE_OPT build api web" \
+    "$COMPOSE_OPT stop api" \
     "$COMPOSE_OPT run --rm api --migrar" \
     "$COMPOSE_OPT up -d api web" \
     "$COMPOSE_OPT ps api web" \
@@ -193,18 +196,38 @@ passo_7_backup_antes_da_migracao() {
   [ "$backup" -lt "$journal" ] && [ "$journal" -lt "$migrar" ] || { echo "  backup depois da migração"; return 1; }
   [ "$migrar" -lt "$(linha_de "$COMPOSE_OPT up -d api web")" ] || { echo "  subida antes da migração"; return 1; }
   grep -qF "backup ok" "$T/passo7" || { echo "  não diz o que conferir no journal"; return 1; }
-  grep -qiF "pare" "$T/passo7" || { echo "  não manda parar se o backup falhar"; return 1; }
+  # A frase inteira: "pare" sozinho casaria com "aparecer".
+  grep -qF "Se o start der erro ou o \"backup ok\" não" "$T/passo7" && grep -qF "pare aqui e não siga para os próximos itens" "$T/passo7" \
+    || { echo "  não manda parar se o backup falhar"; return 1; }
+}
+
+# A api tem IP fixo no compose: com ela de pé, o "run --rm api" falha com "Address already in use". Ela para antes
+# da migração; se a migração falhar, a pessoa para e religa a api antiga (start não recria o container), e a nova
+# não sobe sem a migração.
+passo_7_migracao_com_a_api_parada_e_parada_se_falhar() {
+  local stop migrar condicao up start
+  passo_7 migracao || return 1
+  stop="$(linha_de "$COMPOSE_OPT stop api")"
+  migrar="$(linha_de "$COMPOSE_OPT run --rm api --migrar")"
+  condicao="$(linha_de "Só se o --migrar terminar sem erro (última linha: \"migrações em dia.\"):")"
+  up="$(linha_de "$COMPOSE_OPT up -d api web")"
+  [ -n "$stop" ] && [ -n "$migrar" ] && [ -n "$condicao" ] && [ -n "$up" ] || { echo "  falta stop, migração, condição ou subida"; return 1; }
+  [ "$stop" -lt "$migrar" ] && [ "$migrar" -lt "$condicao" ] && [ "$condicao" -lt "$up" ] || { echo "  ordem stop → migração → condição → subida"; return 1; }
+  grep -qF "Se o --migrar der erro, pare aqui e religue a api antiga:" "$T/passo7" || { echo "  não manda parar se a migração falhar"; return 1; }
+  start="$(linha_de "$COMPOSE_OPT start api")"
+  [ -n "$start" ] && [ "$start" -gt "$migrar" ] || { echo "  sem o start da api antiga depois da migração"; return 1; }
 }
 
 # Os originais de 11/11 só são apagados (shred) depois de o stat mostrar a cópia certa no slot 1.
 passo_7_shred_so_depois_do_stat() {
-  local stat condicao shred
+  local stat cmp condicao shred
   passo_7 shred || return 1
   stat="$(linha_de "sudo stat -c '%n %U %a %s' /opt/gestor-financeiro/infra/secrets/pluggy_1_client_id")"
-  condicao="$(linha_de "Só se o stat mostrar root 444 e tamanho maior que 0 nos dois do slot 1")"
+  cmp="$(linha_de "$CMP_11_11")"
+  condicao="$(linha_de "Só se o stat mostrar root 444 e tamanho maior que 0 nos dois do slot 1 e o cmp")"
   shred="$(linha_de "$SHRED_11_11")"
-  [ -n "$stat" ] && [ -n "$condicao" ] && [ -n "$shred" ] || { echo "  falta stat, condição ou shred"; return 1; }
-  [ "$stat" -lt "$condicao" ] && [ "$condicao" -lt "$shred" ] || { echo "  shred antes do stat ou sem a condição"; return 1; }
+  [ -n "$stat" ] && [ -n "$cmp" ] && [ -n "$condicao" ] && [ -n "$shred" ] || { echo "  falta stat, cmp, condição ou shred"; return 1; }
+  [ "$stat" -lt "$cmp" ] && [ "$cmp" -lt "$condicao" ] && [ "$condicao" -lt "$shred" ] || { echo "  shred antes do stat e do cmp, ou sem a condição"; return 1; }
   [ "$(grep -cF "shred" "$T/passo7")" -ge 1 ] && ! grep -F "shred" "$T/passo7" | grep -qF "/opt/" \
     || { echo "  shred tocando /opt"; return 1; }
 }
@@ -244,6 +267,7 @@ caso passo_7_roda_em_opt_com_sudo_e_na_ordem
 caso passo_7_copia_o_client_secret_para_o_slot_1
 caso passo_7_backup_antes_da_migracao
 caso passo_7_shred_so_depois_do_stat
+caso passo_7_migracao_com_a_api_parada_e_parada_se_falhar
 caso pluggy_existente_nao_e_tocado
 caso segunda_execucao_mantem
 caso pasta_com_outro_modo_falha
