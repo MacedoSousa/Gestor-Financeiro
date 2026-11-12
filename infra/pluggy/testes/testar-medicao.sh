@@ -60,6 +60,8 @@ saida_sem_valores_nem_descricoes() {
 
 responde_as_outras_perguntas() {
   medir "$T/raiz" ITEM=item-sintetico SLOT=1 || { mostrar; return 1; }
+  # A espera não pode parecer travamento: o aviso vem antes (no teste, MEDIR_ESPERA=0).
+  tem "aguardando 0 s para a segunda leitura do saldo..." || return 1
   tem "corrente 1: pendentes=0 · saldo mudou entre as leituras: não" || return 1
   tem "sinal BANK/CHECKING_ACCOUNT: DEBIT(-)=2 DEBIT(+)=0 DEBIT(0)=1 CREDIT(-)=0 CREDIT(+)=1 CREDIT(0)=0" || return 1
   tem "sinal CREDIT/CREDIT_CARD: DEBIT(-)=0 DEBIT(+)=4 DEBIT(0)=0 CREDIT(-)=1 CREDIT(+)=0 CREDIT(0)=0" || return 1

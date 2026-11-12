@@ -140,6 +140,7 @@ done
 
 # Segunda leitura dos saldos: a Pluggy atualiza o saldo da corrente sem transação nova?
 if [ "${#correntes[@]}" -gt 0 ]; then
+  echo "aguardando $espera s para a segunda leitura do saldo..."
   sleep "$espera"
   get "/accounts?itemId=$ITEM"
   if [ "$GET_CODIGO" = 200 ]; then
