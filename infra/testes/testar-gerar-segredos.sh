@@ -111,15 +111,64 @@ segredos_da_pluggy_nascem_vazios() {
     [ "$(stat -c %a "$r/infra/secrets/$f")" = 444 ] || { echo "  modo de $f"; return 1; }
     grep -qx "criado   $f" "$T/saida" || { echo "  sem 'criado $f' na saída"; return 1; }
   done
-  # Os próximos passos ensinam a gravar pelo terminal, sem eco e sem deixar o valor no histórico.
-  grep -qF "read -rs v; printf '%s' \"\$v\" | sudo tee infra/secrets/pluggy_1_client_id >/dev/null; unset v" "$T/saida" \
-    || { echo "  sem o comando de gravação nos próximos passos"; return 1; }
-  # Instalação que já existia: rodar o script antes do "up" (o compose exige os quatro arquivos) e os arquivos de
-  # 11/11 (pluggy_client_*) viram o slot 1 (D23), sem o valor passar pela tela.
-  grep -qF "Instalação que já existia: depois do git pull, rode este script de novo ANTES do docker compose up" "$T/saida" \
-    || { echo "  sem o aviso para a instalação que já existia"; return 1; }
-  grep -qF "sudo install -m 0444 ~/Gestor-Financeiro/infra/secrets/pluggy_client_id infra/secrets/pluggy_1_client_id" "$T/saida" \
-    || { echo "  sem a cópia dos arquivos de 11/11 para o slot 1"; return 1; }
+}
+
+# Passo 7 dos próximos passos (do "  7." até o parágrafo seguinte), para os casos abaixo.
+passo_7() {
+  local r
+  r="$(nova_raiz "passo7-$1")"
+  "$r/infra/scripts/gerar-segredos.sh" >"$T/saida" 2>&1 || { sed 's/^/  | /' "$T/saida"; return 1; }
+  sed -n '/^  7\. /,/^$/p' "$T/saida" >"$T/passo7"
+  [ -s "$T/passo7" ] || { echo "  sem o passo 7"; return 1; }
+}
+
+# Número da linha (no passo 7) do primeiro comando que contém o texto; vazio se não houver.
+linha_de() { grep -nF -- "$1" "$T/passo7" | head -1 | cut -d: -f1; }
+
+# D23 e D28: o passo 7 é para a instalação de verdade, feito pela pessoa, em /opt, com sudo, nesta ordem:
+# git pull → gerar-segredos.sh (cria os pluggy_* vazios) → cópia dos arquivos de 11/11 para o slot 1 → stat → api.
+passo_7_roda_em_opt_com_sudo_e_na_ordem() {
+  local esperado num anterior=0
+  passo_7 ordem || return 1
+  grep -qF "na pasta /opt/gestor-financeiro, com sudo" "$T/passo7" || { echo "  não diz onde roda"; return 1; }
+  for esperado in \
+    "sudo git -C /opt/gestor-financeiro pull" \
+    "sudo /opt/gestor-financeiro/infra/scripts/gerar-segredos.sh" \
+    "sudo install -m 444 -o root ~/Gestor-Financeiro/infra/secrets/pluggy_client_id /opt/gestor-financeiro/infra/secrets/pluggy_1_client_id" \
+    "sudo stat -c '%n %U %a %s' /opt/gestor-financeiro/infra/secrets/pluggy_1_client_id" \
+    "sudo docker compose -f /opt/gestor-financeiro/infra/docker-compose.yml up -d api"; do
+    num="$(linha_de "$esperado")"
+    [ -n "$num" ] || { echo "  falta: $esperado"; return 1; }
+    [ "$num" -gt "$anterior" ] || { echo "  fora de ordem: $esperado"; return 1; }
+    anterior="$num"
+  done
+  # Todo comando (linha que começa por sudo, read ou um passo "a)") usa sudo e caminho absoluto em /opt: nenhum
+  # "infra/" relativo, nenhum docker ou git sem sudo.
+  if grep -E '^\s+(sudo |read |[a-z]\) )' "$T/passo7" | grep -E '(^|[ =])infra/' >/dev/null; then
+    echo "  comando com caminho relativo:"; grep -E '(^|[ =])infra/' "$T/passo7" | sed 's/^/  | /'; return 1
+  fi
+  if grep -E '^\s+(docker|git) ' "$T/passo7" >/dev/null; then echo "  docker ou git sem sudo"; return 1; fi
+  # Gravação pelo terminal, sem eco e sem deixar o valor no histórico, nos dois slots.
+  grep -qF "read -rs v; printf '%s' \"\$v\" | sudo tee /opt/gestor-financeiro/infra/secrets/pluggy_2_client_id >/dev/null; unset v" "$T/passo7" \
+    || { echo "  sem o comando de gravação do slot 2"; return 1; }
+  grep -qF "Depois de regravar as chaves de um slot, reinicie a api (a chave temporária fica em cache por até 110 min)." "$T/passo7" \
+    || { echo "  sem o aviso de reiniciar a api"; return 1; }
+  grep -qF "sudo docker compose -f /opt/gestor-financeiro/infra/docker-compose.yml restart api" "$T/passo7" \
+    || { echo "  sem o comando de reiniciar a api"; return 1; }
+}
+
+# O client_secret de 11/11 também vai para o slot 1 (não para o 2), com o mesmo dono e modo, e é conferido.
+passo_7_copia_o_client_secret_para_o_slot_1() {
+  local id segredo
+  passo_7 secret || return 1
+  id="$(linha_de "sudo install -m 444 -o root ~/Gestor-Financeiro/infra/secrets/pluggy_client_id ")"
+  segredo="$(linha_de "sudo install -m 444 -o root ~/Gestor-Financeiro/infra/secrets/pluggy_client_secret /opt/gestor-financeiro/infra/secrets/pluggy_1_client_secret")"
+  [ -n "$segredo" ] || { echo "  sem a cópia do client_secret para o slot 1"; return 1; }
+  [ -n "$id" ] && [ "$segredo" -gt "$id" ] || { echo "  client_secret antes do client_id"; return 1; }
+  # A pasta em /opt é 0700 do root: o glob não expandiria no shell da pessoa, então o stat lista os arquivos.
+  grep -F "sudo stat -c '%n %U %a %s' " "$T/passo7" | grep -qF "/opt/gestor-financeiro/infra/secrets/pluggy_1_client_secret" \
+    || { echo "  sem a conferência do client_secret"; return 1; }
+  if grep -F "pluggy_client_secret" "$T/passo7" | grep -qF "pluggy_2_"; then echo "  client_secret de 11/11 indo para o slot 2"; return 1; fi
 }
 
 # Um segredo da Pluggy já preenchido (valor sintético) não é tocado: mesmo inode, mesmo sha, mesmo modo.
@@ -139,6 +188,8 @@ pluggy_existente_nao_e_tocado() {
 
 caso pasta_0700_e_segredos_0444_menos_a_chave
 caso segredos_da_pluggy_nascem_vazios
+caso passo_7_roda_em_opt_com_sudo_e_na_ordem
+caso passo_7_copia_o_client_secret_para_o_slot_1
 caso pluggy_existente_nao_e_tocado
 caso segunda_execucao_mantem
 caso pasta_com_outro_modo_falha
