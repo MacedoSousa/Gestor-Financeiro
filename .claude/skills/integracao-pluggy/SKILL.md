@@ -12,6 +12,7 @@ Spec: `docs/superpowers/specs/2026-11-11-fase-2-open-finance-design.md` (a seç�
 - Ler `infra/secrets/` nem usar as chaves reais. Script contra a Pluggy de verdade é rodado **pela pessoa**, e só imprime estrutura (contagens, nomes de campo, sim ou não).
 - Chamar rota de pagamento ou `PATCH`/`PUT`/`DELETE` na Pluggy (o teste de arquitetura recusa).
 - Pôr id da Pluggy, `itemId`, valor, descrição ou chave em log, exceção, URL de log ou resposta. O `HttpClient` da Pluggy já vem sem o log padrão (`RemoveAllLoggers`); não reative.
+  - Única exceção (CEO, D18): o id opaco da conta na Pluggy pode aparecer só nas respostas autenticadas de descoberta e confirmação (E3); nunca em log, erro ou outra rota. Teste: `NascimentoTests.Descoberta_e_confirmacao_nao_logam_o_id_da_conta`. O `itemId` não tem exceção.
 - Usar `double` em valor: `ConversaoPluggy.Centavos` (decimal, exato, recusa mais de duas casas).
 - Espalhar código de categoria da Pluggy: só em `Lancamentos.Contracts.CategoriasDoBanco`.
 
