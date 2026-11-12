@@ -3,7 +3,7 @@ import { ErroDeApi } from "./autenticacao";
 const SEM_CONEXAO = "Sem conexão com o servidor. Tente de novo.";
 
 /**
- * Títulos fixos que Contas, Lancamentos e Investimentos escrevem nos Problem Details. Só estes vão para a tela; qualquer outro
+ * Títulos fixos que Contas, Lancamentos, Investimentos e Integracoes escrevem nos Problem Details. Só estes vão para a tela; qualquer outro
  * título cai na mensagem genérica.
  */
 const TITULOS: ReadonlySet<string> = new Set([
@@ -20,6 +20,15 @@ const TITULOS: ReadonlySet<string> = new Set([
   "Só contas de poupança ou investimento entram numa meta.",
   "Só contas de poupança ou investimento são conciliadas aqui.",
   "O saldo mudou desde que a tela foi aberta. Confira de novo.",
+  // Integracoes (conexões do Meu Pluggy)
+  "As chaves deste slot não foram gravadas no servidor.",
+  "Este slot já é usado no casal.",
+  "Você já tem uma conexão.",
+  "Este item já está cadastrado.",
+  "Só o titular pode alterar esta conexão.",
+  "A Pluggy não respondeu. Tente de novo em alguns minutos.",
+  "O banco recusou este item com as chaves do slot 1.",
+  "O banco recusou este item com as chaves do slot 2.",
 ]);
 
 type Resposta<T> = { data?: T; error?: unknown; response: Response };

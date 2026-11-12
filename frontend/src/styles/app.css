@@ -170,6 +170,24 @@ a {
   background: var(--negativo);
 }
 
+.ponto.alerta {
+  background: var(--alerta);
+}
+
+/* Conexões: opção de slot com o aviso embaixo; desabilitada fica apagada, mas legível. */
+.opcao-slot {
+  align-items: flex-start;
+}
+
+.opcao-slot input {
+  margin-top: 1px;
+  flex: none;
+}
+
+.opcao-slot:has(input:disabled) > span:first-of-type {
+  color: var(--texto-suave);
+}
+
 /* Cadastro do casal */
 .pagina-centro {
   width: 100%;

@@ -10,6 +10,28 @@ internal static class EstadoDoItem
     public const string ConsentimentoVencendo = "CONSENTIMENTO_VENCENDO";
     public const string ConsentimentoVencido = "CONSENTIMENTO_VENCIDO";
     public const string Erro = "ERRO";
+
+    /// <summary>Aviso de consentimento: 15 dias antes de <c>consentExpiresAt</c> (spec, seção 6).</summary>
+    public static readonly TimeSpan AvisoDeConsentimento = TimeSpan.FromDays(15);
+
+    /// <summary>Status da Pluggy em que o item está bem: atualizado ou atualizando.</summary>
+    private static readonly HashSet<string> StatusBons = new(StringComparer.Ordinal) { "UPDATED", "UPDATING" };
+
+    /// <summary>
+    /// Estado e motivo a partir do que o banco disse do item. Ordem: consentimento vencido, erro do item, consentimento
+    /// vencendo, ativo. O motivo é só o código do status (ex.: LOGIN_ERROR), nunca texto livre da resposta (D26).
+    /// </summary>
+    public static (string Estado, string? Motivo) Do(string status, DateTimeOffset? consentimentoVenceEm, DateTimeOffset agora)
+    {
+        if (consentimentoVenceEm is { } vence && vence <= agora) return (ConsentimentoVencido, null);
+        if (!StatusBons.Contains(status)) return (Erro, CodigoSeguro(status));
+        if (consentimentoVenceEm is { } v && v - agora <= AvisoDeConsentimento) return (ConsentimentoVencendo, null);
+        return (Ativo, null);
+    }
+
+    /// <summary>Só A–Z e sublinhado, até 60 caracteres; qualquer outra coisa vira DESCONHECIDO.</summary>
+    private static string CodigoSeguro(string status) =>
+        status.Length is > 0 and <= Item.MotivoMaximo && status.All(ch => ch is (>= 'A' and <= 'Z') or '_') ? status : "DESCONHECIDO";
 }
 
 /// <summary>
