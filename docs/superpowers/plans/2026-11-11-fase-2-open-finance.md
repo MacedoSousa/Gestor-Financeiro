@@ -384,7 +384,7 @@ public interface IMetasDeContas { Task<bool> LigarContaAMetaAsync(Guid contaId, 
 - Teste: `backend/tests/GestorFinanceiro.IntegrationTests/NascimentoTests.cs`
 
 **Migração (V0013), `integracoes.vinculos`:**
-- colunas: `id`, `casal_id`, `item_id REFERENCES integracoes.items` (D18), `tipo text CHECK (tipo IN ('CONTA','CARTAO','INVESTIMENTO'))`, `id_externo text NOT NULL` (em claro, D7), `conta_id uuid NULL` (nulo = aplicação aguardando grupo), `identidade_hmac bytea NULL`, `historico_desde date NULL`, `importado_ate date NULL` (último dia coberto pela importação do vínculo; decisão 7), `diferenca_centavos bigint NULL`, `diferencas_seguidas smallint NOT NULL DEFAULT 0`, `faturas_divergentes jsonb NULL` (decisão 12);
+- colunas: `id`, `casal_id`, `item_id REFERENCES integracoes.items` (D18), `tipo text CHECK (tipo IN ('CONTA','CARTAO','INVESTIMENTO'))`, `id_externo text NOT NULL` (em claro, D7), `conta_id uuid NULL` (nulo = aplicação aguardando grupo), `identidade_hmac bytea NULL`, `historico_desde date NULL`, `importado_ate date NULL` (último dia coberto pela importação do vínculo; decisão 7), `diferenca_centavos bigint NULL`, `diferencas_seguidas smallint NOT NULL DEFAULT 0`, `faturas_divergentes jsonb NULL` (decisão 12), `nao_importar_em timestamptz NULL` (conta encontrada marcada "não importar"; decisão 16);
 - `ux_vinculos_externo (item_id, tipo, id_externo) WHERE NOT is_deleted`;
 - `ux_vinculos_identidade (casal_id, identidade_hmac) WHERE NOT is_deleted AND identidade_hmac IS NOT NULL`;
 - `audit.proteger`.
@@ -421,12 +421,15 @@ public interface IMetasDeContas { Task<bool> LigarContaAMetaAsync(Guid contaId, 
 **Interfaces:**
 - `POST /integracoes/items/{id}/nascimento` com o corpo:
   ```
-  { contas: [{ idExterno, acao: "CRIAR"|"LIGAR"|"IGNORAR", contaExistenteId?, apelido, titularUsuarioId?, diaFechamento?, diaVencimento? }],
+  { contas: [{ idExterno, acao: "CRIAR"|"LIGAR"|"NAO_IMPORTAR", contaExistenteId?, apelido, titularUsuarioId?, diaFechamento?, diaVencimento? }],
     aplicacoes: [{ idExterno, grupo: { nome, metaId? } | null }] }
   ```
   Só o dono da conexão (D21).
 - Cada conta: o vínculo é gravado primeiro com um `conta_id` novo (Guid v7), e depois `IContasLigadas.CriarAsync` é chamado com esse id. O mesmo id torna a retomada idempotente.
 - Aplicações: cada grupo distinto vira **uma** conta `INVESTIMENTO`, e cada aplicação vira um vínculo com o mesmo `conta_id`. Com `metaId`, chama `IMetasDeContas.LigarContaAMetaAsync`. Aplicação `null` fica com `conta_id` nulo, aguardando grupo.
+- `NAO_IMPORTAR` (decisão 16): grava o vínculo com `conta_id` nulo e `nao_importar_em = agora`. Não vira conta, não sincroniza e não é perguntada de novo: a `Descoberta` a lista à parte, como "não importada", e não como conta encontrada.
+  - "Conexões" mostra as contas não importadas com "Incluir". `POST /integracoes/vinculos/{id}/inclusao` recebe os mesmos campos de `CRIAR`/`LIGAR`, limpa `nao_importar_em` e segue como um nascimento normal. A primeira sincronização importa o histórico desde 2026-01-01.
+  - É diferente da conta que já vem da outra conexão (`JaVemDe`), que é ignorada pela trava e nem vira vínculo.
 - O saldo inicial provisório é 0 em `2026-01-01`. A conta corrente e o cartão são recalculados na etapa 4. O grupo de investimento é a soma dos saldos das aplicações, na data do nascimento.
 
 - [ ] **Passo 1:** testes que falham:
@@ -437,9 +440,12 @@ public interface IMetasDeContas { Task<bool> LigarContaAMetaAsync(Guid contaId, 
   - `Dois_CDBs_no_mesmo_grupo_viram_uma_conta`;
   - `Grupo_com_meta_liga_a_conta_a_meta`;
   - `Ligar_a_conta_existente_marca_ligada`;
-  - `Outro_conjuge_recebe_403`.
+  - `Outro_conjuge_recebe_403`;
+  - `Nao_importar_registra_e_nao_pergunta_de_novo`: segunda descoberta lista a conta como não importada, não como encontrada;
+  - `Conta_nao_importada_nao_vira_conta_nem_sincroniza`;
+  - `Incluir_depois_cria_a_conta_ligada`.
 - [ ] **Passo 2:** rodar → FALHA.
-- [ ] **Passo 3:** implementar o back. Depois, o front com a lista "Encontramos N contas, M cartões e K investimentos no <banco>. Criar?", com apelido, titular e grupo editáveis. Regerar o cliente.
+- [ ] **Passo 3:** implementar o back. Depois, o front com a lista "Encontramos N contas, M cartões e K investimentos no <banco>. Criar?", com apelido, titular e grupo editáveis, e "não importar" em cada conta. Regerar o cliente.
 - [ ] **Passo 4:** `--filter NascimentoTests` e `npm --prefix frontend run check` → PASSA. Commit "Integracoes: nascimento de contas ligadas".
 
 **Pronto quando:**
@@ -549,6 +555,7 @@ public interface IImportacaoDeLancamentos
 - Teste: `backend/tests/GestorFinanceiro.IntegrationTests/SincronizacaoTests.cs`
 
 **Regras:**
+- Vínculo "não importar" (`nao_importar_em` preenchido, decisão 16) não sincroniza. Ao ser incluído, faz a primeira importação desde `historico_desde`.
 - Vínculo cuja conta está **arquivada** (`ContaResumo.Arquivada`) não sincroniza: nada é lido nem importado, o histórico fica e `importado_ate` não anda (decisão 7).
 - Por vínculo CONTA ou CARTAO, desde `historico_desde` na primeira importação; depois, desde `max(historico_desde, importado_ate − 10 dias)`. Assim, ao desarquivar, a próxima sincronização importa o período que ficou de fora. Ao terminar, `importado_ate` = hoje. lê `/v2/transactions`, mapeia e chama `ImportarAsync`. Cada vínculo é uma chamada; a falha num vínculo não desfaz os outros.
 - `historico_desde`: 2026-01-01, ou a data mais antiga recebida se o banco entregar menos. A tela mostra "Histórico desde DD/MM".
@@ -840,3 +847,4 @@ Decisões sobre o "Para o CEO" da primeira versão deste plano (PR #30). Elas va
 13. **Reconhecimento por categoria** (CEO 11/11 21h). Usa os códigos medidos: `05100000` pagamento de fatura, `03000000` e `03020000` aplicação, `03060000` resgate ou rendimento, `04000000` mesma titularidade, `05010000` boleto, `15030000` IOF e `15010000` IR. A tabela fica num lugar só, com teste. → `Lancamentos.Contracts.CategoriasDoBanco` (etapa 1) e Tarefa 6.2.
 14. **Aviso na espera da medição** (CEO 11/11 21h). Antes da espera, o `medir-saldos.sh` imprime "aguardando 60 s para a segunda leitura do saldo...": a pessoa achou que ele tinha travado. → Tarefa 1.0.
 15. **Transferência entre items** (CEO 11/11 21h, medição do segundo banco: 7 transações `04000000` entre contas da mesma pessoa em bancos diferentes). O pareamento de transferência (D9) e o reconhecimento por categoria funcionam entre items do mesmo casal, não só dentro de um item, com teste de duas contas de items diferentes. → Tarefa 6.2.
+16. **"Não importar"** (CEO 11/11 21h, medição do segundo banco: dois cartões sem transação no ano). Na tela de confirmação, cada conta encontrada pode ser marcada "não importar". Ela fica registrada como ignorada: não vira conta nem é perguntada de novo a cada sincronização. Pode ser incluída depois em "Conexões". → Tarefas 3.2 (`nao_importar_em`), 3.3 e 4.5.
