@@ -679,6 +679,8 @@ Task<Guid?> CriarParManualAsync(Guid transacaoImportadaId, Guid contaManualId, C
 
 **Regras:**
 - Transferência: saída numa conta ligada e entrada noutra conta ligada do casal, mesmo |valor|, datas até 1 dia útil, **par único** → `ParearComoTransferenciaAsync`. Sem par único → item `TRANSFERENCIA_SEM_PAR`.
+  - O pareamento e o reconhecimento por categoria valem **entre items e conexões diferentes do mesmo casal** (decisão 15): dois bancos do mesmo cônjuge, ou contas dos dois cônjuges. A busca do par é por casal, nunca por item.
+  - Como cada item sincroniza na sua vez (job por conexão, "Atualizar agora"), uma saída sem par só vira item `TRANSFERENCIA_SEM_PAR` depois de 2 dias úteis da data. Um item aberto que ganha par único depois é resolvido sozinho, com a resolução "pareado automaticamente" (decisão do Dev, a confirmar).
 - Os papéis vêm de `CategoriasDoBanco.Papel(categoria_externa)` (`Lancamentos.Contracts`), a única tabela de códigos (decisão 13). O teste de arquitetura `Codigos_de_categoria_da_Pluggy_so_na_tabela` recusa os códigos em outro arquivo.
 - Pagamento de fatura (D10): saída da corrente com papel `PagamentoDeFatura` e crédito no cartão ligado do mesmo valor, até 1 dia útil → par.
   - Cartão não ligado → item, e a resolução cria o lado do cartão (`CriarParManualAsync`).
@@ -689,6 +691,10 @@ Task<Guid?> CriarParManualAsync(Guid transacaoImportadaId, Guid contaManualId, C
 
 - [ ] **Passo 1:** testes que falham:
   - `Transferencia_entre_ligadas_vira_par_nunca_gasto_e_receita`;
+  - `Transferencia_entre_items_diferentes_do_casal_vira_par`: corrente do item A, conta do item B, mesma pessoa (decisão 15);
+  - `Mesma_titularidade_entre_items_diferentes_vira_par`: categoria `04000000` nos dois lados, em items diferentes;
+  - `Sem_par_so_vai_para_a_conferir_depois_de_2_dias_uteis`;
+  - `Item_sem_par_que_ganha_par_depois_se_resolve_sozinho`;
   - `Dois_candidatos_vao_para_a_conferir`;
   - `Pagamento_de_fatura_usa_as_duas_pernas_do_banco`;
   - `Pagamento_de_fatura_nao_conta_como_gasto`;
@@ -833,3 +839,4 @@ Decisões sobre o "Para o CEO" da primeira versão deste plano (PR #30). Elas va
 12. **Conferência do cartão por fatura** (CEO 11/11 21h). Substitui a fórmula do saldo da D3, que a medição mostrou não fechar. Para cada fatura do banco, o total informado é comparado com a soma das transações com aquele `billId`. A diferença aparece em "Conexões" se persistir por duas sincronizações. Pendentes (sem `billId`) não entram. O saldo do cartão no sistema continua sendo o calculado pelas transações. Só é conferida a fatura que vence a partir de dois meses depois do início do histórico, para não acusar compras de antes do histórico (decisão do Dev, a confirmar). → `ConferenciaDasFaturas` (etapa 1) e Tarefa 4.5.
 13. **Reconhecimento por categoria** (CEO 11/11 21h). Usa os códigos medidos: `05100000` pagamento de fatura, `03000000` e `03020000` aplicação, `03060000` resgate ou rendimento, `04000000` mesma titularidade, `05010000` boleto, `15030000` IOF e `15010000` IR. A tabela fica num lugar só, com teste. → `Lancamentos.Contracts.CategoriasDoBanco` (etapa 1) e Tarefa 6.2.
 14. **Aviso na espera da medição** (CEO 11/11 21h). Antes da espera, o `medir-saldos.sh` imprime "aguardando 60 s para a segunda leitura do saldo...": a pessoa achou que ele tinha travado. → Tarefa 1.0.
+15. **Transferência entre items** (CEO 11/11 21h, medição do segundo banco: 7 transações `04000000` entre contas da mesma pessoa em bancos diferentes). O pareamento de transferência (D9) e o reconhecimento por categoria funcionam entre items do mesmo casal, não só dentro de um item, com teste de duas contas de items diferentes. → Tarefa 6.2.
