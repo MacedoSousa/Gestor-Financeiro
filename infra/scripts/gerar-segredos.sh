@@ -48,6 +48,12 @@ criar pg_senha_migrador gerar_senha
 criar pgpass_app        bash -c "echo \"*:*:gestor:gf_app:\$(cat '$dir/pg_senha_app')\""
 criar pgpass_migrador   bash -c "echo \"*:*:gestor:gf_migrator:\$(cat '$dir/pg_senha_migrador')\""
 criar gf_chave_servico  openssl rand 32
+# Pluggy (D23): um par de chaves por slot, com nome fixo. Nascem vazios (slot não configurado),
+# só para o compose subir; quem grava o conteúdo é a pessoa, pelo terminal (próximos passos).
+for slot in 1 2; do
+  criar "pluggy_${slot}_client_id"     true
+  criar "pluggy_${slot}_client_secret" true
+done
 
 cat <<EOF
 
@@ -70,6 +76,14 @@ Próximos passos (a API em container roda como o usuário 'app', uid 1654):
      cadastro — imprima e guarde em papel.
   6. Faça backup de infra/secrets/ e de infra/data/chaves/dek.servico num lugar fora deste PC
      (sem eles, os dados cifrados não abrem).
+  7. Open Finance (Meu Pluggy): cada cônjuge grava as próprias chaves num slot, pelo terminal
+     (o valor não aparece na tela nem fica no histórico). Slot vazio = não configurado. Um
+     comando por arquivo; cole o valor e tecle Enter:
+       read -rs v; printf '%s' "\$v" | sudo tee infra/secrets/pluggy_1_client_id >/dev/null; unset v
+       read -rs v; printf '%s' "\$v" | sudo tee infra/secrets/pluggy_1_client_secret >/dev/null; unset v
+       read -rs v; printf '%s' "\$v" | sudo tee infra/secrets/pluggy_2_client_id >/dev/null; unset v
+       read -rs v; printf '%s' "\$v" | sudo tee infra/secrets/pluggy_2_client_secret >/dev/null; unset v
+     Depois: docker compose -f infra/docker-compose.yml up -d api
 
 Instalações anteriores: um dek.recuperacao antigo e o código em papel que veio com ele estão
 obsoletos (não são mais lidos). Guarde ou destrua de propósito; não confunda com o código novo.

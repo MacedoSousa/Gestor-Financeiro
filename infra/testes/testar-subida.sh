@@ -68,6 +68,14 @@ echo "segredos: $(find "$R/infra/secrets" -type f | wc -l) arquivos, pasta $(sta
 como_root 'install -d -o 1654 -m 700 /dados/chaves && chown 1654 /segredos/gf_chave_servico' \
   || falhar "passo 1 do gerar-segredos.sh (chown 1654)"
 
+# D23: o slot 1 fica como o script o criou (vazio = não configurado); o slot 2 recebe um valor
+# sintético, como a pessoa faria pelo terminal. A api tem de subir nos dois casos.
+for f in pluggy_2_client_id pluggy_2_client_secret; do
+  chmod u+w "$R/infra/secrets/$f"
+  printf '%s' "valor-sintetico-$f" >"$R/infra/secrets/$f"
+  chmod 444 "$R/infra/secrets/$f"
+done
+
 # Terceiro octeto aleatório entre 100 e 227: 172.31.<n>.0/24.
 OCTETO=$((100 + 0x${ID:0:2} % 128))
 cat >"$T/override.yml" <<EOF
@@ -178,5 +186,21 @@ if "${COMPOSE[@]}" logs --no-color api 2>&1 | grep -qi libgssapi; then
   falhar "o log da api tem libgssapi"
 fi
 echo "ok sem libgssapi no log da api"
+
+# Segredos da Pluggy (D23): só a api os recebe; o vazio chega vazio e o preenchido chega igual
+# (compara tamanho e sha, nunca imprime o conteúdo).
+for f in pluggy_1_client_id pluggy_1_client_secret pluggy_2_client_id pluggy_2_client_secret; do
+  dentro="$("${COMPOSE[@]}" exec -T api sh -c "wc -c </run/secrets/$f; sha256sum </run/secrets/$f" 2>/dev/null)" \
+    || falhar "a api não lê /run/secrets/$f"
+  fora="$(wc -c <"$R/infra/secrets/$f"; sha256sum <"$R/infra/secrets/$f")"
+  [ "$dentro" = "$fora" ] || falhar "/run/secrets/$f na api difere do arquivo"
+  if "${COMPOSE[@]}" exec -T postgres test -e "/run/secrets/$f" 2>/dev/null; then
+    falhar "o postgres recebeu $f"
+  fi
+done
+[ "$(wc -c <"$R/infra/secrets/pluggy_1_client_id")" = 0 ] || falhar "pluggy_1_client_id deveria estar vazio"
+[ "$("${COMPOSE[@]}" exec -T api printenv Pluggy__PastaDeSegredos 2>/dev/null)" = /run/secrets ] \
+  || falhar "Pluggy__PastaDeSegredos da api"
+echo "ok segredos da Pluggy só na api (slot 1 vazio, slot 2 sintético)"
 
 echo "subida do zero ok"

@@ -30,7 +30,7 @@ pasta_0700_e_segredos_0444_menos_a_chave() {
   r="$(nova_raiz nova)"
   "$r/infra/scripts/gerar-segredos.sh" >"$T/saida" 2>&1 || { sed 's/^/  | /' "$T/saida"; return 1; }
   [ "$(stat -c %a "$r/infra/secrets")" = 700 ] || { echo "  pasta $(stat -c %a "$r/infra/secrets")"; return 1; }
-  [ "$(find "$r/infra/secrets" -type f | wc -l)" = 6 ] || { echo "  quantidade de segredos"; return 1; }
+  [ "$(find "$r/infra/secrets" -type f | wc -l)" = 10 ] || { echo "  quantidade de segredos"; return 1; }
   [ "$(find "$r/infra/secrets" -type f ! -name gf_chave_servico -printf '%m\n' | sort -u)" = 444 ] \
     || { echo "  modos [$(find "$r/infra/secrets" -type f -printf '%f=%m ')]"; return 1; }
   [ "$(stat -c %a "$r/infra/secrets/gf_chave_servico")" = 400 ] || { echo "  modo da gf_chave_servico"; return 1; }
@@ -70,7 +70,7 @@ clone_com_so_o_readme_fecha_a_pasta() {
     grep -qx "infra/secrets fechada em 0700 (só tinha o README)" "$T/saida" \
       || { echo "  sem o aviso (pasta $modo)"; sed 's/^/  | /' "$T/saida"; return 1; }
     [ "$(stat -c %a "$r/infra/secrets")" = 700 ] || { echo "  pasta $(stat -c %a "$r/infra/secrets")"; return 1; }
-    [ "$(find "$r/infra/secrets" -type f ! -name README.md | wc -l)" = 6 ] || { echo "  quantidade de segredos"; return 1; }
+    [ "$(find "$r/infra/secrets" -type f ! -name README.md | wc -l)" = 10 ] || { echo "  quantidade de segredos"; return 1; }
     cmp -s "$REPO/infra/secrets/README.md" "$r/infra/secrets/README.md" || { echo "  mexeu no README"; return 1; }
   done
 }
@@ -97,7 +97,43 @@ pasta_aberta_com_mais_que_o_readme_falha() {
   done
 }
 
+PLUGGY="pluggy_1_client_id pluggy_1_client_secret pluggy_2_client_id pluggy_2_client_secret"
+
+# D23: os quatro segredos da Pluggy nascem vazios (slot não configurado), 0444, para o compose
+# subir. Quem grava o conteúdo é a pessoa, pelo terminal.
+segredos_da_pluggy_nascem_vazios() {
+  local r f
+  r="$(nova_raiz pluggy-vazios)"
+  "$r/infra/scripts/gerar-segredos.sh" >"$T/saida" 2>&1 || { sed 's/^/  | /' "$T/saida"; return 1; }
+  for f in $PLUGGY; do
+    [ -f "$r/infra/secrets/$f" ] || { echo "  falta $f"; return 1; }
+    [ "$(stat -c %s "$r/infra/secrets/$f")" = 0 ] || { echo "  $f não está vazio"; return 1; }
+    [ "$(stat -c %a "$r/infra/secrets/$f")" = 444 ] || { echo "  modo de $f"; return 1; }
+    grep -qx "criado   $f" "$T/saida" || { echo "  sem 'criado $f' na saída"; return 1; }
+  done
+  # Os próximos passos ensinam a gravar pelo terminal, sem eco e sem deixar o valor no histórico.
+  grep -qF "read -rs v; printf '%s' \"\$v\" | sudo tee infra/secrets/pluggy_1_client_id >/dev/null; unset v" "$T/saida" \
+    || { echo "  sem o comando de gravação nos próximos passos"; return 1; }
+}
+
+# Um segredo da Pluggy já preenchido (valor sintético) não é tocado: mesmo inode, mesmo sha, mesmo modo.
+pluggy_existente_nao_e_tocado() {
+  local r antes
+  r="$(nova_raiz pluggy-existente)"
+  mkdir -m 700 "$r/infra/secrets"
+  printf '%s' 'id-sintetico-de-teste' >"$r/infra/secrets/pluggy_1_client_id"
+  chmod 444 "$r/infra/secrets/pluggy_1_client_id"
+  antes="$(stat -c '%i %a %s' "$r/infra/secrets/pluggy_1_client_id") $(sha256sum <"$r/infra/secrets/pluggy_1_client_id")"
+  "$r/infra/scripts/gerar-segredos.sh" >"$T/saida" 2>&1 || { sed 's/^/  | /' "$T/saida"; return 1; }
+  grep -qx "mantido  pluggy_1_client_id" "$T/saida" || { echo "  sem 'mantido pluggy_1_client_id'"; return 1; }
+  [ "$(stat -c '%i %a %s' "$r/infra/secrets/pluggy_1_client_id") $(sha256sum <"$r/infra/secrets/pluggy_1_client_id")" = "$antes" ] \
+    || { echo "  pluggy_1_client_id mudou"; return 1; }
+  [ "$(stat -c %s "$r/infra/secrets/pluggy_2_client_id")" = 0 ] || { echo "  pluggy_2_client_id não nasceu vazio"; return 1; }
+}
+
 caso pasta_0700_e_segredos_0444_menos_a_chave
+caso segredos_da_pluggy_nascem_vazios
+caso pluggy_existente_nao_e_tocado
 caso segunda_execucao_mantem
 caso pasta_com_outro_modo_falha
 caso clone_com_so_o_readme_fecha_a_pasta
