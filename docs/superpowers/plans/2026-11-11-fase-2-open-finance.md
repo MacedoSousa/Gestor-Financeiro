@@ -494,7 +494,7 @@ public interface IImportacaoDeLancamentos
 ```
 
 **Regras:**
-- Natureza pelo sinal: menor que 0 → `DESPESA`, maior que 0 → `RECEITA`. Todo item novo nasce `A_REVISAR`, com `categoria_id` nulo; a sugestão vem na etapa 5.
+- O valor chega já no sinal do sistema: a `Sincronizacao` usa `ConversaoPluggy.ValorNoSistema(tipoDaConta, valor)`, decisão 10. Natureza pelo sinal: menor que 0 → `DESPESA`, maior que 0 → `RECEITA`. Todo item novo nasce `A_REVISAR`, com `categoria_id` nulo; a sugestão vem na etapa 5.
 - A chave é procurada **também entre as apagadas**, com `IgnoreQueryFilters([Filtros.SoftDelete])` só dentro de `Importacao.cs` (regra 9, exceção D6). Apagada → ignorada, conta em `Ignorados`, nada é recriado.
 - Atualização: muda `data`, `valor`, `confirmacao` e `parcela`. A `descricao` só é atualizada enquanto `A_REVISAR`. Categoria e descrição de linha `REVISADA` são do casal e nunca mudam.
 - Pendente que sumiu do lote, com definitiva **única** (mesma conta, mesmo valor, data até 3 dias, descrição parecida): a definitiva recebe a categoria e a revisão da pendente, e a pendente vai para soft delete. Sem par único, fica como está e conta em `PendentesSemPar`. Na etapa 6, ela vai para "A conferir".
@@ -817,3 +817,7 @@ Decisões sobre o "Para o CEO" da primeira versão deste plano (PR #30). Elas va
 7. **Arquivar conta ligada** (CEO 11/11 19h). Desliga a sincronização do vínculo e mantém o histórico. Desarquivar religa e importa o período que ficou de fora. Apagar continua recusado. → Tarefas 3.1, 3.2 (`importado_ate`) e 4.5.
 8. **Reconhecimento pela categoria da Pluggy** (CEO 11/11 19h), com "A conferir" como reserva: confirmado. → Tarefa 6.2.
 9. **Medição** (CEO 11/11 19h). O `medir-saldos.sh`, incluindo de onde vem o banco, é o primeiro commit do PR da etapa 1 e é rodado pela pessoa. As tarefas 4.2 e 4.3 podem andar antes do resultado. → Tarefa 1.0.
+
+### Sobre o resultado da medição (CEO 11/11 21h)
+
+10. **Sinal** (CEO 11/11 21h). O conversor normaliza o sinal por tipo de conta: na corrente, o da Pluggy já é o do sistema; no cartão, DEBIT positivo é gasto e CREDIT negativo é pagamento ou estorno, então o sinal se inverte. → `ConversaoPluggy.ValorNoSistema` (etapa 1) e Tarefa 4.3.

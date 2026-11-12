@@ -31,6 +31,18 @@ internal static class ConversaoPluggy
         }
     }
 
+    /// <summary>
+    /// Valor da transação no sinal do sistema (negativo = saída ou gasto, positivo = entrada), pelo tipo da conta na Pluggy
+    /// (medição de 11/11; CEO 11/11 21h): na corrente (BANK) o sinal da Pluggy já é esse; no cartão (CREDIT) a compra
+    /// vem positiva e o pagamento ou estorno negativo, então inverte.
+    /// </summary>
+    public static long ValorNoSistema(string tipoDaConta, long valorDaPluggy) => tipoDaConta switch
+    {
+        "BANK" => valorDaPluggy,
+        "CREDIT" => -valorDaPluggy,
+        _ => throw new FormatException("Tipo de conta da Pluggy desconhecido."),
+    };
+
     public static DateOnly DiaDeSaoPaulo(string instanteIso)
     {
         if (!DateTimeOffset.TryParse(instanteIso, CultureInfo.InvariantCulture,

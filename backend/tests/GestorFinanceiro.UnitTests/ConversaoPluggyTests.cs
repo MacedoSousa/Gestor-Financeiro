@@ -31,6 +31,22 @@ public class ConversaoPluggyTests
     public void Valor_que_nao_e_numero_e_formato_invalido(string json) =>
         Assert.Throws<FormatException>(() => ConversaoPluggy.Centavos(Numero(json)));
 
+    // Medição de 11/11: corrente DEBIT negativo e CREDIT positivo; cartão DEBIT positivo (compra) e CREDIT negativo
+    // (pagamento ou estorno). No sistema, negativo é saída/gasto e positivo é entrada (CEO 11/11 21h, decisão 10).
+    [Theory]
+    [InlineData("BANK", -25010, -25010)]   // débito na corrente: saída
+    [InlineData("BANK", 300000, 300000)]   // crédito na corrente: entrada
+    [InlineData("CREDIT", 30000, -30000)]  // compra no cartão: gasto
+    [InlineData("CREDIT", -50000, 50000)]  // pagamento ou estorno no cartão: entrada
+    public void Sinal_e_normalizado_por_tipo_de_conta(string tipoDaConta, long valorDaPluggy, long esperado) =>
+        Assert.Equal(esperado, ConversaoPluggy.ValorNoSistema(tipoDaConta, valorDaPluggy));
+
+    [Theory]
+    [InlineData("LOAN")]
+    [InlineData("")]
+    public void Tipo_de_conta_desconhecido_e_formato_invalido(string tipoDaConta) =>
+        Assert.Throws<FormatException>(() => ConversaoPluggy.ValorNoSistema(tipoDaConta, 100));
+
     [Theory]
     [InlineData("2026-02-01T02:30:00.000Z", "2026-01-31")]
     [InlineData("2026-03-10T12:00:00.000Z", "2026-03-10")]
