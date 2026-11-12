@@ -241,6 +241,24 @@ public class RegrasDeArquitetura
         Assert.Empty(VerificadorDaPluggy.Violacoes(codigo));
     }
 
+    // ---------------------------------------------------------------- códigos de categoria da Pluggy (decisão 13)
+
+    private const string TabelaDeCategorias = "backend/src/Modules/Lancamentos/Contracts/CategoriasDoBanco.cs";
+
+    [Fact]
+    public void Codigos_de_categoria_da_Pluggy_so_na_tabela()
+    {
+        // Um código de categoria da Pluggy é um texto de 8 dígitos entre aspas; só a tabela pode tê-lo.
+        var codigo = new Regex("\"[0-9]{8}\"");
+        var ofensores = Arquivos("backend/src", "*.cs")
+            .Where(f => Relativo(f) != TabelaDeCategorias && codigo.IsMatch(File.ReadAllText(f)))
+            .Select(Relativo)
+            .ToList();
+
+        Assert.True(File.Exists(Path.Combine(RaizDoRepositorio(), TabelaDeCategorias)), $"Falta a tabela {TabelaDeCategorias}.");
+        Assert.True(ofensores.Count == 0, $"Código de categoria da Pluggy fora de {TabelaDeCategorias}: {string.Join(", ", ofensores)}");
+    }
+
     // ---------------------------------------------------------------- filtros (regra 9, D6 e D27)
 
     [Fact]

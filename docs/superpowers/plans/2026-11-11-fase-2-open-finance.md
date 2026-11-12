@@ -679,9 +679,13 @@ Task<Guid?> CriarParManualAsync(Guid transacaoImportadaId, Guid contaManualId, C
 
 **Regras:**
 - Transferência: saída numa conta ligada e entrada noutra conta ligada do casal, mesmo |valor|, datas até 1 dia útil, **par único** → `ParearComoTransferenciaAsync`. Sem par único → item `TRANSFERENCIA_SEM_PAR`.
-- Pagamento de fatura (D10): saída da corrente com `categoria_externa` = id de "pagamento de fatura" (medido na Tarefa 1.0) e crédito no cartão ligado do mesmo valor, até 1 dia útil → par.
+- Os papéis vêm de `CategoriasDoBanco.Papel(categoria_externa)` (`Lancamentos.Contracts`), a única tabela de códigos (decisão 13). O teste de arquitetura `Codigos_de_categoria_da_Pluggy_so_na_tabela` recusa os códigos em outro arquivo.
+- Pagamento de fatura (D10): saída da corrente com papel `PagamentoDeFatura` e crédito no cartão ligado do mesmo valor, até 1 dia útil → par.
   - Cartão não ligado → item, e a resolução cria o lado do cartão (`CriarParManualAsync`).
-- Aplicação e resgate (D12): transação da corrente com `categoria_externa` de investimento (medida na Tarefa 1.0) → item `APORTE_OU_RESGATE`, com o grupo sugerido pelas regras de descrição.
+- Aplicação e resgate (D12): transação da corrente com papel `Aplicacao` ou `ResgateOuRendimento` → item `APORTE_OU_RESGATE`, com o grupo sugerido pelas regras de descrição.
+- `MesmaTitularidade` reforça o par de transferência: é candidata mesmo sem a outra perna na mesma data. Sem par único, vai para "A conferir".
+- `Boleto` fica guardado para o bloco Boletos. `Iof` e `ImpostoDeRenda` são sugestão de categoria na revisão (etapa 5) e na resolução `IR_IOF_TAXA`.
+- Sem papel (`Nenhum`, inclusive sem categoria): nada automático, só as regras de descrição e "A conferir".
 
 - [ ] **Passo 1:** testes que falham:
   - `Transferencia_entre_ligadas_vira_par_nunca_gasto_e_receita`;
@@ -827,3 +831,4 @@ Decisões sobre o "Para o CEO" da primeira versão deste plano (PR #30). Elas va
 10. **Sinal** (CEO 11/11 21h). O conversor normaliza o sinal por tipo de conta: na corrente, o da Pluggy já é o do sistema; no cartão, DEBIT positivo é gasto e CREDIT negativo é pagamento ou estorno, então o sinal se inverte. → `ConversaoPluggy.ValorNoSistema` (etapa 1) e Tarefa 4.3.
 11. **Trava de conta repetida** (CEO 11/11 21h). HMAC do `transferNumber` normalizado (só os dígitos), sem código do banco: a Pluggy não o traz. `ContaPluggy.CodigoDoBanco` sai do modelo. Substitui a parte do código na decisão 1; o nome digitado continua fora da trava. → `ConversaoPluggy.TransferNumberNormalizado` (etapa 1) e Tarefa 3.2.
 12. **Conferência do cartão por fatura** (CEO 11/11 21h). Substitui a fórmula do saldo da D3, que a medição mostrou não fechar. Para cada fatura do banco, o total informado é comparado com a soma das transações com aquele `billId`. A diferença aparece em "Conexões" se persistir por duas sincronizações. Pendentes (sem `billId`) não entram. O saldo do cartão no sistema continua sendo o calculado pelas transações. Só é conferida a fatura que vence a partir de dois meses depois do início do histórico, para não acusar compras de antes do histórico (decisão do Dev, a confirmar). → `ConferenciaDasFaturas` (etapa 1) e Tarefa 4.5.
+13. **Reconhecimento por categoria** (CEO 11/11 21h). Usa os códigos medidos: `05100000` pagamento de fatura, `03000000` e `03020000` aplicação, `03060000` resgate ou rendimento, `04000000` mesma titularidade, `05010000` boleto, `15030000` IOF e `15010000` IR. A tabela fica num lugar só, com teste. → `Lancamentos.Contracts.CategoriasDoBanco` (etapa 1) e Tarefa 6.2.
