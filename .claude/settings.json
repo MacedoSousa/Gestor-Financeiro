@@ -14,11 +14,25 @@
       "Bash(scripts/guardas/verificar-repositorio.sh:*)",
       "Bash(scripts/guardas/testes.sh:*)",
       "mcp__playwright__browser_console_messages",
-      "Bash(./gradlew:*)",
-      "Bash(adb:*)",
-      "Bash(emulator:*)",
-      "Bash(sdkmanager:*)",
-      "Bash(avdmanager:*)"
+      "Bash(./gradlew lint)",
+      "Bash(./gradlew testDebugUnitTest)",
+      "Bash(./gradlew assembleDebug)",
+      "Bash(./gradlew assembleRelease)",
+      "Bash(./gradlew openApiGenerate)",
+      "Bash(./gradlew ktlintCheck)",
+      "Bash(./gradlew verifyRoborazziDebug)",
+      "Bash(./gradlew recordRoborazziDebug)",
+      "Bash(./gradlew koverXmlReport)",
+      "Bash(./gradlew connectedDebugAndroidTest)",
+      "Bash(adb devices)",
+      "Bash(adb install -r android/app/build/outputs/:*)",
+      "Bash(adb logcat --pid:*)",
+      "Bash(sdkmanager --list)",
+      "Bash(sdkmanager --list_installed)",
+      "Bash(emulator -avd gf-pixel-api36)",
+      "Bash(emulator -accel-check)",
+      "Bash(emulator -list-avds)",
+      "Bash(avdmanager list:*)"
     ],
     "deny": [
       "Read(./.env)",
@@ -39,7 +53,16 @@
       "Bash(git commit -n:*)",
       "Read(**/*.jks)",
       "Read(**/*.keystore)",
-      "Read(**/keystore.properties)"
+      "Read(**/keystore.properties)",
+      "Read(**/*.p12)",
+      "Read(**/*.pfx)",
+      "Read(**/*.bks)",
+      "Read(**/*.pepk)",
+      "Read(**/local.properties)",
+      "Read(~/.android/**)",
+      "Read(~/.gradle/gradle.properties)",
+      "Read(**/*service-account*.json)",
+      "Bash(./gradlew --scan:*)"
     ]
   },
   "hooks": {
@@ -50,6 +73,15 @@
           {
             "type": "command",
             "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/bloquear-delete-fisico.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/guardar-bash.sh"
           }
         ]
       }
