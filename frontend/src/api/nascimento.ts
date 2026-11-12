@@ -12,14 +12,17 @@ export type Inclusao = components["schemas"]["InclusaoDto"];
 
 const APELIDO_REPETIDO = "Já existe uma conta com esse nome.";
 
-/** 409 de apelido repetido: a API manda a sugestão e qual conta do banco (idExterno) esbarrou. */
+/**
+ * 409 de apelido repetido: a API manda a sugestão e a posição (`linha`) da conta no pedido que esbarrou; nunca o id da
+ * conta na Pluggy (D18).
+ */
 export class ErroDeApelido extends ErroDeApi {
   readonly sugestao: string;
-  readonly idExterno: string | null;
-  constructor(sugestao: string, idExterno: string | null) {
+  readonly linha: number | null;
+  constructor(sugestao: string, linha: number | null) {
     super(409, `${APELIDO_REPETIDO} Sugestão: ${sugestao}.`);
     this.sugestao = sugestao;
-    this.idExterno = idExterno;
+    this.linha = linha;
   }
 }
 
@@ -32,9 +35,9 @@ async function comSugestao(chamada: () => Promise<Resposta>, generica: string): 
     r = await chamada();
     return { ...r, data: undefined };
   }, generica).catch((e: unknown) => {
-    const corpo = r?.error as { title?: unknown; sugestao?: unknown; idExterno?: unknown } | undefined;
+    const corpo = r?.error as { title?: unknown; sugestao?: unknown; linha?: unknown } | undefined;
     if (r?.response.status === 409 && corpo?.title === APELIDO_REPETIDO && typeof corpo.sugestao === "string")
-      throw new ErroDeApelido(corpo.sugestao, typeof corpo.idExterno === "string" ? corpo.idExterno : null);
+      throw new ErroDeApelido(corpo.sugestao, typeof corpo.linha === "number" && Number.isInteger(corpo.linha) ? corpo.linha : null);
     throw e;
   });
 }

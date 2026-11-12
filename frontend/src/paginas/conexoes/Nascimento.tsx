@@ -317,9 +317,11 @@ function Confirmacao({ itemId, descoberta, aoAvisar }: { itemId: string; descobe
       await acoes.confirmar(montarPedido(linhas, aplicacoes, metaPorGrupo));
       aoAvisar("Pronto. As contas confirmadas aparecem em Contas com o selo do banco; o histórico chega na primeira sincronização.");
     } catch (erro) {
-      if (erro instanceof ErroDeApelido && erro.idExterno) {
-        setLinhas((ls) => ls.map((l) => (l.idExterno === erro.idExterno ? { ...l, apelido: erro.sugestao } : l)));
-        setErros({ [erro.idExterno]: { campo: "apelido", mensagem: `Já existe uma conta com esse nome. Sugerimos "${erro.sugestao}"; confira e confirme de novo.` } });
+      // O 409 aponta a posição da conta no pedido, que é a ordem de `linhas` (montarPedido não reordena).
+      const alvo = erro instanceof ErroDeApelido && erro.linha !== null ? linhas[erro.linha] : undefined;
+      if (erro instanceof ErroDeApelido && alvo) {
+        setLinhas((ls) => ls.map((l) => (l.idExterno === alvo.idExterno ? { ...l, apelido: erro.sugestao } : l)));
+        setErros({ [alvo.idExterno]: { campo: "apelido", mensagem: `Já existe uma conta com esse nome. Sugerimos "${erro.sugestao}"; confira e confirme de novo.` } });
       } else servidor.falhar(erro);
     } finally {
       setOcupado(false);
@@ -468,9 +470,12 @@ export function Nascimento() {
         <section className="cartao erro-secao" role="alert">
           <span>{descoberta.error.message}</span>
           <div className="acoes-linha">
-            <button type="button" className="botao-secundario" onClick={() => void descoberta.refetch()}>
-              Tentar de novo
-            </button>
+            {/* 409 (banco ainda não escolhido) não se resolve tentando de novo: só voltando a Conexões. */}
+            {!(descoberta.error instanceof ErroDeApi && descoberta.error.status === 409) && (
+              <button type="button" className="botao-secundario" onClick={() => void descoberta.refetch()}>
+                Tentar de novo
+              </button>
+            )}
             <Link to="/conexoes" className="botao-secundario link-botao">
               Voltar para Conexões
             </Link>

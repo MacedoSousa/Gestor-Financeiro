@@ -278,7 +278,7 @@ public class NascimentoTests(PostgresFixture pg)
 
     /// <summary>
     /// D18, item 2: o id opaco da conta na Pluggy só aparece nas respostas autenticadas de descoberta e confirmação; nunca
-    /// em log, de nenhuma categoria e em nenhum nível (padrão do LogDaPluggyTests).
+    /// em log (padrão do LogDaPluggyTests), de nenhuma categoria, nos níveis que o host grava (os do appsettings).
     /// </summary>
     [Fact]
     public async Task Descoberta_e_confirmacao_nao_logam_o_id_da_conta()
@@ -582,12 +582,42 @@ public class NascimentoTests(PostgresFixture pg)
         }), HttpStatusCode.Created);
         var item = await ItemComContasAsync(c);
 
-        var r = await EsperarAsync(NascerAsync(c.Ana, item, [Criar(Corrente.Id, "Itaú Corrente · Ana", c.AnaId)]), HttpStatusCode.Conflict);
+        // A corrente é a segunda linha do pedido: o 409 aponta a linha, não o id da Pluggy (D18, item 2: erro nunca leva o id).
+        var r = await EsperarAsync(NascerAsync(c.Ana, item,
+            [new { idExterno = CartaoDaAna.Id, acao = "NAO_IMPORTAR" }, Criar(Corrente.Id, "Itaú Corrente · Ana", c.AnaId)]),
+            HttpStatusCode.Conflict);
 
+        var texto = await r.Content.ReadAsStringAsync();
         var problema = await JsonAsync(r);
         Assert.Equal("Já existe uma conta com esse nome.", problema.GetProperty("title").GetString());
         Assert.Equal("Itaú Corrente · Ana (2)", problema.GetProperty("sugestao").GetString());
-        Assert.Equal(Corrente.Id, problema.GetProperty("idExterno").GetString());
+        Assert.Equal(1, problema.GetProperty("linha").GetInt32());
+        Assert.False(problema.TryGetProperty("idExterno", out _));
+        Assert.DoesNotContain(Corrente.Id, texto, StringComparison.Ordinal);
+        Assert.DoesNotContain(CartaoDaAna.Id, texto, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Apelido_repetido_na_inclusao_nao_devolve_o_id_da_conta()
+    {
+        await using var c = await IniciarAsync();
+        var item = await ItemComContasAsync(c);
+        await EsperarAsync(NascerAsync(c.Ana, item, [new { idExterno = CartaoDaAna.Id, acao = "NAO_IMPORTAR" }]), HttpStatusCode.NoContent);
+        var vinculo = (await DescobertaAsync(c.Ana, item)).GetProperty("naoImportadas").EnumerateArray().Single().GetProperty("vinculoId").GetGuid();
+        await EsperarAsync(c.Ana.PostAsJsonAsync("/api/v1/contas", new
+        {
+            tipo = "CORRENTE", apelido = "Itaú Cartão · Ana", saldoInicialCentavos = 0L, saldoInicialEm = "2026-01-01",
+        }), HttpStatusCode.Created);
+
+        var r = await EsperarAsync(c.Ana.PostAsJsonAsync($"/api/v1/integracoes/vinculos/{vinculo}/inclusao", new
+        {
+            acao = "CRIAR", apelido = "Itaú Cartão · Ana", titularUsuarioId = c.AnaId, diaFechamento = 3, diaVencimento = 10,
+        }), HttpStatusCode.Conflict);
+
+        var texto = await r.Content.ReadAsStringAsync();
+        Assert.Equal("Itaú Cartão · Ana (2)", (await JsonAsync(r)).GetProperty("sugestao").GetString());
+        Assert.DoesNotContain(CartaoDaAna.Id, texto, StringComparison.Ordinal);
+        Assert.DoesNotContain("idExterno", texto, StringComparison.Ordinal);
     }
 
     [Fact]

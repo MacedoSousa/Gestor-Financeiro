@@ -58,7 +58,8 @@ internal sealed class Nascimento(
     private abstract record Tarefa
     {
         /// <param name="Vinculos">Os vínculos que apontam para a conta: a troca de id (IdEmUso) mexe só neles.</param>
-        public sealed record CriarConta(string IdExterno, NovaContaLigada Pedido, IReadOnlyList<Guid> Vinculos) : Tarefa;
+        /// <param name="Linha">Posição da conta no pedido: o 409 de apelido aponta a linha, nunca o id da Pluggy (D18).</param>
+        public sealed record CriarConta(int Linha, NovaContaLigada Pedido, IReadOnlyList<Guid> Vinculos) : Tarefa;
         public sealed record MarcarLigada(Guid ContaId) : Tarefa;
         public sealed record CriarGrupo(string Nome, NovaContaLigada Pedido, Guid? MetaId, IReadOnlyList<Guid> Vinculos) : Tarefa;
     }
@@ -121,7 +122,7 @@ internal sealed class Nascimento(
         var doCasal = (await consultaDeContas.ListarAsync(ct)).ToDictionary(c => c.Id);
         var agora = relogio.GetUtcNow();
 
-        foreach (var confirmada in contas)
+        foreach (var (confirmada, linha) in contas.Select((c, i) => (c, i)))
         {
             var conta = doBanco[confirmada.IdExterno!];
             var tipo = Vinculo.TipoDe(conta);
@@ -164,7 +165,7 @@ internal sealed class Nascimento(
 
             tarefas.Add(ligar
                 ? new Tarefa.MarcarLigada(destino)
-                : new Tarefa.CriarConta(conta.Id, NovaConta(a, conta, confirmada, destino), [vinculo.Id]));
+                : new Tarefa.CriarConta(linha, NovaConta(a, conta, confirmada, destino), [vinculo.Id]));
         }
 
         return GravarAplicacoes(a, leitura, aplicacoes, vinculos, doCasal, tarefas) ?? new ResultadoDeNascimento.Feito();
@@ -255,7 +256,7 @@ internal sealed class Nascimento(
         switch (tarefa)
         {
             case Tarefa.CriarConta t:
-                return (await CriarAsync(t.Pedido, t.Vinculos, t.IdExterno, ct)).Recusa;
+                return (await CriarAsync(t.Pedido, t.Vinculos, t.Linha, ct)).Recusa;
             case Tarefa.MarcarLigada t:
                 return await contasLigadas.MarcarLigadaAsync(t.ContaId, ct) ? null : new ResultadoDeNascimento.Recusado(TituloContaSumiu, 409);
             case Tarefa.CriarGrupo t:
@@ -276,10 +277,10 @@ internal sealed class Nascimento(
     /// que nenhum vínculo aponta.
     /// </summary>
     private async Task<(ResultadoDeNascimento? Recusa, Guid ContaId)> CriarAsync(NovaContaLigada pedido, IReadOnlyList<Guid> vinculoIds,
-        string? idExterno, CancellationToken ct)
+        int? linha, CancellationToken ct)
     {
         var resultado = await contasLigadas.CriarAsync(pedido, ct);
-        if (resultado is not ResultadoDaContaLigada.IdEmUso) return (Traduzir(resultado, idExterno), pedido.ContaId);
+        if (resultado is not ResultadoDaContaLigada.IdEmUso) return (Traduzir(resultado, linha), pedido.ContaId);
 
         var casal = atual.CasalId ?? throw new InvalidOperationException("Nascimento sem casal.");
         Guid? alvo = null;
@@ -305,14 +306,14 @@ internal sealed class Nascimento(
         resultado = await contasLigadas.CriarAsync(pedido with { ContaId = id }, ct);
         return resultado is ResultadoDaContaLigada.IdEmUso
             ? (new ResultadoDeNascimento.Recusado(TituloTenteDeNovo, 409), id)
-            : (Traduzir(resultado, idExterno), id);
+            : (Traduzir(resultado, linha), id);
     }
 
-    private static ResultadoDeNascimento? Traduzir(ResultadoDaContaLigada resultado, string? idExterno) => resultado switch
+    private static ResultadoDeNascimento? Traduzir(ResultadoDaContaLigada resultado, int? linha) => resultado switch
     {
         ResultadoDaContaLigada.Pronta => null,
         ResultadoDaContaLigada.ApelidoRepetido r => new ResultadoDeNascimento.Recusado(TituloApelidoRepetido, 409,
-            new Dictionary<string, object?> { ["sugestao"] = r.Sugestao, ["idExterno"] = idExterno }),
+            new Dictionary<string, object?> { ["sugestao"] = r.Sugestao, ["linha"] = linha }),
         ResultadoDaContaLigada.Invalida i => new ResultadoDeNascimento.Invalido(i.Erros),
         _ => throw new InvalidOperationException(resultado.GetType().Name),
     };
