@@ -13,6 +13,7 @@ using GestorFinanceiro.SharedKernel.Seguranca;
 using GestorFinanceiro.UnitTests;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 using Npgsql;
 
 namespace GestorFinanceiro.IntegrationTests;
@@ -82,11 +83,11 @@ public class NascimentoTests(PostgresFixture pg)
         JsonDocument.Parse(await r.Content.ReadAsStringAsync()).RootElement.Clone();
 
     /// <summary>Cadastra a conexão (slot 1 para a Ana, 2 para o Bruno) com um item sintético; devolve o id do item no sistema.</summary>
-    private static async Task<(Guid ItemId, string ItemPluggy)> ConectarAsync(Ctx c, HttpClient cliente, int slot, string banco = "Itaú")
+    private static async Task<(Guid ItemId, string ItemPluggy)> ConectarAsync(Ctx c, HttpClient cliente, int slot, string codigoBanco = "341")
     {
         var itemPluggy = $"item-sintetico-{Guid.NewGuid():N}";
         c.Pluggy.Cadastrar(slot == 1 ? IdSlot1 : IdSlot2, itemPluggy);
-        var r = await cliente.PostAsJsonAsync(RotaConexoes, new { slot, itemId = itemPluggy, banco });
+        var r = await cliente.PostAsJsonAsync(RotaConexoes, new { slot, itemId = itemPluggy, codigoBanco });
         Assert.Equal(HttpStatusCode.Created, r.StatusCode);
         return ((await JsonAsync(r)).GetProperty("items")[0].GetProperty("id").GetGuid(), itemPluggy);
     }
@@ -110,7 +111,9 @@ public class NascimentoTests(PostgresFixture pg)
         var db = escopo.ServiceProvider.GetRequiredService<IntegracoesDbContext>();
         var cofre = escopo.ServiceProvider.GetRequiredService<ICofre>();
         casal ??= await EscalarAsync<Guid>(c.Banco, $"SELECT casal_id FROM integracoes.items WHERE id = '{item}'");
-        db.Vinculos.Add(Vinculo.Criar(casal.Value, item, tipo, conta.Id, contaId ?? Guid.CreateVersion7(), Vinculo.IdentidadeDe(conta, cofre)));
+        var codigoBanco = await EscalarAsync<string>(c.Banco, $"SELECT codigo_banco FROM integracoes.items WHERE id = '{item}'");
+        db.Vinculos.Add(Vinculo.Criar(casal.Value, item, tipo, conta.Id, contaId ?? Guid.CreateVersion7(),
+            Vinculo.IdentidadeDe(conta, codigoBanco, cofre)));
         await db.SaveChangesAsync();
     }
 
@@ -186,18 +189,120 @@ public class NascimentoTests(PostgresFixture pg)
     }
 
     [Fact]
-    public async Task Nome_do_banco_diferente_nas_duas_conexoes_ainda_trava()
+    public async Task Mesmo_banco_por_dois_items_ainda_trava()
     {
         await using var c = await IniciarAsync();
-        var (itemDaAna, _) = await ConectarAsync(c, c.Ana, 1, "Itaú");
+        var (itemDaAna, _) = await ConectarAsync(c, c.Ana, 1, "341");
         await VincularAsync(c, itemDaAna, "CONTA", Corrente);
-        var (itemDoBruno, pluggyDoBruno) = await ConectarAsync(c, c.Bruno, 2, "itau unibanco");
+        var (itemDoBruno, pluggyDoBruno) = await ConectarAsync(c, c.Bruno, 2, "341");
         c.Pluggy.CadastrarConta(pluggyDoBruno, Corrente with { Id = "conta-sintetica-do-bruno", AgenciaEConta = "0001 12345 6" });
 
         var conta = ContaEncontrada(await DescobertaAsync(c.Bruno, itemDoBruno), "conta-sintetica-do-bruno");
 
         Assert.Equal("Ana", conta.GetProperty("jaVemDe").GetString());
-        Assert.Equal("itau unibanco Corrente · Bruno", conta.GetProperty("apelidoSugerido").GetString());
+        Assert.Equal("Itaú Corrente · Bruno", conta.GetProperty("apelidoSugerido").GetString());
+    }
+
+    /// <summary>D18, item 1: a identidade inclui o código do banco; agência e conta iguais em bancos diferentes não colidem.</summary>
+    [Fact]
+    public async Task Bancos_diferentes_com_a_mesma_agencia_e_conta_nascem_os_dois()
+    {
+        await using var c = await IniciarAsync();
+        var (itemDaAna, pluggyDaAna) = await ConectarAsync(c, c.Ana, 1, "341");
+        c.Pluggy.CadastrarConta(pluggyDaAna, Corrente);
+        var (itemDoBruno, pluggyDoBruno) = await ConectarAsync(c, c.Bruno, 2, "260");
+        c.Pluggy.CadastrarConta(pluggyDoBruno, Corrente with { Id = "conta-sintetica-do-bruno" });
+        await EsperarAsync(NascerAsync(c.Ana, itemDaAna, [Criar(Corrente.Id, "Itaú Corrente · Ana", c.AnaId)]), HttpStatusCode.NoContent);
+
+        var conta = ContaEncontrada(await DescobertaAsync(c.Bruno, itemDoBruno), "conta-sintetica-do-bruno");
+        Assert.Equal(JsonValueKind.Null, conta.GetProperty("jaVemDe").ValueKind);
+        await EsperarAsync(NascerAsync(c.Bruno, itemDoBruno, [Criar("conta-sintetica-do-bruno", "Nubank Corrente · Bruno", c.BrunoId)]),
+            HttpStatusCode.NoContent);
+
+        Assert.Equal(2L, await EscalarAsync<long>(c.Banco, "SELECT count(*) FROM contas.contas WHERE ligada_em IS NOT NULL"));
+        Assert.Equal(2L, await EscalarAsync<long>(c.Banco, "SELECT count(DISTINCT identidade_hmac) FROM integracoes.vinculos"));
+    }
+
+    /// <summary>D18, item 1: o mesmo banco por dois items (conjunta pelos dois cônjuges) continua recusado na confirmação.</summary>
+    [Fact]
+    public async Task Mesma_conta_do_mesmo_banco_por_dois_items_e_recusada_na_confirmacao()
+    {
+        await using var c = await IniciarAsync();
+        var (itemDaAna, pluggyDaAna) = await ConectarAsync(c, c.Ana, 1, "341");
+        c.Pluggy.CadastrarConta(pluggyDaAna, Corrente);
+        var (itemDoBruno, pluggyDoBruno) = await ConectarAsync(c, c.Bruno, 2, "341");
+        c.Pluggy.CadastrarConta(pluggyDoBruno, Corrente with { Id = "conta-sintetica-do-bruno" });
+        await EsperarAsync(NascerAsync(c.Ana, itemDaAna, [Criar(Corrente.Id, "Itaú Corrente · Conjunta")]), HttpStatusCode.NoContent);
+
+        var r = await EsperarAsync(NascerAsync(c.Bruno, itemDoBruno, [Criar("conta-sintetica-do-bruno", "Itaú Corrente · Bruno")]),
+            HttpStatusCode.Conflict);
+
+        Assert.Equal("Esta conta já vem da conexão de Ana.", await TituloAsync(r));
+        Assert.Equal(1L, await EscalarAsync<long>(c.Banco, "SELECT count(*) FROM contas.contas WHERE ligada_em IS NOT NULL"));
+    }
+
+    private const string TituloEscolhaOBanco = "Escolha o banco desta conexão antes de ver as contas.";
+
+    private static string RotaBancoDoItem(Guid item) => $"/api/v1/integracoes/items/{item}/banco";
+
+    /// <summary>D18, item 1: item cadastrado antes do código (os dois de /opt) não abre a descoberta até o titular escolher o banco.</summary>
+    [Fact]
+    public async Task Item_sem_codigo_do_banco_pede_a_escolha_antes_das_contas()
+    {
+        await using var c = await IniciarAsync();
+        var (item, itemPluggy) = await ConectarAsync(c, c.Ana, 1);
+        c.Pluggy.CadastrarConta(itemPluggy, Corrente);
+        await EscalarAsync<int>(c.Banco, $"UPDATE integracoes.items SET codigo_banco = NULL WHERE id = '{item}' RETURNING 1");
+
+        var descoberta = await EsperarAsync(c.Ana.GetAsync(RotaDescoberta(item)), HttpStatusCode.Conflict);
+        Assert.Equal(TituloEscolhaOBanco, await TituloAsync(descoberta));
+        var nascimento = await EsperarAsync(NascerAsync(c.Ana, item, [Criar(Corrente.Id, "Itaú Corrente · Ana", c.AnaId)]),
+            HttpStatusCode.Conflict);
+        Assert.Equal(TituloEscolhaOBanco, await TituloAsync(nascimento));
+
+        // Só o titular escolhe; o código tem 3 dígitos; "Outro" precisa do nome.
+        await EsperarAsync(c.Bruno.PutAsJsonAsync(RotaBancoDoItem(item), new { codigoBanco = "341" }), HttpStatusCode.Forbidden);
+        await EsperarAsync(c.Ana.PutAsJsonAsync(RotaBancoDoItem(item), new { codigoBanco = "41" }), HttpStatusCode.BadRequest);
+        await EsperarAsync(c.Ana.PutAsJsonAsync(RotaBancoDoItem(item), new { codigoBanco = "999" }), HttpStatusCode.BadRequest);
+        await EsperarAsync(c.Ana.PutAsJsonAsync(RotaBancoDoItem(Guid.CreateVersion7()), new { codigoBanco = "341" }), HttpStatusCode.NotFound);
+
+        await EsperarAsync(c.Ana.PutAsJsonAsync(RotaBancoDoItem(item), new { codigoBanco = "341" }), HttpStatusCode.NoContent);
+
+        Assert.Equal("341|Itaú", await EscalarAsync<string>(c.Banco,
+            $"SELECT codigo_banco || '|' || banco FROM integracoes.items WHERE id = '{item}'"));
+        await DescobertaAsync(c.Ana, item);
+        // Escolhido uma vez, não troca (as identidades já gravadas dependem dele): tire o banco e cadastre de novo.
+        var deNovo = await EsperarAsync(c.Ana.PutAsJsonAsync(RotaBancoDoItem(item), new { codigoBanco = "260" }), HttpStatusCode.Conflict);
+        Assert.Equal("O banco desta conexão já foi escolhido.", await TituloAsync(deNovo));
+    }
+
+    /// <summary>
+    /// D18, item 2: o id opaco da conta na Pluggy só aparece nas respostas autenticadas de descoberta e confirmação; nunca
+    /// em log, de nenhuma categoria e em nenhum nível (padrão do LogDaPluggyTests).
+    /// </summary>
+    [Fact]
+    public async Task Descoberta_e_confirmacao_nao_logam_o_id_da_conta()
+    {
+        var logs = new LogsCapturados();
+        await using var c = await IniciarAsync(s => s.AddSingleton<ILoggerProvider>(logs));
+        var (item, itemPluggy) = await ConectarAsync(c, c.Ana, 1);
+        c.Pluggy.CadastrarConta(itemPluggy, Corrente);
+        c.Pluggy.CadastrarConta(itemPluggy, CartaoDaAna);
+        c.Pluggy.CadastrarInvestimento(itemPluggy, new InvestimentoPluggy("cdb-sintetico-1", "FIXED_INCOME", "CDB", "CDB", 1_000));
+
+        await DescobertaAsync(c.Ana, item);
+        await EsperarAsync(NascerAsync(c.Ana, item, [new { idExterno = "conta-sintetica-inexistente", acao = "CRIAR", apelido = "X" }]),
+            HttpStatusCode.BadRequest);
+        await EsperarAsync(NascerAsync(c.Ana, item,
+            [Criar(Corrente.Id, "Itaú Corrente · Ana", c.AnaId), new { idExterno = CartaoDaAna.Id, acao = "NAO_IMPORTAR" }],
+            [Grupo("cdb-sintetico-1", "CDBs Casa")]), HttpStatusCode.NoContent);
+        await EsperarAsync(c.Ana.GetAsync(RotaDescoberta(item)), HttpStatusCode.OK);
+
+        Assert.NotEmpty(logs.Linhas);
+        string[] proibidos = [Corrente.Id, CartaoDaAna.Id, "cdb-sintetico-1", "conta-sintetica-inexistente", itemPluggy];
+        foreach (var linha in logs.Linhas)
+            foreach (var p in proibidos)
+                Assert.DoesNotContain(p, linha, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

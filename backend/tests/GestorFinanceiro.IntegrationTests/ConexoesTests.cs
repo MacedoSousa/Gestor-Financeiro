@@ -95,7 +95,7 @@ public class ConexoesTests(PostgresFixture pg)
         Assert.Null(await GravarAsync(c, (db, _) => db.Conexoes.Add(conexao)));
 
         var erro = await GravarAsync(c, (db, cofre) =>
-            db.Items.Add(Item.Criar(outroCasal, conexao.Id, ItemSintetico(), "Itaú", EstadoDoItem.Ativo, null, null, cofre)));
+            db.Items.Add(Item.Criar(outroCasal, conexao.Id, ItemSintetico(), "341", "Itaú", EstadoDoItem.Ativo, null, null, cofre)));
 
         Assert.Equal(PostgresErrorCodes.ForeignKeyViolation, erro);
     }
@@ -119,7 +119,7 @@ public class ConexoesTests(PostgresFixture pg)
         Assert.Null(await GravarAsync(c, (db, cofre) =>
         {
             db.Conexoes.Add(conexao);
-            item = Item.Criar(c.CasalId, conexao.Id, itemId, "Itaú", EstadoDoItem.Ativo, null, null, cofre);
+            item = Item.Criar(c.CasalId, conexao.Id, itemId, "341", "Itaú", EstadoDoItem.Ativo, null, null, cofre);
             db.Items.Add(item);
         }));
 
@@ -149,12 +149,12 @@ public class ConexoesTests(PostgresFixture pg)
         Assert.Null(await GravarAsync(c, (db, cofre) =>
         {
             db.Conexoes.AddRange(daAna, doBruno);
-            db.Items.Add(Item.Criar(c.CasalId, daAna.Id, itemId, "Itaú", EstadoDoItem.Ativo, null, null, cofre));
+            db.Items.Add(Item.Criar(c.CasalId, daAna.Id, itemId, "341", "Itaú", EstadoDoItem.Ativo, null, null, cofre));
         }));
 
         // Mesmo item, mesmo que pela outra conexão e com espaços em volta.
         Assert.Equal(ViolacaoDeUnicidade, await GravarAsync(c, (db, cofre) =>
-            db.Items.Add(Item.Criar(c.CasalId, doBruno.Id, $"  {itemId} ", "Itaú", EstadoDoItem.Ativo, null, null, cofre))));
+            db.Items.Add(Item.Criar(c.CasalId, doBruno.Id, $"  {itemId} ", "341", "Itaú", EstadoDoItem.Ativo, null, null, cofre))));
     }
 
     [Fact]
@@ -229,8 +229,8 @@ public class ConexoesTests(PostgresFixture pg)
 
     private static async Task<string> TituloAsync(HttpResponseMessage r) => (await JsonAsync(r)).GetProperty("title").GetString()!;
 
-    private static Task<HttpResponseMessage> CadastrarAsync(HttpClient cliente, int slot, string itemId, string banco = "Itaú") =>
-        cliente.PostAsJsonAsync(Rota, new { slot, itemId, banco });
+    private static Task<HttpResponseMessage> CadastrarAsync(HttpClient cliente, int slot, string itemId, string codigoBanco = "341") =>
+        cliente.PostAsJsonAsync(Rota, new { slot, itemId, codigoBanco });
 
     private static async Task<JsonElement> ConexoesAsync(HttpClient cliente)
     {
@@ -286,7 +286,7 @@ public class ConexoesTests(PostgresFixture pg)
         Assert.Equal("ATIVO", Assert.Single(daAna.GetProperty("items").EnumerateArray()).GetProperty("estado").GetString());
 
         // …mas não acrescenta, não tira item e não apaga a conexão (D21).
-        var acrescentar = await t.Bruno.PostAsJsonAsync($"{Rota}/{id}/items", new { itemId = outro, banco = "Nubank" });
+        var acrescentar = await t.Bruno.PostAsJsonAsync($"{Rota}/{id}/items", new { itemId = outro, codigoBanco = "260" });
         Assert.Equal(HttpStatusCode.Forbidden, acrescentar.StatusCode);
         Assert.Equal(TituloSoOTitular, await TituloAsync(acrescentar));
         Assert.Equal(HttpStatusCode.Forbidden, (await t.Bruno.DeleteAsync($"{Rota}/{id}/items/{item}")).StatusCode);
@@ -400,9 +400,9 @@ public class ConexoesTests(PostgresFixture pg)
         t.Pluggy.Cadastrar(IdSlot1, vencendo, consentimentoVenceEm: new DateTimeOffset(2026, 11, 15, 2, 30, 0, TimeSpan.Zero));
         t.Pluggy.Cadastrar(IdSlot1, comErro, status: "LOGIN_ERROR", consentimentoVenceEm: agora.AddDays(300));
 
-        var conexao = await JsonAsync(await CadastrarAsync(t.Ana, 1, vencendo, "Itaú"));
+        var conexao = await JsonAsync(await CadastrarAsync(t.Ana, 1, vencendo, "341"));
         var id = conexao.GetProperty("id").GetGuid();
-        var segundo = await t.Ana.PostAsJsonAsync($"{Rota}/{id}/items", new { itemId = comErro, banco = "Nubank" });
+        var segundo = await t.Ana.PostAsJsonAsync($"{Rota}/{id}/items", new { itemId = comErro, codigoBanco = "260" });
         Assert.Equal(HttpStatusCode.Created, segundo.StatusCode);
 
         var items = Assert.Single((await ConexoesAsync(t.Ana)).GetProperty("conexoes").EnumerateArray())
@@ -433,7 +433,7 @@ public class ConexoesTests(PostgresFixture pg)
         Assert.Equal(TituloJaTemConexao, await TituloAsync(segunda));
 
         // O mesmo banco duas vezes, na mesma conexão ou na do outro cônjuge.
-        var mesmo = await t.Ana.PostAsJsonAsync($"{Rota}/{id}/items", new { itemId = itemId.ToUpperInvariant(), banco = "Itaú" });
+        var mesmo = await t.Ana.PostAsJsonAsync($"{Rota}/{id}/items", new { itemId = itemId.ToUpperInvariant(), codigoBanco = "341" });
         Assert.Equal(HttpStatusCode.Conflict, mesmo.StatusCode);
         Assert.Equal(TituloItemRepetido, await TituloAsync(mesmo));
         var peloBruno = await CadastrarAsync(t.Bruno, 2, itemId);
@@ -458,7 +458,7 @@ public class ConexoesTests(PostgresFixture pg)
         Assert.Empty(Assert.Single((await ConexoesAsync(t.Ana)).GetProperty("conexoes").EnumerateArray()).GetProperty("items").EnumerateArray());
         // Item apagado pode voltar (troca do item).
         Assert.Equal(HttpStatusCode.Created,
-            (await t.Ana.PostAsJsonAsync($"{Rota}/{id}/items", new { itemId, banco = "Itaú" })).StatusCode);
+            (await t.Ana.PostAsJsonAsync($"{Rota}/{id}/items", new { itemId, codigoBanco = "341" })).StatusCode);
 
         // Apagar a conexão apaga os items e libera o slot e o cônjuge.
         Assert.Equal(HttpStatusCode.NoContent, (await t.Ana.DeleteAsync($"{Rota}/{id}")).StatusCode);
@@ -481,19 +481,79 @@ public class ConexoesTests(PostgresFixture pg)
         var criada = await CadastrarAsync(t.Ana, 1, aceito);
         await Guardar(criada);
         var id = (await JsonAsync(criada)).GetProperty("id").GetGuid();
-        await Guardar(await t.Ana.PostAsJsonAsync($"{Rota}/{id}/items", new { itemId = recusado, banco = "Nubank" }));
-        await Guardar(await t.Ana.PostAsJsonAsync($"{Rota}/{id}/items", new { itemId = aceito, banco = "Itaú" }));
-        await Guardar(await t.Bruno.PostAsJsonAsync($"{Rota}/{id}/items", new { itemId = recusado, banco = "Nubank" }));
+        await Guardar(await t.Ana.PostAsJsonAsync($"{Rota}/{id}/items", new { itemId = recusado, codigoBanco = "260" }));
+        await Guardar(await t.Ana.PostAsJsonAsync($"{Rota}/{id}/items", new { itemId = aceito, codigoBanco = "341" }));
+        await Guardar(await t.Bruno.PostAsJsonAsync($"{Rota}/{id}/items", new { itemId = recusado, codigoBanco = "260" }));
         await Guardar(await CadastrarAsync(t.Bruno, 2, recusado));
         await Guardar(await t.Ana.GetAsync(Rota));
         await Guardar(await t.Bruno.GetAsync(Rota));
         t.Pluggy.Falha = new HttpRequestException($"falha com {recusado}");
-        await Guardar(await t.Ana.PostAsJsonAsync($"{Rota}/{id}/items", new { itemId = recusado, banco = "Nubank" }));
+        await Guardar(await t.Ana.PostAsJsonAsync($"{Rota}/{id}/items", new { itemId = recusado, codigoBanco = "260" }));
 
         string[] proibidos = [aceito, recusado, IdSlot1, SegredoSlot1, IdSlot2, SegredoSlot2];
         Assert.Equal(8, corpos.Count);
         foreach (var texto in corpos.Concat(t.Logs.Linhas))
             foreach (var p in proibidos)
                 Assert.DoesNotContain(p, texto, StringComparison.OrdinalIgnoreCase);
+    }
+
+    // ------------------------------------------------------------------ D18: banco pelo código COMPE
+
+    [Fact]
+    public async Task Cadastro_exige_o_codigo_do_banco()
+    {
+        await using var t = await NovoCasalComApiAsync();
+        var itemId = ItemSintetico();
+        t.Pluggy.Cadastrar(IdSlot1, itemId);
+
+        var semCodigo = await t.Ana.PostAsJsonAsync(Rota, new { slot = 1, itemId, banco = "Itaú" });
+        var codigoRuim = await t.Ana.PostAsJsonAsync(Rota, new { slot = 1, itemId, codigoBanco = "34a" });
+        var outroSemNome = await t.Ana.PostAsJsonAsync(Rota, new { slot = 1, itemId, codigoBanco = "999" });
+
+        foreach (var (r, campo) in new[] { (semCodigo, "codigoBanco"), (codigoRuim, "codigoBanco"), (outroSemNome, "banco") })
+        {
+            Assert.Equal(HttpStatusCode.BadRequest, r.StatusCode);
+            Assert.True((await JsonAsync(r)).GetProperty("errors").TryGetProperty(campo, out _), campo);
+        }
+        Assert.Equal(0L, await ContarAsync(t.C, "items"));
+        Assert.Empty(t.Pluggy.Consultas);
+    }
+
+    [Fact]
+    public async Task Banco_da_lista_usa_o_nome_da_lista_e_Outro_usa_o_texto()
+    {
+        await using var t = await NovoCasalComApiAsync();
+        var itau = ItemSintetico();
+        var outro = ItemSintetico();
+        t.Pluggy.Cadastrar(IdSlot1, itau);
+        t.Pluggy.Cadastrar(IdSlot1, outro);
+
+        var conexao = await JsonAsync(await t.Ana.PostAsJsonAsync(Rota, new { slot = 1, itemId = itau, codigoBanco = "341", banco = "ignorado" }));
+        var primeiro = Assert.Single(conexao.GetProperty("items").EnumerateArray());
+        Assert.Equal("Itaú", primeiro.GetProperty("banco").GetString());
+        Assert.Equal("341", primeiro.GetProperty("codigoBanco").GetString());
+
+        var r = await t.Ana.PostAsJsonAsync($"{Rota}/{conexao.GetProperty("id").GetGuid()}/items",
+            new { itemId = outro, codigoBanco = "999", banco = " Banco Sintético " });
+        Assert.Equal(HttpStatusCode.Created, r.StatusCode);
+        var segundo = await JsonAsync(r);
+        Assert.Equal("Banco Sintético", segundo.GetProperty("banco").GetString());
+        Assert.Equal("999", segundo.GetProperty("codigoBanco").GetString());
+        Assert.Equal("999", await EscalarAsync<string>(t.C.Banco,
+            $"SELECT codigo_banco FROM integracoes.items WHERE id = '{segundo.GetProperty("id").GetGuid()}'"));
+    }
+
+    [Fact]
+    public async Task Lista_de_bancos_vem_com_as_conexoes()
+    {
+        await using var t = await NovoCasalComApiAsync();
+
+        var bancos = (await ConexoesAsync(t.Bruno)).GetProperty("bancos").EnumerateArray()
+            .ToDictionary(b => b.GetProperty("codigo").GetString()!, b => b.GetProperty("nome").GetString());
+
+        Assert.Equal(16, bancos.Count);
+        Assert.Equal("Itaú", bancos["341"]);
+        Assert.Equal("Nubank", bancos["260"]);
+        Assert.Equal("Banco do Brasil", bancos["001"]);
     }
 }

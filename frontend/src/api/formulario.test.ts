@@ -25,6 +25,13 @@ describe("títulos da API que vão para a tela", () => {
     expect(await mensagem(409, { title: "Esta aplicação já está em outro grupo." })).toBe("Esta aplicação já está em outro grupo.");
   });
 
+  it("os do banco escolhido pelo código (D18) passam", async () => {
+    expect(await mensagem(409, { title: "Escolha o banco desta conexão antes de ver as contas." })).toBe(
+      "Escolha o banco desta conexão antes de ver as contas.",
+    );
+    expect(await mensagem(409, { title: "O banco desta conexão já foi escolhido." })).toBe("O banco desta conexão já foi escolhido.");
+  });
+
   it("os com nome passam só no formato exato", async () => {
     expect(await mensagem(409, { title: "Esta conta já vem da conexão de Ana." })).toBe("Esta conta já vem da conexão de Ana.");
     expect(await mensagem(409, { title: "Não deu para ligar o grupo CDBs Casa à meta escolhida." })).toBe(

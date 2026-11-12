@@ -800,6 +800,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/integracoes/items/{id}/banco": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Escolhe o banco (código COMPE) de um item cadastrado antes do código (D18). Só o titular (senão 403); uma vez só (já escolhido dá 409). Nada muda na Pluggy. */
+        put: operations["EscolherBancoDoItem"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/integracoes/items/{id}/descoberta": {
         parameters: {
             query?: never;
@@ -913,6 +930,14 @@ export interface components {
             contaId: string;
             texto: string;
         };
+        BancoDoItemDto: {
+            codigoBanco: null | string;
+            banco: null | string;
+        };
+        BancoDto: {
+            codigo: string;
+            nome: string;
+        };
         CadastroDoCasalDto: {
             codigoInstalacao: string;
             nomeFamilia: string;
@@ -985,6 +1010,7 @@ export interface components {
         ConexoesDto: {
             conexoes: components["schemas"]["ConexaoDto"][];
             slots: components["schemas"]["SlotDto"][];
+            bancos: components["schemas"]["BancoDto"][];
         };
         ConfirmacaoDeIdentidadeDto: {
             codigoTotp: null | string;
@@ -1216,6 +1242,7 @@ export interface components {
             /** Format: uuid */
             id: string;
             banco: string;
+            codigoBanco: null | string;
             estado: string;
             motivo: null | string;
             /** Format: date */
@@ -1303,6 +1330,7 @@ export interface components {
             /** Format: int32 */
             slot: null | number | string;
             itemId: null | string;
+            codigoBanco: null | string;
             banco: null | string;
         };
         NovaContaDto: {
@@ -1355,6 +1383,7 @@ export interface components {
         };
         NovoItemDto: {
             itemId: null | string;
+            codigoBanco: null | string;
             banco: null | string;
         };
         NovoLancamentoDto: {
@@ -3870,6 +3899,64 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    EscolherBancoDoItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BancoDoItemDto"];
+            };
+        };
         responses: {
             /** @description No Content */
             204: {

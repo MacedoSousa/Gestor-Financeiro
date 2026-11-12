@@ -1,5 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { avisoDoSlot, estadoDoItem, rotuloDoSlot, separarConexoes, textoDoConsentimento, validarCadastro } from "./conexoes";
+import {
+  avisoDoSlot,
+  estadoDoItem,
+  nomeDoBancoEscolhido,
+  OUTRO_BANCO,
+  pedidoDoBanco,
+  rotuloDoSlot,
+  separarConexoes,
+  textoDoConsentimento,
+  validarBanco,
+  validarCadastro,
+} from "./conexoes";
 
 const slot = (n: number, configurado: boolean, emUso: boolean) => ({ slot: n, configurado, emUso });
 
@@ -78,8 +89,44 @@ describe("rotuloDoSlot e avisoDoSlot", () => {
   });
 });
 
+const itau = { escolha: "341", codigoOutro: "", nomeOutro: "" };
+const outro = { escolha: OUTRO_BANCO, codigoOutro: " 999 ", nomeOutro: " Banco Sintético " };
+const bancos = [
+  { codigo: "260", nome: "Nubank" },
+  { codigo: "341", nome: "Itaú" },
+];
+
+describe("escolha do banco (D18)", () => {
+  it("banco da lista manda só o código; Outro manda código e nome aparados", () => {
+    expect(pedidoDoBanco(itau)).toEqual({ codigoBanco: "341", banco: null });
+    expect(pedidoDoBanco(outro)).toEqual({ codigoBanco: "999", banco: "Banco Sintético" });
+  });
+
+  it("sem escolha é erro no código", () => {
+    expect(validarBanco({ escolha: "", codigoOutro: "", nomeOutro: "" })).toEqual({ codigoBanco: "Escolha o banco." });
+  });
+
+  it("Outro exige 3 dígitos e o nome, com o limite da API", () => {
+    expect(validarBanco(outro)).toEqual({});
+    expect(validarBanco({ escolha: OUTRO_BANCO, codigoOutro: "34a", nomeOutro: "" })).toEqual({
+      codigoBanco: "O código do banco tem 3 dígitos.",
+      banco: "Informe o nome do banco.",
+    });
+    expect(validarBanco({ escolha: OUTRO_BANCO, codigoOutro: "1234", nomeOutro: "b".repeat(61) })).toEqual({
+      codigoBanco: "O código do banco tem 3 dígitos.",
+      banco: "O nome do banco tem no máximo 60 caracteres.",
+    });
+  });
+
+  it("nome para a mensagem de sucesso: o da lista ou o digitado", () => {
+    expect(nomeDoBancoEscolhido(itau, bancos)).toBe("Itaú");
+    expect(nomeDoBancoEscolhido(outro, bancos)).toBe("Banco Sintético");
+    expect(nomeDoBancoEscolhido({ escolha: OUTRO_BANCO, codigoOutro: "341", nomeOutro: "x" }, bancos)).toBe("Itaú");
+  });
+});
+
 describe("validarCadastro", () => {
-  const ok = { slot: 1, itemId: " 3f1c-item ", banco: " Itaú " };
+  const ok = { slot: 1, itemId: " 3f1c-item ", banco: itau };
 
   it("pedido completo não tem erros", () => {
     expect(validarCadastro(ok)).toEqual({});
@@ -90,22 +137,22 @@ describe("validarCadastro", () => {
   });
 
   it("id do item e banco obrigatórios, aparados", () => {
-    expect(validarCadastro({ ...ok, itemId: "   ", banco: "" })).toEqual({
+    expect(validarCadastro({ ...ok, itemId: "   ", banco: { escolha: "", codigoOutro: "", nomeOutro: "" } })).toEqual({
       itemId: "Cole o id do item, copiado do Meu Pluggy.",
-      banco: "Informe o nome do banco.",
+      codigoBanco: "Escolha o banco.",
     });
   });
 
   it("limites de tamanho iguais aos da API", () => {
-    expect(validarCadastro({ ...ok, itemId: "x".repeat(101), banco: "b".repeat(61) })).toEqual({
+    expect(validarCadastro({ ...ok, itemId: "x".repeat(101), banco: { ...outro, nomeOutro: "b".repeat(61) } })).toEqual({
       itemId: "O id do item tem no máximo 100 caracteres.",
       banco: "O nome do banco tem no máximo 60 caracteres.",
     });
-    expect(validarCadastro({ ...ok, itemId: "x".repeat(100), banco: "b".repeat(60) })).toEqual({});
+    expect(validarCadastro({ ...ok, itemId: "x".repeat(100), banco: { ...outro, nomeOutro: "b".repeat(60) } })).toEqual({});
   });
 
   it("sem slot no formulário de acrescentar banco, o slot não é cobrado", () => {
-    expect(validarCadastro({ itemId: "x", banco: "Nubank" })).toEqual({});
+    expect(validarCadastro({ itemId: "x", banco: itau })).toEqual({});
   });
 });
 

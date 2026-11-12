@@ -2520,6 +2520,74 @@
         }
       }
     },
+    "/api/v1/integracoes/items/{id}/banco": {
+      "put": {
+        "tags": [
+          "Integrações"
+        ],
+        "summary": "Escolhe o banco (código COMPE) de um item cadastrado antes do código (D18). Só o titular (senão 403); uma vez só (já escolhido dá 409). Nada muda na Pluggy.",
+        "operationId": "EscolherBancoDoItem",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BancoDoItemDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/integracoes/items/{id}/descoberta": {
       "get": {
         "tags": [
@@ -2995,6 +3063,42 @@
           }
         }
       },
+      "BancoDoItemDto": {
+        "required": [
+          "codigoBanco",
+          "banco"
+        ],
+        "type": "object",
+        "properties": {
+          "codigoBanco": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "banco": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "BancoDto": {
+        "required": [
+          "codigo",
+          "nome"
+        ],
+        "type": "object",
+        "properties": {
+          "codigo": {
+            "type": "string"
+          },
+          "nome": {
+            "type": "string"
+          }
+        }
+      },
       "CadastroDoCasalDto": {
         "required": [
           "codigoInstalacao",
@@ -3268,7 +3372,8 @@
       "ConexoesDto": {
         "required": [
           "conexoes",
-          "slots"
+          "slots",
+          "bancos"
         ],
         "type": "object",
         "properties": {
@@ -3282,6 +3387,12 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/SlotDto"
+            }
+          },
+          "bancos": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BancoDto"
             }
           }
         }
@@ -4233,6 +4344,7 @@
         "required": [
           "id",
           "banco",
+          "codigoBanco",
           "estado",
           "motivo",
           "consentimentoVenceEm",
@@ -4246,6 +4358,12 @@
           },
           "banco": {
             "type": "string"
+          },
+          "codigoBanco": {
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "estado": {
             "type": "string"
@@ -4609,6 +4727,7 @@
         "required": [
           "slot",
           "itemId",
+          "codigoBanco",
           "banco"
         ],
         "type": "object",
@@ -4623,6 +4742,12 @@
             "format": "int32"
           },
           "itemId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "codigoBanco": {
             "type": [
               "null",
               "string"
@@ -4850,11 +4975,18 @@
       "NovoItemDto": {
         "required": [
           "itemId",
+          "codigoBanco",
           "banco"
         ],
         "type": "object",
         "properties": {
           "itemId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "codigoBanco": {
             "type": [
               "null",
               "string"

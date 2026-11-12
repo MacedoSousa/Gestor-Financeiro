@@ -32,6 +32,7 @@ internal sealed class ItemConfig : IEntityTypeConfiguration<Item>
         b.ToTable("items", "integracoes");
         b.HasKey(x => x.Id);
         b.Property(x => x.Banco).HasMaxLength(Item.BancoMaximo);
+        b.Property(x => x.CodigoBanco).HasColumnType("char(3)");
         b.Property(x => x.MotivoErro).HasMaxLength(Item.MotivoMaximo);
     }
 }

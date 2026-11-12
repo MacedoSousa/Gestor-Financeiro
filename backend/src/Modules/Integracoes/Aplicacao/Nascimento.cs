@@ -125,7 +125,7 @@ internal sealed class Nascimento(
         {
             var conta = doBanco[confirmada.IdExterno!];
             var tipo = Vinculo.TipoDe(conta);
-            var identidade = Vinculo.IdentidadeDe(conta, cofre);
+            var identidade = Vinculo.IdentidadeDe(conta, a.CodigoBanco, cofre);
             var vinculo = vinculos.FirstOrDefault(v => v.Tipo == tipo && v.IdExterno == conta.Id);
 
             if (confirmada.Acao == NaoImportar)

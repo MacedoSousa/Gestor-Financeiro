@@ -78,6 +78,21 @@ internal static class EndpointsDeConexoes
         .ProducesProblem(StatusCodes.Status403Forbidden)
         .ProducesProblem(StatusCodes.Status409Conflict);
 
+        var items = api.MapGroup("/integracoes/items").WithTags("Integrações");
+        items.AddEndpointFilter(async (contexto, proximo) =>
+        {
+            contexto.HttpContext.Response.Headers.CacheControl = "no-store";
+            return await proximo(contexto);
+        });
+        items.MapPut("/{id:guid}/banco", async Task<Results<NoContent, ValidationProblem, ProblemHttpResult, NotFound>> (
+            Guid id, BancoDoItemDto pedido, ServicoDeConexoes servico, CancellationToken ct) =>
+            Feito(await servico.EscolherBancoAsync(id, pedido, ct)))
+        .WithName("EscolherBancoDoItem")
+        .WithSummary("Escolhe o banco (código COMPE) de um item cadastrado antes do código (D18). Só o titular (senão 403); " +
+                     "uma vez só (já escolhido dá 409). Nada muda na Pluggy.")
+        .ProducesProblem(StatusCodes.Status403Forbidden)
+        .ProducesProblem(StatusCodes.Status409Conflict);
+
         return api;
     }
 

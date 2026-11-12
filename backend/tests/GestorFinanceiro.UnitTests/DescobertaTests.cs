@@ -1,5 +1,6 @@
 using GestorFinanceiro.Modules.Integracoes.Dominio;
 using GestorFinanceiro.Modules.Integracoes.Pluggy;
+using GestorFinanceiro.SharedKernel.Seguranca;
 
 namespace GestorFinanceiro.UnitTests;
 
@@ -56,4 +57,24 @@ public class DescobertaTests
     [Fact]
     public void Portador_normalizado_ignora_acento_caixa_e_espacos() =>
         Assert.Equal(Vinculo.PortadorNormalizado(" Ána   Téste "), Vinculo.PortadorNormalizado("ANA TESTE"));
+
+    private static readonly ContaPluggy Corrente =
+        new("conta-sintetica-1", "BANK", "CHECKING_ACCOUNT", "Conta Corrente", null, "0001/12345-6", 0, null, null, null);
+
+    private static readonly ContaPluggy Cartao =
+        new("cartao-sintetico-1", "CREDIT", "CREDIT_CARD", "Cartão", null, null, 0, 0, "ANA TESTE", "4821");
+
+    /// <summary>D18, item 1: a identidade é HMAC(código do banco, agência, conta); o formato da agência e conta não importa.</summary>
+    [Fact]
+    public void Identidade_inclui_o_codigo_do_banco()
+    {
+        using var cofre = new CofreAesGcm(EnvelopeDeChaves.GerarDek());
+
+        var itau = Vinculo.IdentidadeDe(Corrente, "341", cofre);
+
+        Assert.Equal(itau, Vinculo.IdentidadeDe(Corrente with { AgenciaEConta = "0001 12345 6" }, "341", cofre));
+        Assert.NotEqual(itau, Vinculo.IdentidadeDe(Corrente, "260", cofre));
+        Assert.Equal(Vinculo.IdentidadeDe(Cartao, "341", cofre), Vinculo.IdentidadeDe(Cartao with { Portador = "Ána Teste" }, "341", cofre));
+        Assert.NotEqual(Vinculo.IdentidadeDe(Cartao, "341", cofre), Vinculo.IdentidadeDe(Cartao, "260", cofre));
+    }
 }

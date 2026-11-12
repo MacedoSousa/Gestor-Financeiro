@@ -94,17 +94,19 @@ internal sealed class Vinculo : Entidade, ICasalScoped
     };
 
     /// <summary>
-    /// Índice cego da conta física: agência e conta só com os dígitos (decisão 11); cartão, o final e o portador
-    /// normalizado (decisão 6). Nulo quando o banco não manda o que identifica a conta.
+    /// Índice cego da conta física, sempre com o código COMPE do banco do item (D18): conta, o código e a agência e conta só
+    /// com os dígitos (decisão 11); cartão, o código, o final e o portador normalizado (decisão 6). Nulo quando o banco não
+    /// manda o que identifica a conta.
     /// </summary>
-    public static byte[]? IdentidadeDe(ContaPluggy conta, ICofre cofre)
+    public static byte[]? IdentidadeDe(ContaPluggy conta, string codigoBanco, ICofre cofre)
     {
         ArgumentNullException.ThrowIfNull(conta);
         ArgumentNullException.ThrowIfNull(cofre);
+        if (!Item.CodigoValido(codigoBanco)) throw new ArgumentException("Código de banco com 3 dígitos.", nameof(codigoBanco));
         var texto = TipoDe(conta) == TipoDeVinculo.Cartao
             ? (string.IsNullOrWhiteSpace(conta.FinalDoCartao) ? null : $"{conta.FinalDoCartao.Trim()}|{PortadorNormalizado(conta.Portador)}")
             : ConversaoPluggy.TransferNumberNormalizado(conta.AgenciaEConta);
-        return texto is null ? null : cofre.IndiceCego(texto, PropositoIdentidade);
+        return texto is null ? null : cofre.IndiceCego($"{codigoBanco}|{texto}", PropositoIdentidade);
     }
 
     /// <summary>Maiúsculas, sem acento e com um espaço só entre as palavras.</summary>

@@ -41,6 +41,9 @@ const TITULOS: ReadonlySet<string> = new Set([
   "O banco não entregou as contas deste item agora. Tente de novo mais tarde.",
   "A conta escolhida já não existe. Atualize a página.",
   "Esta aplicação já está em outro grupo.",
+  // Integracoes (banco escolhido pelo código, D18)
+  "Escolha o banco desta conexão antes de ver as contas.",
+  "O banco desta conexão já foi escolhido.",
 ]);
 
 /** Títulos com o nome do cônjuge ou do grupo: só no formato exato, com o nome curto e sem ponto no meio. */

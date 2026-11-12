@@ -23,8 +23,11 @@ internal abstract record ResultadoDeNascimento
     public sealed record NaoEncontrado : ResultadoDeNascimento;
 }
 
-/// <summary>O item, a conexão dona, as chaves do slot e o itemId decifrado (só em memória, nunca em log ou resposta).</summary>
-internal sealed record AcessoAoItem(Item Item, Conexao Conexao, CredenciaisPluggy Chaves, string ItemPluggy);
+/// <summary>
+/// O item, a conexão dona, as chaves do slot, o itemId decifrado (só em memória, nunca em log ou resposta) e o código do
+/// banco já escolhido (D18).
+/// </summary>
+internal sealed record AcessoAoItem(Item Item, Conexao Conexao, CredenciaisPluggy Chaves, string ItemPluggy, string CodigoBanco);
 
 /// <summary>O que o banco entregou para o item, numa leitura só.</summary>
 internal sealed record LeituraDoBanco(IReadOnlyList<ContaPluggy> Contas, IReadOnlyList<InvestimentoPluggy> Aplicacoes,
@@ -45,6 +48,7 @@ internal sealed partial class Descoberta(
     ILogger<Descoberta> log)
 {
     internal const string TituloBancoRecusou = "O banco não entregou as contas deste item agora. Tente de novo mais tarde.";
+    internal const string TituloEscolhaOBanco = "Escolha o banco desta conexão antes de ver as contas.";
 
     public async Task<ResultadoDeNascimento> ListarAsync(Guid itemId, CancellationToken ct)
     {
@@ -55,7 +59,10 @@ internal sealed partial class Descoberta(
         return new ResultadoDeNascimento.Descoberta(await MontarAsync(acesso!, leitura!, ct));
     }
 
-    /// <summary>O item do casal, se a conexão dele for de quem está na sessão (senão 404 ou 403) e o slot tiver chaves.</summary>
+    /// <summary>
+    /// O item do casal, se a conexão dele for de quem está na sessão (senão 404 ou 403), se o banco já foi escolhido (senão
+    /// 409: a identidade das contas depende do código, D18) e se o slot tiver chaves.
+    /// </summary>
     internal async Task<(AcessoAoItem? Acesso, ResultadoDeNascimento? Recusa)> AcessoAsync(Guid itemId, CancellationToken ct)
     {
         if (atual.CasalId is null) return (null, new ResultadoDeNascimento.NaoEncontrado());
@@ -64,9 +71,10 @@ internal sealed partial class Descoberta(
         var conexao = await db.Conexoes.AsNoTracking().FirstOrDefaultAsync(c => c.Id == item.ConexaoId, ct);
         if (conexao is null) return (null, new ResultadoDeNascimento.NaoEncontrado());
         if (conexao.UsuarioId != atual.UsuarioId) return (null, new ResultadoDeNascimento.Recusado(ServicoDeConexoes.TituloSoOTitular, 403));
+        if (item.CodigoBanco is not { } codigoBanco) return (null, new ResultadoDeNascimento.Recusado(TituloEscolhaOBanco, 409));
         if (segredos.Ler(conexao.Slot) is not { } chaves)
             return (null, new ResultadoDeNascimento.Recusado(ServicoDeConexoes.TituloSlotSemChaves, 400));
-        return (new AcessoAoItem(item, conexao, chaves, item.LerItemId(cofre)), null);
+        return (new AcessoAoItem(item, conexao, chaves, item.LerItemId(cofre), codigoBanco), null);
     }
 
     /// <summary>
@@ -119,7 +127,7 @@ internal sealed partial class Descoberta(
             }
             if (vinculo?.ContaId is { } nascida && existentes.Contains(nascida)) continue;
 
-            var identidade = Vinculo.IdentidadeDe(conta, cofre);
+            var identidade = Vinculo.IdentidadeDe(conta, a.CodigoBanco, cofre);
             var jaVemDe = identidade is not null && deOutrosItems.TryGetValue(Convert.ToBase64String(identidade), out var usuario)
                 ? apelidos.GetValueOrDefault(usuario, "?")
                 : null;
