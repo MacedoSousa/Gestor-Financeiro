@@ -12,7 +12,8 @@
       "Bash(git log:*)",
       "Bash(scripts/verificar.sh:*)",
       "Bash(scripts/guardas/verificar-repositorio.sh:*)",
-      "Bash(scripts/guardas/testes.sh:*)"
+      "Bash(scripts/guardas/testes.sh:*)",
+      "mcp__playwright__browser_console_messages"
     ],
     "deny": [
       "Read(./.env)",
@@ -20,6 +21,7 @@
       "Read(./infra/secrets/**)",
       "Read(./backups/**)",
       "Read(./infra/data/**)",
+      "Read(//opt/**)",
       "Edit(./infra/secrets/**)",
       "Bash(git push --force:*)",
       "Bash(git push -f:*)",
