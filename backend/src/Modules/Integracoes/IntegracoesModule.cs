@@ -27,6 +27,7 @@ public static class IntegracoesModule
                 sp.GetRequiredService<ContextoAuditoriaInterceptor>()));
         services.AddScoped<ServicoDeConexoes>();
         services.AddScoped<Descoberta>();
+        services.AddScoped<Nascimento>();
 
         // Pluggy, só de leitura (ADR-015). Url e PastaDeSegredos na seção "Pluggy" da configuração.
         services.AddOptions<OpcoesDaPluggy>().BindConfiguration("Pluggy");

@@ -64,15 +64,19 @@ internal static class EndpointsDeConexoes
             Guid id, Guid item, ServicoDeConexoes servico, CancellationToken ct) =>
             Feito(await servico.ApagarItemAsync(id, item, ct)))
         .WithName("ApagarItem")
-        .WithSummary("Tira um banco da própria conexão (soft delete). Só o titular (senão 403).")
-        .ProducesProblem(StatusCodes.Status403Forbidden);
+        .WithSummary("Tira um banco da própria conexão (soft delete). Só o titular (senão 403). Com conta não arquivada vinda " +
+                     "deste banco dá 409: arquive antes.")
+        .ProducesProblem(StatusCodes.Status403Forbidden)
+        .ProducesProblem(StatusCodes.Status409Conflict);
 
         grupo.MapDelete("/{id:guid}", async Task<Results<NoContent, ValidationProblem, ProblemHttpResult, NotFound>> (
             Guid id, ServicoDeConexoes servico, CancellationToken ct) =>
             Feito(await servico.ApagarAsync(id, ct)))
         .WithName("ApagarConexao")
-        .WithSummary("Apaga a própria conexão e os bancos dela (soft delete); libera o slot. Só o titular (senão 403).")
-        .ProducesProblem(StatusCodes.Status403Forbidden);
+        .WithSummary("Apaga a própria conexão e os bancos dela (soft delete); libera o slot. Só o titular (senão 403). Com " +
+                     "conta não arquivada vinda destes bancos dá 409: arquive antes.")
+        .ProducesProblem(StatusCodes.Status403Forbidden)
+        .ProducesProblem(StatusCodes.Status409Conflict);
 
         return api;
     }

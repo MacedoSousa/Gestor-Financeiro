@@ -1,3 +1,4 @@
+using GestorFinanceiro.Modules.Contas.Contracts;
 using GestorFinanceiro.Modules.Identidade.Contracts;
 using GestorFinanceiro.Modules.Integracoes.Contracts;
 using GestorFinanceiro.Modules.Integracoes.Dominio;
@@ -35,6 +36,7 @@ internal sealed partial class ServicoDeConexoes(
     IClientePluggy pluggy,
     ICofre cofre,
     TimeProvider relogio,
+    IConsultaDeContas contas,
     ILogger<ServicoDeConexoes> log)
 {
     internal const string TituloSlotSemChaves = "As chaves deste slot não foram gravadas no servidor.";
@@ -43,6 +45,7 @@ internal sealed partial class ServicoDeConexoes(
     internal const string TituloItemRepetido = "Este item já está cadastrado.";
     internal const string TituloSoOTitular = "Só o titular pode alterar esta conexão.";
     internal const string TituloPluggyFora = "A Pluggy não respondeu. Tente de novo em alguns minutos.";
+    internal const string TituloArquiveAntes = "Arquive antes as contas que vêm deste banco.";
     internal static string TituloRecusado(int slot) => $"O banco recusou este item com as chaves do slot {slot}.";
 
     private const string IndiceDoSlot = "ux_conexoes_slot";
@@ -134,6 +137,7 @@ internal sealed partial class ServicoDeConexoes(
         {
             var item = await db.Items.FirstOrDefaultAsync(i => i.Id == itemId && i.ConexaoId == conexao!.Id, ct);
             if (item is null) return new ResultadoDeConexoes.NaoEncontrado();
+            if (await SoltarVinculosAsync([item.Id], ct) is { } recusa) return recusa;
             db.Items.Remove(item);
             return new ResultadoDeConexoes.Feito();
         }, ct);
@@ -150,13 +154,29 @@ internal sealed partial class ServicoDeConexoes(
         {
             var conexao = await db.Conexoes.FirstOrDefaultAsync(c => c.Id == conexaoId, ct);
             if (conexao is null) return new ResultadoDeConexoes.NaoEncontrado();
-            db.Items.RemoveRange(await db.Items.Where(i => i.ConexaoId == conexaoId).ToListAsync(ct));
+            var items = await db.Items.Where(i => i.ConexaoId == conexaoId).ToListAsync(ct);
+            if (await SoltarVinculosAsync(items.Select(i => i.Id).ToList(), ct) is { } recusa) return recusa;
+            db.Items.RemoveRange(items);
             db.Conexoes.Remove(conexao);
             return new ResultadoDeConexoes.Feito();
         }, ct);
     }
 
     // ------------------------------------------------------------------ regras
+
+    /// <summary>
+    /// Decisão do CEO na E3: com conta não arquivada vindo destes items, recusa (409); a pessoa arquiva antes e o histórico
+    /// fica. Senão, os vínculos vão junto (soft delete) e as contas, já arquivadas, continuam como estão.
+    /// </summary>
+    private async Task<ResultadoDeConexoes?> SoltarVinculosAsync(IReadOnlyCollection<Guid> itemIds, CancellationToken ct)
+    {
+        var vinculos = await db.Vinculos.Where(v => itemIds.Contains(v.ItemId)).ToListAsync(ct);
+        foreach (var contaId in vinculos.Where(v => v.ContaId is not null).Select(v => v.ContaId!.Value).Distinct())
+            if (await contas.ObterAsync(contaId, ct) is { Arquivada: false })
+                return new ResultadoDeConexoes.Recusado(TituloArquiveAntes, 409);
+        db.Vinculos.RemoveRange(vinculos);
+        return null;
+    }
 
     private static ItemPedido? ValidarItem(string? itemId, string? banco, Dictionary<string, string[]> erros)
     {

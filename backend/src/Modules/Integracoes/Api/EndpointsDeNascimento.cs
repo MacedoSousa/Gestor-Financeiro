@@ -40,8 +40,39 @@ internal static class EndpointsDeNascimento
         .ProducesProblem(StatusCodes.Status502BadGateway)
         .ProducesProblem(StatusCodes.Status503ServiceUnavailable);
 
+        grupo.MapPost("/items/{id:guid}/nascimento", async Task<Results<NoContent, ValidationProblem, ProblemHttpResult, NotFound>> (
+            Guid id, NascimentoDto pedido, Nascimento nascimento, CancellationToken ct) =>
+            Feito(await nascimento.NascerAsync(id, pedido, ct)))
+        .WithName("ConfirmarNascimento")
+        .WithSummary("Cria as contas confirmadas, já ligadas ao banco (CRIAR), liga a contas que já existem (LIGAR) ou registra " +
+                     "\"não importar\". Cada grupo de aplicações vira uma conta INVESTIMENTO, opcionalmente numa meta. Repetir o " +
+                     "pedido não duplica. Só o titular (senão 403); apelido repetido ou conta que já vem de outra conexão dão 409.")
+        .ProducesProblem(StatusCodes.Status403Forbidden)
+        .ProducesProblem(StatusCodes.Status409Conflict)
+        .ProducesProblem(StatusCodes.Status502BadGateway)
+        .ProducesProblem(StatusCodes.Status503ServiceUnavailable);
+
+        grupo.MapPost("/vinculos/{id:guid}/inclusao", async Task<Results<NoContent, ValidationProblem, ProblemHttpResult, NotFound>> (
+            Guid id, InclusaoDto pedido, Nascimento nascimento, CancellationToken ct) =>
+            Feito(await nascimento.IncluirAsync(id, pedido, ct)))
+        .WithName("IncluirContaNaoImportada")
+        .WithSummary("Inclui uma conta marcada \"não importar\": CRIAR ou LIGAR, como na confirmação. Só o titular (senão 403); " +
+                     "conta que não está marcada dá 409.")
+        .ProducesProblem(StatusCodes.Status403Forbidden)
+        .ProducesProblem(StatusCodes.Status409Conflict);
+
         return api;
     }
+
+    private static Results<NoContent, ValidationProblem, ProblemHttpResult, NotFound> Feito(ResultadoDeNascimento resultado) =>
+        resultado switch
+        {
+            ResultadoDeNascimento.Feito => TypedResults.NoContent(),
+            ResultadoDeNascimento.Invalido i => TypedResults.ValidationProblem(i.Erros.ToDictionary()),
+            ResultadoDeNascimento.Recusado r => Problema(r),
+            ResultadoDeNascimento.NaoEncontrado => TypedResults.NotFound(),
+            _ => throw new UnreachableException(resultado.GetType().Name),
+        };
 
     internal static ProblemHttpResult Problema(ResultadoDeNascimento.Recusado r) =>
         TypedResults.Problem(title: r.Titulo, statusCode: r.Status,

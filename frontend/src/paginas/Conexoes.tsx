@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState, type FormEvent, type RefObject } from "react";
+import { Link } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { ErroDeApi } from "../api/autenticacao";
 import { n } from "../api/formulario";
@@ -284,15 +285,20 @@ function SuaConexao({ conexao, aoAvisar, aoVoltar }: { conexao: Conexao; aoAvisa
           {conexao.items.map((item) => (
             <li key={item.id} className="item-linha">
               <EstadoDoBanco item={item} />
-              <button
-                type="button"
-                className="botao-secundario"
-                disabled={ocupado}
-                aria-label={`Tirar ${item.banco} da conexão`}
-                onClick={() => setConfirmando({ tipo: "banco", item })}
-              >
-                Tirar
-              </button>
+              <div className="acoes-linha">
+                <Link to={`/conexoes/items/${item.id}/nascimento`} className="botao-secundario link-botao" aria-label={`Contas do ${item.banco}`}>
+                  Contas do banco
+                </Link>
+                <button
+                  type="button"
+                  className="botao-secundario"
+                  disabled={ocupado}
+                  aria-label={`Tirar ${item.banco} da conexão`}
+                  onClick={() => setConfirmando({ tipo: "banco", item })}
+                >
+                  Tirar
+                </button>
+              </div>
             </li>
           ))}
         </ul>
