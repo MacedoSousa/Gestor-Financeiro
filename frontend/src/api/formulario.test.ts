@@ -19,6 +19,10 @@ describe("títulos da API que vão para a tela", () => {
     expect(await mensagem(409, { title: "Esta conta vem do banco. O saldo inicial é calculado." })).toBe(
       "Esta conta vem do banco. O saldo inicial é calculado.",
     );
+    expect(await mensagem(409, { title: "A conta escolhida já não existe. Atualize a página." })).toBe(
+      "A conta escolhida já não existe. Atualize a página.",
+    );
+    expect(await mensagem(409, { title: "Esta aplicação já está em outro grupo." })).toBe("Esta aplicação já está em outro grupo.");
   });
 
   it("os com nome passam só no formato exato", async () => {

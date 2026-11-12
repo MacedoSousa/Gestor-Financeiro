@@ -71,13 +71,14 @@ internal sealed class Vinculo : Entidade, ICasalScoped
     }
 
     /// <summary>
-    /// Troca a conta de um vínculo cuja conta nunca chegou a existir no casal (o id ficou indisponível, ou o LIGAR mudou de
-    /// alvo antes de concluir). Quem chama confere isso.
+    /// Troca (ou limpa) a conta de um vínculo cuja conta nunca chegou a existir no casal: o id ficou indisponível, o LIGAR
+    /// mudou de alvo antes de concluir, ou o grupo foi desfeito. Recusa se a conta mudou desde que quem chama a leu.
     /// </summary>
-    public void TrocarConta(Guid contaId)
+    public void TrocarConta(Guid? esperada, Guid? nova)
     {
-        ContaId = contaId;
-        NaoImportarEm = null;
+        if (ContaId != esperada) throw new InvalidOperationException("A conta do vínculo mudou no meio.");
+        ContaId = nova;
+        if (nova is not null) NaoImportarEm = null;
     }
 
     /// <summary>CONTA para conta bancária, CARTAO para cartão de crédito.</summary>

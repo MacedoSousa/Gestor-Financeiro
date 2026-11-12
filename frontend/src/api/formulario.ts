@@ -39,6 +39,8 @@ const TITULOS: ReadonlySet<string> = new Set([
   "Esta conta não está marcada como \"não importar\".",
   "Outra confirmação deste banco estava em andamento. Tente de novo.",
   "O banco não entregou as contas deste item agora. Tente de novo mais tarde.",
+  "A conta escolhida já não existe. Atualize a página.",
+  "Esta aplicação já está em outro grupo.",
 ]);
 
 /** Títulos com o nome do cônjuge ou do grupo: só no formato exato, com o nome curto e sem ponto no meio. */

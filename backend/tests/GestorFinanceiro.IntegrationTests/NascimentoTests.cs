@@ -31,7 +31,7 @@ public class NascimentoTests(PostgresFixture pg)
         new("conta-sintetica-1", "BANK", "CHECKING_ACCOUNT", "Conta Corrente", null, "0001/12345-6", 150_000, null, null, null);
 
     private static readonly ContaPluggy CartaoDaAna =
-        new("cartao-sintetico-1", "CREDIT", "CREDIT_CARD", "Cartão Platinum", null, null, 80_000, 500_000, "ANA TESTE", "1234");
+        new("cartao-sintetico-1", "CREDIT", "CREDIT_CARD", "Cartão Platinum", null, null, 80_000, 500_000, "ANA TESTE", "4821");
 
     private sealed record Ctx(ApiDeTeste Api, BancoDeTeste Banco, ClientePluggyFalso Pluggy, HttpClient Ana, HttpClient Bruno,
         Guid AnaId, Guid BrunoId, string Pasta) : IAsyncDisposable
@@ -242,7 +242,7 @@ public class NascimentoTests(PostgresFixture pg)
         Assert.Equal(HttpStatusCode.Forbidden, doBruno.StatusCode);
         Assert.DoesNotContain(itemPluggy, daAna, StringComparison.Ordinal);
         Assert.DoesNotContain("12345", daAna, StringComparison.Ordinal);
-        Assert.DoesNotContain("1234", daAna, StringComparison.Ordinal);
+        Assert.DoesNotContain("4821", daAna, StringComparison.Ordinal);
         Assert.DoesNotContain("ANA TESTE", daAna, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -844,5 +844,96 @@ public class NascimentoTests(PostgresFixture pg)
         var erro = await Assert.ThrowsAsync<Microsoft.EntityFrameworkCore.DbUpdateException>(() => VincularAsync(c, item, "CONTA", Corrente, casal: o.Casal));
 
         Assert.Equal(PostgresErrorCodes.ForeignKeyViolation, (erro.InnerException as PostgresException)?.SqlState);
+    }
+
+    // ------------------------------------------------------------------ Revisão de segurança da E3, segunda rodada
+
+    private static async Task<Guid> AplicacoesAsync(Ctx c)
+    {
+        var (item, itemPluggy) = await ConectarAsync(c, c.Ana, 1);
+        c.Pluggy.CadastrarInvestimento(itemPluggy, new InvestimentoPluggy("cdb-sintetico-1", "FIXED_INCOME", "CDB", "CDB 1", 1_000));
+        c.Pluggy.CadastrarInvestimento(itemPluggy, new InvestimentoPluggy("cdb-sintetico-2", "FIXED_INCOME", "CDB", "CDB 2", 2_000));
+        // Um apelido já usado derruba a criação do grupo "Investimentos Itaú" com 409, depois de os vínculos apontarem para ele.
+        await EsperarAsync(c.Ana.PostAsJsonAsync("/api/v1/contas", new
+        {
+            tipo = "DINHEIRO", apelido = "Investimentos Itaú", saldoInicialCentavos = 0L, saldoInicialEm = "2026-01-01",
+        }), HttpStatusCode.Created);
+        await EsperarAsync(NascerAsync(c.Ana, item, [], [Grupo("cdb-sintetico-1", "Investimentos Itaú"), Grupo("cdb-sintetico-2", "Investimentos Itaú")]),
+            HttpStatusCode.Conflict);
+        return item;
+    }
+
+    [Fact]
+    public async Task Separar_um_grupo_que_nao_chegou_a_nascer_cria_uma_conta_por_grupo()
+    {
+        await using var c = await IniciarAsync();
+        var item = await AplicacoesAsync(c);
+
+        await EsperarAsync(NascerAsync(c.Ana, item, [], [Grupo("cdb-sintetico-1", "CDBs Casa"), Grupo("cdb-sintetico-2", "CDBs Carro")]),
+            HttpStatusCode.NoContent);
+
+        Assert.Equal("CDBs Carro|2000;CDBs Casa|1000", await EscalarAsync<string>(c.Banco,
+            "SELECT string_agg(apelido || '|' || saldo_inicial_centavos, ';' ORDER BY apelido) FROM contas.contas WHERE tipo = 'INVESTIMENTO'"));
+        Assert.Equal(2L, await EscalarAsync<long>(c.Banco,
+            "SELECT count(DISTINCT v.conta_id) FROM integracoes.vinculos v JOIN contas.contas k ON k.id = v.conta_id WHERE v.tipo = 'INVESTIMENTO'"));
+    }
+
+    [Fact]
+    public async Task Aplicacao_tirada_de_um_grupo_que_nao_nasceu_volta_a_aguardar()
+    {
+        await using var c = await IniciarAsync();
+        var item = await AplicacoesAsync(c);
+
+        await EsperarAsync(NascerAsync(c.Ana, item, [], [Grupo("cdb-sintetico-1", "CDBs Casa"), Grupo("cdb-sintetico-2", null)]),
+            HttpStatusCode.NoContent);
+
+        Assert.Equal("CDBs Casa|1000", await EscalarAsync<string>(c.Banco,
+            "SELECT string_agg(apelido || '|' || saldo_inicial_centavos, ';') FROM contas.contas WHERE tipo = 'INVESTIMENTO'"));
+        Assert.True(await EscalarAsync<bool>(c.Banco, "SELECT conta_id IS NULL FROM integracoes.vinculos WHERE id_externo = 'cdb-sintetico-2'"));
+        Assert.Equal(["cdb-sintetico-2"], (await DescobertaAsync(c.Ana, item)).GetProperty("aplicacoes").EnumerateArray()
+            .Select(x => x.GetProperty("idExterno").GetString()));
+    }
+
+    /// <summary>Segura as duas confirmações depois do IdEmUso, para as duas trocarem o id ao mesmo tempo.</summary>
+    private sealed class Barreira(IContasLigadas real, Guid idDaBarreira, int[] chegaram, TaskCompletionSource juntas) : IContasLigadas
+    {
+        public async Task<ResultadoDaContaLigada> CriarAsync(NovaContaLigada pedido, CancellationToken ct)
+        {
+            var r = await real.CriarAsync(pedido, ct);
+            if (pedido.ContaId != idDaBarreira) return r;
+            if (Interlocked.Increment(ref chegaram[0]) == 2) juntas.TrySetResult();
+            await juntas.Task.WaitAsync(TimeSpan.FromSeconds(10), ct);
+            return r;
+        }
+
+        public Task<bool> MarcarLigadaAsync(Guid contaId, CancellationToken ct) => real.MarcarLigadaAsync(contaId, ct);
+
+        public Task DefinirSaldoInicialAsync(Guid contaId, long centavos, DateOnly em, CancellationToken ct) =>
+            real.DefinirSaldoInicialAsync(contaId, centavos, em, ct);
+    }
+
+    [Fact]
+    public async Task Duas_confirmacoes_juntas_sobre_conta_apagada_nao_criam_conta_orfa()
+    {
+        var apagada = new Guid[1];
+        var chegaram = new int[1];
+        var juntas = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        await using var c = await IniciarAsync(s => s.Replace(ServiceDescriptor.Scoped<IContasLigadas>(sp =>
+            new Barreira(ActivatorUtilities.CreateInstance<ContasLigadas>(sp), apagada[0], chegaram, juntas))));
+        apagada[0] = await CorrenteManualAsync(c, "Vai ser apagada");
+        await EsperarAsync(c.Ana.DeleteAsync($"/api/v1/contas/{apagada[0]}"), HttpStatusCode.NoContent);
+        var item = await ItemComContasAsync(c);
+        await VincularAsync(c, item, "CONTA", Corrente, contaId: apagada[0]);
+
+        var respostas = await Task.WhenAll(
+            NascerAsync(c.Ana, item, [Criar(Corrente.Id, "Itaú Corrente · Ana", c.AnaId)]),
+            NascerAsync(c.Ana, item, [Criar(Corrente.Id, "Itaú Corrente · Ana", c.AnaId)]));
+
+        foreach (var r in respostas)
+            Assert.True(r.StatusCode == HttpStatusCode.NoContent, $"{(int)r.StatusCode}: {await r.Content.ReadAsStringAsync()}");
+        Assert.Equal(1L, await EscalarAsync<long>(c.Banco, "SELECT count(*) FROM contas.contas WHERE NOT is_deleted"));
+        Assert.True(await EscalarAsync<bool>(c.Banco,
+            $"SELECT k.ligada_em IS NOT NULL FROM integracoes.vinculos v JOIN contas.contas k ON k.id = v.conta_id AND NOT k.is_deleted " +
+            $"WHERE v.id_externo = '{Corrente.Id}'"));
     }
 }

@@ -203,10 +203,11 @@ function NaoImportada({ conta, banco, titulares, nomes, aoIncluir }: {
   const formulario = useRef<HTMLFormElement>(null);
   const botao = useRef<HTMLButtonElement>(null);
   const [voltar, setVoltar] = useState(false);
-  const [linha, setLinha] = useState<LinhaDeConta>(() => ({
+  const rascunho = (): LinhaDeConta => ({
     idExterno: conta.idExterno, tipo: conta.tipo, nomeNoBanco: conta.nomeNoBanco, acao: "CRIAR", apelido: conta.apelidoSugerido,
     titular: titulares[1]?.valor ?? "", contaExistenteId: "", diaFechamento: "", diaVencimento: "", limiteCentavos: null,
-  }));
+  });
+  const [linha, setLinha] = useState<LinhaDeConta>(rascunho);
   const erro = validarConfirmacao([linha], [])[linha.idExterno];
   const [mostrarErro, setMostrarErro] = useState(false);
   const no = (campo: ErroDaLinha["campo"]) => (mostrarErro && erro?.campo === campo ? erro.mensagem : undefined);
@@ -217,7 +218,10 @@ function NaoImportada({ conta, banco, titulares, nomes, aoIncluir }: {
     else if (voltar) botao.current?.focus();
   }, [aberta, voltar]);
 
+  /** Fecha o formulário; cancelar volta ao rascunho sugerido, sem erro aparecendo antes do próximo envio. */
   function fechar() {
+    setLinha(rascunho());
+    setMostrarErro(false);
     setVoltar(true);
     setAberta(false);
   }

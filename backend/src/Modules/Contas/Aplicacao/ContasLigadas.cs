@@ -34,7 +34,7 @@ internal sealed class ContasLigadas(ContasDbContext db, IUsuarioAtual atual, Ser
             return new ResultadoDaContaLigada.Invalida(new Dictionary<string, string[]> { ["tipo"] = ["Conta do banco não é do tipo DINHEIRO."] });
 
         var apelido = pedido.Apelido.Trim();
-        if (await ApelidoUsadoAsync(apelido, ct)) return new ResultadoDaContaLigada.ApelidoRepetido(await SugestaoAsync(apelido, ct));
+        if (await ApelidoUsadoAsync(apelido, ct)) return await ApelidoRepetidoAsync(pedido.ContaId, apelido, ct);
 
         var conta = Conta.CriarLigada(pedido.ContaId, casalId, tipo, apelido, relogio.GetUtcNow());
         conta.Definir(apelido, string.IsNullOrWhiteSpace(pedido.Instituicao) ? null : pedido.Instituicao.Trim(), pedido.TitularUsuarioId,
@@ -55,10 +55,17 @@ internal sealed class ContasLigadas(ContasDbContext db, IUsuarioAtual atual, Ser
             // Apelido tomado no meio: devolve a sugestão. Id tomado: é desta conta ligada (outra chamada gravou antes) ou de
             // uma conta que o filtro não mostra (apagada, de outro casal); nunca "Pronta" sem conferir.
             return pg.ConstraintName == IndiceDeApelido
-                ? new ResultadoDaContaLigada.ApelidoRepetido(await SugestaoAsync(apelido, ct))
+                ? await ApelidoRepetidoAsync(conta.Id, apelido, ct)
                 : await JaExisteAsync(conta.Id, ct) ?? new ResultadoDaContaLigada.IdEmUso();
         }
     }
+
+    /// <summary>
+    /// O apelido já está em uso. Se for por esta mesma conta, criada agora por outra chamada com o mesmo id (duas
+    /// confirmações juntas), ela está pronta; senão, devolve a sugestão.
+    /// </summary>
+    private async Task<ResultadoDaContaLigada> ApelidoRepetidoAsync(Guid id, string apelido, CancellationToken ct) =>
+        await JaExisteAsync(id, ct) ?? new ResultadoDaContaLigada.ApelidoRepetido(await SugestaoAsync(apelido, ct));
 
     /// <summary>A conta com este id no casal: ligada = pronta; manual = id em uso. Nula se o filtro não a mostra.</summary>
     private async Task<ResultadoDaContaLigada?> JaExisteAsync(Guid id, CancellationToken ct)
