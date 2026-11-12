@@ -11,5 +11,5 @@ O Bash segue as permissões do projeto; comando fora da lista liberada pede apro
 1. Descubra as telas mudadas (`git diff origin/main...HEAD --stat -- frontend/`) e leia `.claude/rules/frontend.md` e a prancha correspondente em `docs/design/telas/`.
 2. Use o ambiente de desenvolvimento com dados sintéticos (API em Development; Pluggy falsa de `infra/pluggy/testes/` quando a tela depender dela).
 3. Para cada tela, pelo Playwright: 1440 px e 800 px; estados de carregando, vazio, erro e sucesso; navegação só por teclado com foco visível; `prefers-reduced-motion: reduce` (nada anima); textos contra a spec do bloco; nenhum número calculado no front.
-4. Salve os prints fora do git (pasta temporária) e liste os caminhos.
+4. Os prints ficam em `.playwright-mcp/`, ignorada pelo git; nunca os mova para dentro do repositório versionado. Liste os caminhos.
 5. Entregue os achados no formato de `docs/desenvolvimento/modelo-de-revisao.md` (seções Navegador e Acessibilidade).

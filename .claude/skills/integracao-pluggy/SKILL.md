@@ -22,4 +22,4 @@ Spec: `docs/superpowers/specs/2026-11-11-fase-2-open-finance-design.md` (a seç�
 - Data de transação: dia em São Paulo do instante (medido: nenhuma às 00:00Z); data só-dia (vencimento): `DiaDoCalendario`.
 - Importar é "criar ou atualizar pela chave natural" `(OPEN_FINANCE, id)`, idempotente; o que o sistema cria usa origem `SISTEMA` e as chaves fixas da spec (D12).
 - Contas ligadas vêm só do banco (opção B): lançamento manual nelas é `409`.
-- Tela nova: skill `melhorar-tela` e o agente `testador-de-telas`. Antes do PR: `{ git log --format='%h %s%n%b' origin/main..HEAD; echo '---'; git diff origin/main...HEAD; } > .git/revisao.diff` e depois o agente `revisor-seguranca`.
+- Tela nova: skill `melhorar-tela` e o agente `testador-de-telas`. Antes do PR: `{ echo "HEAD $(git rev-parse --short HEAD)"; git log --format='%h %s%n%b' origin/main..HEAD; echo '---'; git diff origin/main...HEAD; } > .git/revisao.diff` e depois o agente `revisor-seguranca`.
