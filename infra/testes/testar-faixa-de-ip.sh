@@ -7,7 +7,7 @@
 # Usa uma cópia do infra/docker-compose.yml real com só o prefixo 172.30.0. trocado por
 # 172.31.<n>. (para não colidir com a instalação de verdade, se estiver de pé): sub-rede,
 # ip_range e IPs fixos vêm do arquivo do repositório. Um override troca a imagem de todos os
-# serviços por uma mínima que só dorme, sem segredos, volumes, portas nem GPU; o que se testa é a
+# serviços por uma mínima que só dorme, sem segredos, volumes, portas, GPU nem restart; o que se testa é a
 # alocação de IP, não os programas. Projeto do compose com nome aleatório; derruba com
 # "docker compose down", sem -v.
 #
@@ -41,7 +41,7 @@ falhar() { echo "FALHA $*"; exit 1; }
 
 : >"$T/vazio.env"
 sed 's/172\.30\.0\./'"$PREFIXO"'/g' "$REPO/infra/docker-compose.yml" >"$T/compose.yml"
-if grep -q '172\.30\.0\.' "$T/compose.yml"; then falhar "sobrou 172.30.0. na cópia do compose"; fi
+if grep -q '172\.30\.' "$T/compose.yml"; then falhar "sobrou 172.30. na cópia do compose (a sub-rede real mudou?)"; fi
 
 AUTOMATICOS=(duckdns whatsapp ocr)
 FIXOS=(web api)
@@ -52,6 +52,7 @@ FIXOS=(web api)
   $s:
     image: $IMAGEM
     pull_policy: missing
+    restart: "no"
     build: !reset null
     entrypoint: ["sleep", "600"]
     command: !reset []
