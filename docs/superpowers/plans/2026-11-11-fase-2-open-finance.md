@@ -384,7 +384,7 @@ public interface IMetasDeContas { Task<bool> LigarContaAMetaAsync(Guid contaId, 
 - Teste: `backend/tests/GestorFinanceiro.IntegrationTests/NascimentoTests.cs`
 
 **Migração (V0013), `integracoes.vinculos`:**
-- colunas: `id`, `casal_id`, `item_id REFERENCES integracoes.items` (D18), `tipo text CHECK (tipo IN ('CONTA','CARTAO','INVESTIMENTO'))`, `id_externo text NOT NULL` (em claro, D7), `conta_id uuid NULL` (nulo = aplicação aguardando grupo), `identidade_hmac bytea NULL`, `historico_desde date NULL`, `importado_ate date NULL` (último dia coberto pela importação do vínculo; decisão 7), `diferenca_centavos bigint NULL`, `diferencas_seguidas smallint NOT NULL DEFAULT 0`;
+- colunas: `id`, `casal_id`, `item_id REFERENCES integracoes.items` (D18), `tipo text CHECK (tipo IN ('CONTA','CARTAO','INVESTIMENTO'))`, `id_externo text NOT NULL` (em claro, D7), `conta_id uuid NULL` (nulo = aplicação aguardando grupo), `identidade_hmac bytea NULL`, `historico_desde date NULL`, `importado_ate date NULL` (último dia coberto pela importação do vínculo; decisão 7), `diferenca_centavos bigint NULL`, `diferencas_seguidas smallint NOT NULL DEFAULT 0`, `faturas_divergentes jsonb NULL` (decisão 12);
 - `ux_vinculos_externo (item_id, tipo, id_externo) WHERE NOT is_deleted`;
 - `ux_vinculos_identidade (casal_id, identidade_hmac) WHERE NOT is_deleted AND identidade_hmac IS NOT NULL`;
 - `audit.proteger`.
@@ -553,11 +553,14 @@ public interface IImportacaoDeLancamentos
 - Por vínculo CONTA ou CARTAO, desde `historico_desde` na primeira importação; depois, desde `max(historico_desde, importado_ate − 10 dias)`. Assim, ao desarquivar, a próxima sincronização importa o período que ficou de fora. Ao terminar, `importado_ate` = hoje. lê `/v2/transactions`, mapeia e chama `ImportarAsync`. Cada vínculo é uma chamada; a falha num vínculo não desfaz os outros.
 - `historico_desde`: 2026-01-01, ou a data mais antiga recebida se o banco entregar menos. A tela mostra "Histórico desde DD/MM".
 - Saldo inicial, depois da **primeira** importação do vínculo: `DefinirSaldoInicialAsync(conta, saldoBanco − soma das confirmadas importadas até hoje, historico_desde)`.
-  - Para cartão, use a fórmula medida na Tarefa 1.0, com "saldo do sistema = −(valor usado)" (D3).
-- Conferência a cada sincronização: se o saldo do sistema hoje (`IConsultaDeSaldos`) diferir do esperado pela fórmula, grava `diferenca_centavos` e incrementa `diferencas_seguidas`; se bater, zera.
+  - Só para CONTA (corrente e poupança). O cartão não tem saldo inicial calculado pelo banco (decisão 12): nasce com 0 em `historico_desde`, e o saldo do cartão no sistema é o calculado pelas transações.
+- Conferência de saldo a cada sincronização, só para CONTA: se o saldo do sistema hoje (`IConsultaDeSaldos`) diferir do esperado pela fórmula, grava `diferenca_centavos` e incrementa `diferencas_seguidas`; se bater, zera.
   - A tela mostra "Diferença de R$ X com o banco" só com `diferencas_seguidas >= 2`. Nada é ajustado.
 - Item: `ultima_tentativa_em` sempre; `ultima_sincronizacao_em` só com sucesso.
-- Faturas (D2): para cada fatura do banco (`ListarFaturasAsync`) com vencimento já calculado pelo sistema, compara o `TotalCentavos` com o total do sistema daquele vencimento. A diferença aparece em Conexões ("Fatura de <mês>: diferença de R$ X com o banco"). Nada muda no calendário nem na regra C7.
+- Faturas do cartão (decisão 12; substitui a fórmula do saldo da D3 e a comparação com o total calculado pelo sistema): `ConferenciaDasFaturas.Diferencas(faturas do banco, transações do vínculo, historico_desde)`, já feita na etapa 1.
+  - Para cada fatura do banco, o total informado é comparado com a soma das transações com aquele `billId`; pendentes, sem `billId`, não entram.
+  - Cada diferença é guardada por fatura no vínculo (coluna `faturas_divergentes jsonb NULL` em V0013: id da fatura → diferença e sincronizações seguidas). Ela aparece em Conexões ("Fatura de <mês>: diferença de R$ X com o banco") só se persistir em 2 sincronizações seguidas.
+  - Nada muda no calendário nem na regra C7.
 - Aplicação nova num item já nascido: vira vínculo com `conta_id` nulo e aparece em Conexões para escolher o grupo, pelo mesmo `POST …/nascimento` (só `aplicacoes`). Até lá, não entra em nenhum grupo.
 
 - [ ] **Passo 1:** testes que falham:
@@ -568,7 +571,8 @@ public interface IImportacaoDeLancamentos
   - `Sincronizacao_seguinte_usa_a_janela_de_10_dias`;
   - `Conta_arquivada_nao_sincroniza_e_mantem_o_historico`;
   - `Desarquivar_importa_o_periodo_que_ficou_de_fora`;
-  - `Fatura_do_banco_diferente_aparece_em_conexoes_sem_mudar_a_fatura`;
+  - `Fatura_do_banco_diferente_so_aparece_na_segunda_sincronizacao_e_nao_muda_a_fatura`;
+  - `Cartao_nasce_com_saldo_inicial_zero_e_sem_conferencia_de_saldo`;
   - `Aplicacao_nova_espera_o_grupo`.
 - [ ] **Passo 2:** rodar → FALHA. Implementar. Rodar → PASSA.
 - [ ] **Passo 3:** front: o selo, "Histórico desde DD/MM" e a diferença em Conexões; os lançamentos com o selo "a confirmar" e o estado "a revisar" no extrato. `npm --prefix frontend run check`. Commit "Integracoes: importação do histórico e saldo inicial".
@@ -822,3 +826,4 @@ Decisões sobre o "Para o CEO" da primeira versão deste plano (PR #30). Elas va
 
 10. **Sinal** (CEO 11/11 21h). O conversor normaliza o sinal por tipo de conta: na corrente, o da Pluggy já é o do sistema; no cartão, DEBIT positivo é gasto e CREDIT negativo é pagamento ou estorno, então o sinal se inverte. → `ConversaoPluggy.ValorNoSistema` (etapa 1) e Tarefa 4.3.
 11. **Trava de conta repetida** (CEO 11/11 21h). HMAC do `transferNumber` normalizado (só os dígitos), sem código do banco: a Pluggy não o traz. `ContaPluggy.CodigoDoBanco` sai do modelo. Substitui a parte do código na decisão 1; o nome digitado continua fora da trava. → `ConversaoPluggy.TransferNumberNormalizado` (etapa 1) e Tarefa 3.2.
+12. **Conferência do cartão por fatura** (CEO 11/11 21h). Substitui a fórmula do saldo da D3, que a medição mostrou não fechar. Para cada fatura do banco, o total informado é comparado com a soma das transações com aquele `billId`. A diferença aparece em "Conexões" se persistir por duas sincronizações. Pendentes (sem `billId`) não entram. O saldo do cartão no sistema continua sendo o calculado pelas transações. Só é conferida a fatura que vence a partir de dois meses depois do início do histórico, para não acusar compras de antes do histórico (decisão do Dev, a confirmar). → `ConferenciaDasFaturas` (etapa 1) e Tarefa 4.5.
