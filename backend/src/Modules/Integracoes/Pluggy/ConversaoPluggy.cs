@@ -59,8 +59,11 @@ internal static class ConversaoPluggy
                 DateTimeStyles.AssumeUniversal | DateTimeStyles.AllowWhiteSpaces, out var instante))
             throw new FormatException("Data da Pluggy inválida.");
 
-        return DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(instante, Fuso).DateTime);
+        return DiaDeSaoPaulo(instante);
     }
+
+    public static DateOnly DiaDeSaoPaulo(DateTimeOffset instante) =>
+        DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(instante, Fuso).DateTime);
 
     /// <summary>
     /// Data que é só dia (o vencimento de uma fatura): os 10 primeiros caracteres, sem conversão de fuso. Meia-noite UTC

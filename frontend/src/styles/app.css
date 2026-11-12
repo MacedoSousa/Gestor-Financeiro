@@ -170,6 +170,38 @@ a {
   background: var(--negativo);
 }
 
+.ponto.alerta {
+  background: var(--alerta);
+}
+
+/* Conexões: opção de slot com o aviso embaixo; desabilitada fica apagada, mas legível. */
+.opcao-slot {
+  align-items: flex-start;
+}
+
+.opcao-slot input {
+  margin-top: 1px;
+  flex: none;
+  /* Círculo do rádio nativo no tema escuro: borda clara o bastante sobre o cartão (1.4.11). */
+  color-scheme: dark;
+}
+
+.opcao-slot:has(input:disabled) > span:first-of-type {
+  color: var(--texto-suave);
+}
+
+/* Título e confirmação que recebem o foco por código: mesmo anel dos controles. */
+.cartao-rotulo[tabindex="-1"]:focus-visible,
+.confirmacao[tabindex="-1"]:focus-visible {
+  outline: 2px solid var(--destaque-claro);
+  outline-offset: 2px;
+}
+
+.aviso-do-slot {
+  display: block;
+  margin: 2px 0 0 28px;
+}
+
 /* Cadastro do casal */
 .pagina-centro {
   width: 100%;

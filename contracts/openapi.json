@@ -2223,6 +2223,282 @@
           }
         }
       }
+    },
+    "/api/v1/integracoes/conexoes": {
+      "get": {
+        "tags": [
+          "Integrações"
+        ],
+        "summary": "Conexões dos dois cônjuges, com o estado de cada banco, e os dois slots de chaves do servidor.",
+        "operationId": "ListarConexoes",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConexoesDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Integrações"
+        ],
+        "summary": "Cria a conexão de quem está na sessão com o primeiro banco. Autentica com as chaves do slot escolhido e consulta o item na Pluggy antes de gravar: recusado dá 400, Pluggy fora do ar dá 503. Slot sem chaves dá 400; slot em uso, segunda conexão do mesmo cônjuge ou item já cadastrado dão 409.",
+        "operationId": "CriarConexao",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NovaConexaoDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConexaoDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/integracoes/conexoes/{id}/items": {
+      "post": {
+        "tags": [
+          "Integrações"
+        ],
+        "summary": "Mais um banco na própria conexão, validado com as chaves do slot dela. Só o titular (senão 403).",
+        "operationId": "AcrescentarItem",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NovoItemDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/integracoes/conexoes/{id}/items/{item}": {
+      "delete": {
+        "tags": [
+          "Integrações"
+        ],
+        "summary": "Tira um banco da própria conexão (soft delete). Só o titular (senão 403).",
+        "operationId": "ApagarItem",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "item",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/integracoes/conexoes/{id}": {
+      "delete": {
+        "tags": [
+          "Integrações"
+        ],
+        "summary": "Apaga a própria conexão e os bancos dela (soft delete); libera o slot. Só o titular (senão 403).",
+        "operationId": "ApagarConexao",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -2647,6 +2923,72 @@
               "string"
             ],
             "format": "int64"
+          }
+        }
+      },
+      "ConexaoDto": {
+        "required": [
+          "id",
+          "usuarioId",
+          "apelido",
+          "slot",
+          "slotConfigurado",
+          "ehSua",
+          "items"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "usuarioId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "apelido": {
+            "type": "string"
+          },
+          "slot": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "slotConfigurado": {
+            "type": "boolean"
+          },
+          "ehSua": {
+            "type": "boolean"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ItemDto"
+            }
+          }
+        }
+      },
+      "ConexoesDto": {
+        "required": [
+          "conexoes",
+          "slots"
+        ],
+        "type": "object",
+        "properties": {
+          "conexoes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConexaoDto"
+            }
+          },
+          "slots": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SlotDto"
+            }
           }
         }
       },
@@ -3321,6 +3663,49 @@
           }
         }
       },
+      "ItemDto": {
+        "required": [
+          "id",
+          "banco",
+          "estado",
+          "motivo",
+          "consentimentoVenceEm",
+          "ultimaSincronizacaoEm"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "banco": {
+            "type": "string"
+          },
+          "estado": {
+            "type": "string"
+          },
+          "motivo": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "consentimentoVenceEm": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date"
+          },
+          "ultimaSincronizacaoEm": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
       "LancamentoDto": {
         "required": [
           "id",
@@ -3627,6 +4012,37 @@
           }
         }
       },
+      "NovaConexaoDto": {
+        "required": [
+          "slot",
+          "itemId",
+          "banco"
+        ],
+        "type": "object",
+        "properties": {
+          "slot": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "itemId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "banco": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
       "NovaContaDto": {
         "required": [
           "tipo",
@@ -3835,6 +4251,27 @@
           },
           "descricao": {
             "type": "string"
+          }
+        }
+      },
+      "NovoItemDto": {
+        "required": [
+          "itemId",
+          "banco"
+        ],
+        "type": "object",
+        "properties": {
+          "itemId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "banco": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -4817,6 +5254,30 @@
           }
         }
       },
+      "SlotDto": {
+        "required": [
+          "slot",
+          "configurado",
+          "emUso"
+        ],
+        "type": "object",
+        "properties": {
+          "slot": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "configurado": {
+            "type": "boolean"
+          },
+          "emUso": {
+            "type": "boolean"
+          }
+        }
+      },
       "TetoDaCategoriaDto": {
         "required": [
           "categoriaId",
@@ -5107,6 +5568,9 @@
     },
     {
       "name": "Metas"
+    },
+    {
+      "name": "Integrações"
     }
   ]
 }

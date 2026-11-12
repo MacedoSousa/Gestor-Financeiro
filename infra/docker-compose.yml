@@ -50,7 +50,16 @@ services:
       ConnectionStrings__Migrador: "Host=postgres;Database=gestor;Username=gf_migrator;Passfile=/run/secrets/pgpass_migrador;GSS Encryption Mode=Disable"
       Seguranca__WebAuthn__RpId: ${DOMINIO:?defina DOMINIO em infra/.env}
       Seguranca__WebAuthn__Origens__0: https://${DOMINIO:?defina DOMINIO em infra/.env}
-    secrets: [gf_chave_servico, pgpass_app, pgpass_migrador]
+      # Chaves do Meu Pluggy por slot (D23): pluggy_<slot>_client_{id,secret}; vazio = slot não configurado.
+      Pluggy__PastaDeSegredos: /run/secrets
+    secrets:
+      - gf_chave_servico
+      - pgpass_app
+      - pgpass_migrador
+      - pluggy_1_client_id
+      - pluggy_1_client_secret
+      - pluggy_2_client_id
+      - pluggy_2_client_secret
     volumes:
       - ./data/chaves:/var/lib/gestor/chaves
     networks:
@@ -128,3 +137,8 @@ secrets:
   pgpass_app:        { file: ./secrets/pgpass_app }
   pgpass_migrador:   { file: ./secrets/pgpass_migrador }
   gf_chave_servico:  { file: ./secrets/gf_chave_servico }
+  # Só a api recebe; criados vazios pelo gerar-segredos.sh, preenchidos pela pessoa (D23).
+  pluggy_1_client_id:     { file: ./secrets/pluggy_1_client_id }
+  pluggy_1_client_secret: { file: ./secrets/pluggy_1_client_secret }
+  pluggy_2_client_id:     { file: ./secrets/pluggy_2_client_id }
+  pluggy_2_client_secret: { file: ./secrets/pluggy_2_client_secret }

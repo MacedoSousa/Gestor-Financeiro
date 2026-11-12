@@ -48,6 +48,12 @@ criar pg_senha_migrador gerar_senha
 criar pgpass_app        bash -c "echo \"*:*:gestor:gf_app:\$(cat '$dir/pg_senha_app')\""
 criar pgpass_migrador   bash -c "echo \"*:*:gestor:gf_migrator:\$(cat '$dir/pg_senha_migrador')\""
 criar gf_chave_servico  openssl rand 32
+# Pluggy (D23): um par de chaves por slot, com nome fixo. Nascem vazios (slot não configurado),
+# só para o compose subir; quem grava o conteúdo é a pessoa, pelo terminal (próximos passos).
+for slot in 1 2; do
+  criar "pluggy_${slot}_client_id"     true
+  criar "pluggy_${slot}_client_secret" true
+done
 
 cat <<EOF
 
@@ -70,6 +76,62 @@ Próximos passos (a API em container roda como o usuário 'app', uid 1654):
      cadastro — imprima e guarde em papel.
   6. Faça backup de infra/secrets/ e de infra/data/chaves/dek.servico num lugar fora deste PC
      (sem eles, os dados cifrados não abrem).
+  Na instalação que já existe, só o passo 7 (os passos 1 a 6 são da primeira instalação).
+  7. Open Finance (Meu Pluggy): roteiro para pôr a etapa 2 no ar. Roda na instalação de verdade:
+     na pasta /opt/gestor-financeiro, com sudo, feito pela pessoa (nunca por agente), num terminal
+     normal, fora de sudo -i (lá o ~ vira /root). Slot vazio = não configurado. Faça de a) a g) de uma
+     vez, longe das 03:00 (backup) e das 04:00 (reinício automático). Nesta ordem:
+     a) Depois do merge do PR da etapa 2, anote o commit atual (é o ponto de volta do código) e atualize:
+          sudo git -C /opt/gestor-financeiro rev-parse --short HEAD
+          sudo git -C /opt/gestor-financeiro pull
+     b) Backup antes de migrar. O start espera o backup terminar; depois, entre as últimas linhas do
+        journal tem de aparecer "backup ok: <arquivo>". Se o start der erro ou o "backup ok" não
+        aparecer, pare aqui e não siga para os próximos itens:
+          sudo systemctl start gestor-backup.service
+          sudo journalctl -u gestor-backup -n 5 --no-pager
+     c) Crie os quatro pluggy_* vazios (o compose exige os quatro; este script só cria os que faltam):
+          sudo /opt/gestor-financeiro/infra/scripts/gerar-segredos.sh
+     d) As chaves gravadas em 11/11 (pluggy_client_*, no clone ~/Gestor-Financeiro) viram o slot 1 de
+        quem as criou (D23). O ~ é a sua pasta; o valor não passa pela tela:
+          sudo install -m 444 -o root ~/Gestor-Financeiro/infra/secrets/pluggy_client_id /opt/gestor-financeiro/infra/secrets/pluggy_1_client_id
+          sudo install -m 444 -o root ~/Gestor-Financeiro/infra/secrets/pluggy_client_secret /opt/gestor-financeiro/infra/secrets/pluggy_1_client_secret
+        Confira: dono root, modo 444, tamanho maior que 0 nos dois do slot 1 (no slot 2, 0 até gravar):
+          sudo stat -c '%n %U %a %s' /opt/gestor-financeiro/infra/secrets/pluggy_1_client_id /opt/gestor-financeiro/infra/secrets/pluggy_1_client_secret /opt/gestor-financeiro/infra/secrets/pluggy_2_client_id /opt/gestor-financeiro/infra/secrets/pluggy_2_client_secret
+     e) Confira que as cópias são iguais aos originais (o cmp não mostra o conteúdo; iguais = só "iguais"):
+          sudo cmp ~/Gestor-Financeiro/infra/secrets/pluggy_client_id /opt/gestor-financeiro/infra/secrets/pluggy_1_client_id && sudo cmp ~/Gestor-Financeiro/infra/secrets/pluggy_client_secret /opt/gestor-financeiro/infra/secrets/pluggy_1_client_secret && echo iguais
+        Só se o stat mostrar root 444 e tamanho maior que 0 nos dois do slot 1 e o cmp responder só
+        "iguais": apague os originais do clone, que ficam ao alcance dos agentes (o -f libera a escrita
+        num arquivo 0444):
+          sudo shred -fu ~/Gestor-Financeiro/infra/secrets/pluggy_client_id ~/Gestor-Financeiro/infra/secrets/pluggy_client_secret
+     f) Construa a api e o web. A api tem IP fixo no compose: pare a antiga antes de migrar (com ela de
+        pé, o run falha com "Address already in use"). Depois aplique as migrações:
+          sudo docker compose -f /opt/gestor-financeiro/infra/docker-compose.yml build api web
+          sudo docker compose -f /opt/gestor-financeiro/infra/docker-compose.yml stop api
+          sudo docker compose -f /opt/gestor-financeiro/infra/docker-compose.yml run --rm api --migrar
+        Só se o --migrar terminar sem erro (última linha: "migrações em dia."): suba a api e o web novos:
+          sudo docker compose -f /opt/gestor-financeiro/infra/docker-compose.yml up -d api web
+        Se o --migrar der erro, pare aqui e religue a api e o web antigos: o start não recria os
+        containers, então eles voltam com as imagens antigas; o backup do item b) é o ponto de volta do banco:
+          sudo docker compose -f /opt/gestor-financeiro/infra/docker-compose.yml start api web
+        Até resolver, não rode nenhum up nem reinicie o PC (nem deixe o reinício das 04:00 acontecer): o
+        código e as imagens novos continuam em /opt, e o up do boot subiria a api nova sobre o banco sem a
+        migração. Para voltar de vez ao código antigo, com o commit anotado no item a):
+          sudo git -C /opt/gestor-financeiro checkout <commit anotado no item a>
+          sudo docker compose -f /opt/gestor-financeiro/infra/docker-compose.yml build api web
+        Depois leve o erro do --migrar ao CEO, sem colar nenhum valor de chave.
+     g) Confira: api e web "Up" (o compose não tem healthcheck para os dois) e a api respondendo
+        {"status":"ok",...} pela rede interna; se o wget recusar a conexão, a api ainda está subindo:
+        espere uns 10 s e repita:
+          sudo docker compose -f /opt/gestor-financeiro/infra/docker-compose.yml ps api web
+          sudo docker compose -f /opt/gestor-financeiro/infra/docker-compose.yml exec -T postgres wget -q -O - http://api:8080/api/v1/saude
+     O outro cônjuge (slot 2), ou quem trocar as chaves de um slot, grava pelo terminal: um comando por
+     arquivo; no aviso "valor (não aparece):", cole o valor e tecle Enter (não aparece na tela nem fica no
+     histórico). Só depois o sudo pode pedir a sua senha:
+          read -rsp 'valor (não aparece): ' v; echo; printf '%s' "\$v" | sudo tee /opt/gestor-financeiro/infra/secrets/pluggy_2_client_id >/dev/null; unset v
+          read -rsp 'valor (não aparece): ' v; echo; printf '%s' "\$v" | sudo tee /opt/gestor-financeiro/infra/secrets/pluggy_2_client_secret >/dev/null; unset v
+     (para o slot 1, os mesmos comandos com pluggy_1_*). Depois, confira com o stat do item d).
+     Depois de regravar as chaves de um slot, reinicie a api (a chave temporária fica em cache por até 110 min).
+          sudo docker compose -f /opt/gestor-financeiro/infra/docker-compose.yml restart api
 
 Instalações anteriores: um dek.recuperacao antigo e o código em papel que veio com ele estão
 obsoletos (não são mais lidos). Guarde ou destrua de propósito; não confunda com o código novo.

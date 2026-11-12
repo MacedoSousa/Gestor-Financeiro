@@ -731,6 +731,75 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/integracoes/conexoes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Conexões dos dois cônjuges, com o estado de cada banco, e os dois slots de chaves do servidor. */
+        get: operations["ListarConexoes"];
+        put?: never;
+        /** Cria a conexão de quem está na sessão com o primeiro banco. Autentica com as chaves do slot escolhido e consulta o item na Pluggy antes de gravar: recusado dá 400, Pluggy fora do ar dá 503. Slot sem chaves dá 400; slot em uso, segunda conexão do mesmo cônjuge ou item já cadastrado dão 409. */
+        post: operations["CriarConexao"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/integracoes/conexoes/{id}/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mais um banco na própria conexão, validado com as chaves do slot dela. Só o titular (senão 403). */
+        post: operations["AcrescentarItem"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/integracoes/conexoes/{id}/items/{item}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Tira um banco da própria conexão (soft delete). Só o titular (senão 403). */
+        delete: operations["ApagarItem"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/integracoes/conexoes/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Apaga a própria conexão e os bancos dela (soft delete); libera o slot. Só o titular (senão 403). */
+        delete: operations["ApagarConexao"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -838,6 +907,22 @@ export interface components {
             saldoInformadoCentavos: null | number | string;
             /** Format: int64 */
             saldoExibidoCentavos: null | number | string;
+        };
+        ConexaoDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            usuarioId: string;
+            apelido: string;
+            /** Format: int32 */
+            slot: number | string;
+            slotConfigurado: boolean;
+            ehSua: boolean;
+            items: components["schemas"]["ItemDto"][];
+        };
+        ConexoesDto: {
+            conexoes: components["schemas"]["ConexaoDto"][];
+            slots: components["schemas"]["SlotDto"][];
         };
         ConfirmacaoDeIdentidadeDto: {
             codigoTotp: null | string;
@@ -1005,6 +1090,17 @@ export interface components {
                 [key: string]: string[];
             };
         };
+        ItemDto: {
+            /** Format: uuid */
+            id: string;
+            banco: string;
+            estado: string;
+            motivo: null | string;
+            /** Format: date */
+            consentimentoVenceEm: null | string;
+            /** Format: date-time */
+            ultimaSincronizacaoEm: null | string;
+        };
         LancamentoDto: {
             /** Format: uuid */
             id: string;
@@ -1077,6 +1173,12 @@ export interface components {
             tipo: string;
             arquivada?: null | boolean;
         };
+        NovaConexaoDto: {
+            /** Format: int32 */
+            slot: null | number | string;
+            itemId: null | string;
+            banco: null | string;
+        };
         NovaContaDto: {
             tipo: string;
             apelido: string;
@@ -1124,6 +1226,10 @@ export interface components {
             /** Format: date */
             data: string;
             descricao: string;
+        };
+        NovoItemDto: {
+            itemId: null | string;
+            banco: null | string;
         };
         NovoLancamentoDto: {
             /** Format: uuid */
@@ -1341,6 +1447,12 @@ export interface components {
             residentKey: string;
             requireResidentKey: boolean;
             userVerification: string;
+        };
+        SlotDto: {
+            /** Format: int32 */
+            slot: number | string;
+            configurado: boolean;
+            emUso: boolean;
         };
         TetoDaCategoriaDto: {
             /** Format: uuid */
@@ -3402,6 +3514,251 @@ export interface operations {
                 };
                 content: {
                     "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ListarConexoes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConexoesDto"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    CriarConexao: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NovaConexaoDto"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConexaoDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    AcrescentarItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NovoItemDto"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    ApagarItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                item: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ApagarConexao: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
             /** @description Not Found */

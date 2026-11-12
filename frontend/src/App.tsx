@@ -10,6 +10,7 @@ import { RegistrarAcesso } from "./paginas/RegistrarAcesso";
 import { Dispositivos } from "./paginas/Dispositivos";
 import { Lancamentos } from "./paginas/Lancamentos";
 import { Contas } from "./paginas/Contas";
+import { Conexoes } from "./paginas/Conexoes";
 import { Metas } from "./paginas/Metas";
 import { Orcamento } from "./paginas/Orcamento";
 
@@ -29,6 +30,7 @@ export function App() {
         <Route path="metas" element={<Metas />} />
         <Route path="assistente" element={<EmBreve titulo="Assistente" fase="Fase 4" />} />
         <Route path="contas" element={<Contas />} />
+        <Route path="conexoes" element={<Conexoes />} />
         <Route path="dispositivos" element={<Dispositivos />} />
         <Route path="*" element={<EmBreve titulo="Página não encontrada" />} />
       </Route>
