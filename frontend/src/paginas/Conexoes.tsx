@@ -286,7 +286,7 @@ function SuaConexao({ conexao, aoAvisar, aoVoltar }: { conexao: Conexao; aoAvisa
             <li key={item.id} className="item-linha">
               <EstadoDoBanco item={item} />
               <div className="acoes-linha">
-                <Link to={`/conexoes/items/${item.id}/nascimento`} className="botao-secundario link-botao" aria-label={`Contas do ${item.banco}`}>
+                <Link to={`/conexoes/items/${item.id}/nascimento`} className="botao-secundario link-botao" aria-label={`Contas do banco: ${item.banco}`}>
                   Contas do banco
                 </Link>
                 <button

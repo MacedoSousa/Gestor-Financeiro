@@ -119,20 +119,24 @@ describe("validarConfirmacao", () => {
   const cartao = primeira(linhasIniciais(descoberta([encontrada("k", "CARTAO")])));
 
   it("criar pede apelido de 1 a 60", () => {
-    expect(validarConfirmacao([{ ...corrente, apelido: " " }], [])).toEqual({ c: "Dê um apelido à conta." });
-    expect(validarConfirmacao([{ ...corrente, apelido: "x".repeat(61) }], [])).toEqual({ c: "O apelido tem no máximo 60 caracteres." });
+    expect(validarConfirmacao([{ ...corrente, apelido: " " }], [])).toEqual({ c: { campo: "apelido", mensagem: "Dê um apelido à conta." } });
+    expect(validarConfirmacao([{ ...corrente, apelido: "x".repeat(61) }], [])).toEqual({ c: { campo: "apelido", mensagem: "O apelido tem no máximo 60 caracteres." } });
   });
 
   it("cartão novo pede os dois dias", () => {
     expect(validarConfirmacao([{ ...cartao, diaFechamento: "3", diaVencimento: "" }], [])).toEqual({
-      k: "Informe os dias de fechamento e de vencimento (1 a 31).",
+      k: { campo: "diaVencimento", mensagem: "Informe os dias de fechamento e de vencimento (1 a 31)." },
     });
-    expect(validarConfirmacao([{ ...cartao, diaFechamento: "3", diaVencimento: "32" }], [])).toHaveProperty("k");
+    expect(validarConfirmacao([{ ...cartao, diaFechamento: "0", diaVencimento: "32" }], [])).toEqual({
+      k: { campo: "diaFechamento", mensagem: "Informe os dias de fechamento e de vencimento (1 a 31)." },
+    });
     expect(validarConfirmacao([{ ...cartao, diaFechamento: "3", diaVencimento: "10" }], [])).toEqual({});
   });
 
   it("ligar pede a conta que recebe", () => {
-    expect(validarConfirmacao([{ ...corrente, acao: "LIGAR", contaExistenteId: "" }], [])).toEqual({ c: "Escolha a conta que vai receber esta." });
+    expect(validarConfirmacao([{ ...corrente, acao: "LIGAR", contaExistenteId: "" }], [])).toEqual({
+      c: { campo: "contaExistenteId", mensagem: "Escolha a conta que vai receber esta." },
+    });
   });
 
   it("não importar não pede nada", () => {
@@ -141,12 +145,12 @@ describe("validarConfirmacao", () => {
 
   it("dois apelidos iguais na mesma confirmação", () => {
     const outra = { ...corrente, idExterno: "c2", apelido: " itaú corrente · ana " };
-    expect(validarConfirmacao([corrente, outra], [])).toEqual({ c2: "Outra conta desta lista já tem esse apelido." });
+    expect(validarConfirmacao([corrente, outra], [])).toEqual({ c2: { campo: "apelido", mensagem: "Outra conta desta lista já tem esse apelido." } });
   });
 
   it("grupo com nome longo", () => {
     const ap = primeira(linhasDeAplicacao(descoberta([], [{ idExterno: "a", nome: "CDB", tipo: "CDB", saldoCentavos: 1 }])));
-    expect(validarConfirmacao([], [{ ...ap, grupo: "g".repeat(61) }])).toEqual({ a: "O nome do grupo tem no máximo 60 caracteres." });
+    expect(validarConfirmacao([], [{ ...ap, grupo: "g".repeat(61) }])).toEqual({ a: { campo: "grupo", mensagem: "O nome do grupo tem no máximo 60 caracteres." } });
   });
 });
 

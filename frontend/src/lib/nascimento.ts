@@ -97,25 +97,36 @@ const diaValido = (texto: string) => /^\d{1,2}$/.test(texto.trim()) && Number(te
 /** O nome do grupo (e o apelido) não diferencia caixa nem espaços em volta, como na API. */
 const chaveDoGrupo = (nome: string) => nome.trim().toLocaleLowerCase("pt-BR");
 
-/** Mesmas regras da API, para avisar antes de enviar. Chave = idExterno; valor = a primeira mensagem daquela linha. */
-export function validarConfirmacao(contas: readonly LinhaDeConta[], aplicacoes: readonly LinhaDeAplicacao[]): Record<string, string> {
-  const erros: Record<string, string> = {};
+/** Erro de uma linha: o campo que recebe a marca de inválido e o foco, e a mensagem. */
+export type ErroDaLinha = {
+  campo: "apelido" | "diaFechamento" | "diaVencimento" | "contaExistenteId" | "grupo";
+  mensagem: string;
+};
+
+/** Mesmas regras da API, para avisar antes de enviar. Chave = idExterno; valor = o primeiro erro daquela linha. */
+export function validarConfirmacao(contas: readonly LinhaDeConta[], aplicacoes: readonly LinhaDeAplicacao[]): Record<string, ErroDaLinha> {
+  const erros: Record<string, ErroDaLinha> = {};
   const apelidos = new Set<string>();
   for (const c of contas) {
     if (c.acao === "CRIAR") {
       const apelido = c.apelido.trim();
-      if (apelido.length === 0) erros[c.idExterno] = "Dê um apelido à conta.";
-      else if (apelido.length > APELIDO_MAXIMO) erros[c.idExterno] = `O apelido tem no máximo ${APELIDO_MAXIMO} caracteres.`;
+      if (apelido.length === 0) erros[c.idExterno] = { campo: "apelido", mensagem: "Dê um apelido à conta." };
+      else if (apelido.length > APELIDO_MAXIMO)
+        erros[c.idExterno] = { campo: "apelido", mensagem: `O apelido tem no máximo ${APELIDO_MAXIMO} caracteres.` };
       else if (c.tipo === "CARTAO" && !(diaValido(c.diaFechamento) && diaValido(c.diaVencimento)))
-        erros[c.idExterno] = "Informe os dias de fechamento e de vencimento (1 a 31).";
-      else if (apelidos.has(chaveDoGrupo(apelido))) erros[c.idExterno] = "Outra conta desta lista já tem esse apelido.";
+        erros[c.idExterno] = {
+          campo: diaValido(c.diaFechamento) ? "diaVencimento" : "diaFechamento",
+          mensagem: "Informe os dias de fechamento e de vencimento (1 a 31).",
+        };
+      else if (apelidos.has(chaveDoGrupo(apelido))) erros[c.idExterno] = { campo: "apelido", mensagem: "Outra conta desta lista já tem esse apelido." };
       apelidos.add(chaveDoGrupo(apelido));
     } else if (c.acao === "LIGAR" && !c.contaExistenteId) {
-      erros[c.idExterno] = "Escolha a conta que vai receber esta.";
+      erros[c.idExterno] = { campo: "contaExistenteId", mensagem: "Escolha a conta que vai receber esta." };
     }
   }
   for (const a of aplicacoes)
-    if (a.grupo.trim().length > APELIDO_MAXIMO) erros[a.idExterno] = `O nome do grupo tem no máximo ${APELIDO_MAXIMO} caracteres.`;
+    if (a.grupo.trim().length > APELIDO_MAXIMO)
+      erros[a.idExterno] = { campo: "grupo", mensagem: `O nome do grupo tem no máximo ${APELIDO_MAXIMO} caracteres.` };
   return erros;
 }
 

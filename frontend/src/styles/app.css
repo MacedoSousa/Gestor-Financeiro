@@ -1436,6 +1436,14 @@ select.entrada {
   text-decoration: underline;
 }
 
+/* Links de texto da tela: o mesmo anel de foco dos botões. */
+.link-voltar:focus-visible,
+.cartao-nota a:focus-visible {
+  outline: 2px solid var(--destaque-claro);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
 /* Link com cara de botão secundário (ex.: "Decidir depois"). */
 .link-botao {
   display: inline-flex;
@@ -1458,10 +1466,6 @@ select.entrada {
 .conta-encontrada-titulo {
   padding: 0;
   font-weight: 500;
-}
-
-.conta-encontrada[aria-invalid="true"] {
-  border-top-color: var(--negativo);
 }
 
 .opcoes-acao {
@@ -1490,6 +1494,6 @@ select.entrada {
 }
 
 .selo-conta {
-  margin-left: 8px;
+  margin-left: 4px;
   font-weight: 400;
 }

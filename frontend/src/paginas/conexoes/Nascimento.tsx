@@ -17,6 +17,7 @@ import {
   trocarTitular,
   validarConfirmacao,
   type Acao,
+  type ErroDaLinha,
   type LinhaDeAplicacao,
   type LinhaDeConta,
 } from "../../lib/nascimento";
@@ -44,11 +45,16 @@ function useErroDoServidor() {
 }
 
 /** Os dias do cartão (fechamento e vencimento), lado a lado. */
-function DiasDoCartao({ linha, aoMudar }: { linha: { diaFechamento: string; diaVencimento: string }; aoMudar: (campo: "diaFechamento" | "diaVencimento", v: string) => void }) {
+function DiasDoCartao({ linha, erro, aoMudar }: {
+  linha: { diaFechamento: string; diaVencimento: string };
+  erro?: ErroDaLinha;
+  aoMudar: (campo: "diaFechamento" | "diaVencimento", v: string) => void;
+}) {
+  const no = (campo: ErroDaLinha["campo"]) => (erro?.campo === campo ? erro.mensagem : undefined);
   return (
     <div className="grade-dias">
-      <Campo rotulo="Dia de fechamento" valor={linha.diaFechamento} aoMudar={(v) => aoMudar("diaFechamento", v)} inputMode="numeric" maxLength={2} classeEntrada="num" />
-      <Campo rotulo="Dia de vencimento" valor={linha.diaVencimento} aoMudar={(v) => aoMudar("diaVencimento", v)} inputMode="numeric" maxLength={2} classeEntrada="num" />
+      <Campo rotulo="Dia de fechamento" valor={linha.diaFechamento} aoMudar={(v) => aoMudar("diaFechamento", v)} erro={no("diaFechamento")} inputMode="numeric" maxLength={2} classeEntrada="num" />
+      <Campo rotulo="Dia de vencimento" valor={linha.diaVencimento} aoMudar={(v) => aoMudar("diaVencimento", v)} erro={no("diaVencimento")} inputMode="numeric" maxLength={2} classeEntrada="num" />
     </div>
   );
 }
@@ -68,17 +74,18 @@ function ContaEncontrada({
   titulares: Titular[];
   nomes: Record<string, string>;
   contas: ReturnType<typeof useContas>["data"];
-  erro?: string;
+  erro?: ErroDaLinha;
   ocupado: boolean;
   aoMudar: (linha: LinhaDeConta) => void;
 }) {
   const id = useId();
   const cartao = linha.tipo === "CARTAO";
+  const no = (campo: ErroDaLinha["campo"]) => (erro?.campo === campo ? erro.mensagem : undefined);
   const compativeis = contasCompativeis(linha.tipo, contas ?? []);
   const mudar = <K extends keyof LinhaDeConta>(campo: K, valor: LinhaDeConta[K]) => aoMudar({ ...linha, [campo]: valor });
 
   return (
-    <fieldset className="conta-encontrada" disabled={ocupado} aria-invalid={erro ? true : undefined} aria-describedby={erro ? `${id}-erro` : undefined}>
+    <fieldset className="conta-encontrada" disabled={ocupado}>
       <legend className="conta-encontrada-titulo">
         {linha.nomeNoBanco} <span className="texto-suave">· {rotuloDoTipo(linha.tipo)}</span>
       </legend>
@@ -99,9 +106,9 @@ function ContaEncontrada({
 
       {linha.acao === "CRIAR" && (
         <div className="grade-form">
-          <Campo rotulo="Apelido" valor={linha.apelido} aoMudar={(v) => mudar("apelido", v)} maxLength={APELIDO_MAXIMO} autoComplete="off" />
+          <Campo rotulo="Apelido" valor={linha.apelido} aoMudar={(v) => mudar("apelido", v)} erro={no("apelido")} maxLength={APELIDO_MAXIMO} autoComplete="off" />
           <CampoSelecao rotulo="Titular" valor={linha.titular} aoMudar={(v) => aoMudar(trocarTitular(linha, v, banco, nomes))} opcoes={titulares} />
-          {cartao && <DiasDoCartao linha={linha} aoMudar={(campo, v) => mudar(campo, v)} />}
+          {cartao && <DiasDoCartao linha={linha} erro={erro} aoMudar={(campo, v) => mudar(campo, v)} />}
         </div>
       )}
 
@@ -117,6 +124,7 @@ function ContaEncontrada({
             aoMudar={(v) => mudar("contaExistenteId", v)}
             opcoes={[{ valor: "", rotulo: "Escolha a conta" }, ...compativeis.map((c) => ({ valor: c.id, rotulo: c.apelido }))]}
             nota="Ela passa a vir do banco: os lançamentos chegam sozinhos."
+            erro={no("contaExistenteId")}
           />
         ))}
 
@@ -124,11 +132,6 @@ function ContaEncontrada({
         <p className="cartao-nota">Fica registrada como não importada e não é perguntada de novo. Dá para incluir depois, nesta tela.</p>
       )}
 
-      {erro && (
-        <span id={`${id}-erro`} className="campo-erro">
-          {erro}
-        </span>
-      )}
     </fieldset>
   );
 }
@@ -145,7 +148,7 @@ function Investimentos({
   linhas: LinhaDeAplicacao[];
   metaPorGrupo: Record<string, string>;
   metas: { id: string; nome: string }[];
-  erros: Record<string, string>;
+  erros: Record<string, ErroDaLinha>;
   ocupado: boolean;
   aoMudarLinha: (linha: LinhaDeAplicacao) => void;
   aoMudarMeta: (chave: string, metaId: string) => void;
@@ -166,7 +169,7 @@ function Investimentos({
                 {a.tipo} · <span className="num">{formatarReais(a.saldoCentavos)}</span>
               </span>
             </div>
-            <Campo rotulo={`Grupo de ${a.nome}`} valor={a.grupo} aoMudar={(v) => aoMudarLinha({ ...a, grupo: v })} erro={erros[a.idExterno]} maxLength={APELIDO_MAXIMO + 10} autoComplete="off" />
+            <Campo rotulo={`Grupo de ${a.nome}`} valor={a.grupo} aoMudar={(v) => aoMudarLinha({ ...a, grupo: v })} erro={erros[a.idExterno]?.mensagem} maxLength={APELIDO_MAXIMO + 10} autoComplete="off" />
           </li>
         ))}
       </ul>
@@ -197,21 +200,39 @@ function NaoImportada({ conta, banco, titulares, nomes, aoIncluir }: {
 }) {
   const [aberta, setAberta] = useState(false);
   const [ocupado, setOcupado] = useState(false);
+  const formulario = useRef<HTMLFormElement>(null);
+  const botao = useRef<HTMLButtonElement>(null);
+  const [voltar, setVoltar] = useState(false);
   const [linha, setLinha] = useState<LinhaDeConta>(() => ({
     idExterno: conta.idExterno, tipo: conta.tipo, nomeNoBanco: conta.nomeNoBanco, acao: "CRIAR", apelido: conta.apelidoSugerido,
     titular: titulares[1]?.valor ?? "", contaExistenteId: "", diaFechamento: "", diaVencimento: "", limiteCentavos: null,
   }));
   const erro = validarConfirmacao([linha], [])[linha.idExterno];
   const [mostrarErro, setMostrarErro] = useState(false);
+  const no = (campo: ErroDaLinha["campo"]) => (mostrarErro && erro?.campo === campo ? erro.mensagem : undefined);
+
+  // Ao abrir, o foco vai ao apelido; ao fechar, volta ao botão "Incluir" (2.4.3).
+  useEffect(() => {
+    if (aberta) formulario.current?.querySelector<HTMLInputElement>("input")?.focus();
+    else if (voltar) botao.current?.focus();
+  }, [aberta, voltar]);
+
+  function fechar() {
+    setVoltar(true);
+    setAberta(false);
+  }
 
   async function incluir(e: FormEvent) {
     e.preventDefault();
     setMostrarErro(true);
-    if (erro) return;
+    if (erro) {
+      requestAnimationFrame(() => formulario.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus());
+      return;
+    }
     setOcupado(true);
     const ok = await aoIncluir(conta, linha);
     setOcupado(false);
-    if (ok) setAberta(false);
+    if (ok) fechar();
   }
 
   return (
@@ -221,21 +242,21 @@ function NaoImportada({ conta, banco, titulares, nomes, aoIncluir }: {
         <span className="cartao-nota">{rotuloDoTipo(conta.tipo)} · não importada</span>
       </div>
       {!aberta ? (
-        <button type="button" className="botao-secundario" aria-label={`Incluir ${conta.nomeNoBanco}`} onClick={() => setAberta(true)}>
+        <button ref={botao} type="button" className="botao-secundario" aria-label={`Incluir: ${conta.nomeNoBanco}`} onClick={() => setAberta(true)}>
           Incluir
         </button>
       ) : (
-        <form className="bloco-form inclusao" noValidate onSubmit={(e) => void incluir(e)} aria-label={`Incluir ${conta.nomeNoBanco}`}>
+        <form ref={formulario} className="bloco-form inclusao" noValidate onSubmit={(e) => void incluir(e)} aria-label={`Incluir ${conta.nomeNoBanco}`}>
           <div className="grade-form">
-            <Campo rotulo="Apelido" valor={linha.apelido} aoMudar={(v) => setLinha({ ...linha, apelido: v })} maxLength={APELIDO_MAXIMO} erro={mostrarErro ? erro : undefined} autoComplete="off" />
+            <Campo rotulo="Apelido" valor={linha.apelido} aoMudar={(v) => setLinha({ ...linha, apelido: v })} maxLength={APELIDO_MAXIMO} erro={no("apelido")} autoComplete="off" />
             <CampoSelecao rotulo="Titular" valor={linha.titular} aoMudar={(v) => setLinha(trocarTitular(linha, v, banco, nomes))} opcoes={titulares} />
-            {conta.tipo === "CARTAO" && <DiasDoCartao linha={linha} aoMudar={(campo, v) => setLinha({ ...linha, [campo]: v })} />}
+            {conta.tipo === "CARTAO" && <DiasDoCartao linha={linha} erro={mostrarErro ? erro : undefined} aoMudar={(campo, v) => setLinha({ ...linha, [campo]: v })} />}
           </div>
           <div className="acoes-linha">
             <button type="submit" className="botao-secundario" disabled={ocupado}>
               {ocupado ? "Incluindo…" : "Incluir conta"}
             </button>
-            <button type="button" className="botao-secundario" disabled={ocupado} onClick={() => setAberta(false)}>
+            <button type="button" className="botao-secundario" disabled={ocupado} onClick={fechar}>
               Cancelar
             </button>
           </div>
@@ -265,7 +286,7 @@ function Confirmacao({ itemId, descoberta, aoAvisar }: { itemId: string; descobe
   const [linhas, setLinhas] = useState(() => linhasIniciais(descoberta));
   const [aplicacoes, setAplicacoes] = useState(() => linhasDeAplicacao(descoberta));
   const [metaPorGrupo, setMetaPorGrupo] = useState<Record<string, string>>({});
-  const [erros, setErros] = useState<Record<string, string>>({});
+  const [erros, setErros] = useState<Record<string, ErroDaLinha>>({});
   const [ocupado, setOcupado] = useState(false);
   const form = useRef<HTMLFormElement>(null);
 
@@ -278,7 +299,7 @@ function Confirmacao({ itemId, descoberta, aoAvisar }: { itemId: string; descobe
 
   useEffect(() => {
     if (Object.keys(erros).length > 0)
-      requestAnimationFrame(() => form.current?.querySelector<HTMLElement>('[aria-invalid="true"] input:not([type="radio"]), [aria-invalid="true"] select, input[aria-invalid="true"]')?.focus());
+      requestAnimationFrame(() => form.current?.querySelector<HTMLElement>('input[aria-invalid="true"], select[aria-invalid="true"]')?.focus());
   }, [erros]);
 
   async function confirmar(e: FormEvent) {
@@ -294,7 +315,7 @@ function Confirmacao({ itemId, descoberta, aoAvisar }: { itemId: string; descobe
     } catch (erro) {
       if (erro instanceof ErroDeApelido && erro.idExterno) {
         setLinhas((ls) => ls.map((l) => (l.idExterno === erro.idExterno ? { ...l, apelido: erro.sugestao } : l)));
-        setErros({ [erro.idExterno]: `Já existe uma conta com esse nome. Sugerimos "${erro.sugestao}"; confira e confirme de novo.` });
+        setErros({ [erro.idExterno]: { campo: "apelido", mensagem: `Já existe uma conta com esse nome. Sugerimos "${erro.sugestao}"; confira e confirme de novo.` } });
       } else servidor.falhar(erro);
     } finally {
       setOcupado(false);
@@ -331,7 +352,7 @@ function Confirmacao({ itemId, descoberta, aoAvisar }: { itemId: string; descobe
             Tudo em dia
           </h2>
           <p className="cartao-nota" style={{ margin: 0 }}>
-            {resumoDaDescoberta(descoberta)} <Link to="/contas">Ver as contas</Link>
+            As contas deste banco já estão no sistema. <Link to="/contas">Ver as contas</Link>
           </p>
         </section>
       ) : (
@@ -424,7 +445,9 @@ export function Nascimento() {
           ← Conexões
         </Link>
         <h1 className="titulo">{banco ? `Contas do ${banco}` : "Contas do banco"}</h1>
-        <span className="subtitulo">{descoberta.data ? resumoDaDescoberta(descoberta.data) : "Lendo o que o banco tem…"}</span>
+        <span className="subtitulo">
+          {descoberta.data ? resumoDaDescoberta(descoberta.data) : descoberta.isError ? "Não foi possível ler as contas do banco." : "Lendo o que o banco tem…"}
+        </span>
       </header>
 
       <p role="status" className={aviso ? "aviso-form" : "sr-only"}>

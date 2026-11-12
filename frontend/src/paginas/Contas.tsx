@@ -71,7 +71,12 @@ function ContaNaLista({ conta, saldo, aoEditar }: { conta: Conta; saldo?: { sald
         <span style={{ fontWeight: 500 }}>
           {conta.apelido}
           {conta.arquivada && <span className="texto-fraco"> (arquivada)</span>}
-          {seloDaConta(conta) && <span className="selo selo-open-finance selo-conta">{seloDaConta(conta)}</span>}
+          {seloDaConta(conta) && (
+            <>
+              {" "}
+              <span className="selo selo-open-finance selo-conta">{seloDaConta(conta)}</span>
+            </>
+          )}
         </span>
         <span className="cartao-nota">
           {rotuloDoTipo(conta.tipo)} · {conta.titular?.apelido ?? "Conjunta"}
