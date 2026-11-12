@@ -9,7 +9,7 @@ Sistema financeiro pessoal de um casal, rodando num PC de casa. Dados reais de b
 - Integração (precisa de Docker): `dotnet test backend/tests/GestorFinanceiro.IntegrationTests`
 - Front (tipos + lint + testes + build): `npm --prefix frontend run check`
 - Só os testes do front (Vitest): `npm --prefix frontend test`
-- Regerar cliente da API depois de mudar endpoint: `dotnet build backend/src/Host/GestorFinanceiro.Api && npm --prefix frontend run gen:api`
+- Regerar cliente da API depois de mudar endpoint: `dotnet build backend/src/Host/GestorFinanceiro.Api && npm --prefix frontend run gen:api` e, quando existir o projeto em `android/`, `cd android && ./gradlew openApiGenerate`
 - Nova migração: criar `db/migrations/V{próximo número com 4 dígitos}__descricao.sql`; nunca editar uma migração já commitada (skill `nova-migracao`).
 - Guardas e testes da parte que mudou (o que o hook `Stop` roda): `scripts/verificar.sh` (`--tudo` antes de PR)
 - Só as guardas: `scripts/guardas/verificar-repositorio.sh`; testes delas: `scripts/guardas/testes.sh`
@@ -23,7 +23,7 @@ Sistema financeiro pessoal de um casal, rodando num PC de casa. Dados reais de b
 5. **Nada pessoal em log, exceção ou resposta de erro.** Logar ids, nunca valores de CPF, telefone, nome, descrição ou token.
 6. **Dinheiro é `Dinheiro` (centavos em `long`)** no domínio e `bigint` no banco. Nunca `double`/`float`.
 7. **Módulos não se enxergam.** Só tipos em `GestorFinanceiro.Modules.<X>.Contracts` (e a classe `<X>Module`) são `public`; o resto é `internal`. Um módulo nunca lê o schema de outro.
-8. **API só por DTO.** Endpoints em `/api/v1`, erros em Problem Details (RFC 9457). Mudou contrato → regere o cliente do front no mesmo commit.
+8. **API só por DTO.** Endpoints em `/api/v1`, erros em Problem Details (RFC 9457). Mudou contrato → regere os dois clientes (front e app Android) no mesmo commit.
 9. **Toda consulta respeita os filtros nomeados** `SoftDelete` e `Casal`. `IgnoreQueryFilters` só com o nome do filtro (`["SoftDelete"]`) e só na tela de lixeira ou, dentro do módulo dono, na checagem de chave natural de importação (sem expor o conteúdo da linha apagada; spec da Fase 2, D6); nunca desligar o filtro `Casal`, exceto nos fluxos sem sessão do `Identidade` listados no teste de arquitetura dos filtros (login, passkey, TOTP, sessões, dispositivo, recuperação, primeiro acesso e identificação pelo telefone do bot); fluxo novo entra no teste antes.
 10. **Gemini não calcula.** Números vêm do `FinanceEngine`; o Gemini recebe só agregados com apelidos (`Conjuge_1`) e o texto dele é conferido contra os números.
 
@@ -39,7 +39,7 @@ Sistema financeiro pessoal de um casal, rodando num PC de casa. Dados reais de b
 ## Onde está cada coisa
 
 - Visão da arquitetura e fases: `docs/SPEC.md`; decisões: `docs/adr/`
-- Regras específicas: `.claude/rules/backend.md` e `.claude/rules/frontend.md` (carregam só nos arquivos certos)
-- Agentes do projeto: `.claude/agents/revisor-seguranca.md` (antes de todo PR, depois de `rm -f .git/revisao.diff && git fetch -q origin main && { echo "HEAD $(git rev-parse --short HEAD)"; git log --format='%h %s%n%b' origin/main..HEAD; echo '---'; git diff origin/main...HEAD; } > .git/revisao.diff`) e `.claude/agents/testador-de-telas.md` (toda tarefa com tela, pelo Playwright); skill `integracao-pluggy` para tudo da Fase 2
-- Guardas (DELETE físico, segredos, migrações): `scripts/guardas/regras.sh`, usadas pelos hooks do Claude, pelo `.githooks/pre-commit` e pelo CI
+- Regras específicas: `.claude/rules/backend.md`, `.claude/rules/frontend.md` e `.claude/rules/android.md` (carregam só nos arquivos certos)
+- Agentes do projeto: `.claude/agents/revisor-seguranca.md` (antes de todo PR, depois de `rm -f .git/revisao.diff && git fetch -q origin main && { echo "HEAD $(git rev-parse --short HEAD)"; git log --format='%h %s%n%b' origin/main..HEAD; echo '---'; git diff origin/main...HEAD; } > .git/revisao.diff`) e `.claude/agents/testador-de-telas.md` (toda tarefa com tela, pelo Playwright); skill `integracao-pluggy` para tudo da Fase 2; no app Android, agentes `android-dev` e `android-revisor` (este junto do `revisor-seguranca`, no mesmo diff) e skill `android-verificar`
+- Guardas (DELETE físico, segredos, migrações, keystore e `./gradlew` perigoso): `scripts/guardas/regras.sh`, usadas pelos hooks do Claude (edição e Bash), pelo `.githooks/pre-commit` e pelo CI
 - Trabalho com o Antigravity: `docs/desenvolvimento/dois-agentes.md`; revisões em `.revisoes/<branch>.md`

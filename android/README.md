@@ -29,12 +29,13 @@ os dois funcionam.
 
 ### Emulador e virtualização
 
-O emulador x86_64 precisa de KVM. Nesta máquina (i5-10400F) o VT-x está desligado na BIOS
-(`emulator -accel-check`: "/dev/kvm is not found"). Até ligar o VT-x, a validação é no
-tablet por depuração USB, que já é o piso de desempenho do app.
+Sem KVM: testes no aparelho.
 
 ## Regras
 
-As regras do app estão em `.claude/agents/android-dev.md`; a verificação antes de todo PR,
-em `.claude/skills/android-verificar/SKILL.md`. Keystore, senhas de keystore e
-`keystore.properties` nunca entram no repositório nem são lidos por agentes.
+As regras do app estão em `.claude/rules/android.md`; a verificação antes de todo PR, em
+`.claude/skills/android-verificar/SKILL.md`. Keystore, `keystore.properties` e
+`local.properties` ficam fora do git (`.gitignore`), e as guardas do projeto barram commit de
+keystore e o acesso de agentes a esses arquivos pelas ferramentas de edição e pelo Bash. Isso
+reduz o risco, mas não substitui manter o keystore de release fora desta máquina: ele vive
+nos GitHub Secrets do CI.
