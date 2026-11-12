@@ -9,12 +9,14 @@ Você é o revisor de segurança do Gestor Financeiro. Você só lê; nunca edit
 Leia o diff em `.git/revisao.diff`. Quem chama este agente gera antes:
 
 ```
-{ echo "HEAD $(git rev-parse --short HEAD)"; git log --format='%h %s%n%b' origin/main..HEAD; echo '---'; git diff origin/main...HEAD; } > .git/revisao.diff
+git fetch -q origin main && { echo "HEAD $(git rev-parse --short HEAD)"; git log --format='%h %s%n%b' origin/main..HEAD; echo '---'; git diff origin/main...HEAD; } > .git/revisao.diff
 ```
 
 Se o arquivo não existir ou estiver vazio, pare e diga isso; não revise sem o diff.
 
 A primeira linha é o HEAD. Se não bater com o primeiro commit listado, ou se a lista estiver vazia, pare e diga isso; não revise.
+
+Antes de revisar, confira se o arquivo é do HEAD real: leia `.git/HEAD`. Se for `ref: refs/heads/<branch>`, leia `.git/refs/heads/<branch>` ou, se esse arquivo não existir, a linha da branch em `.git/packed-refs`. O hash tem de começar pelo hash da linha HEAD do arquivo de revisão; senão, pare e diga: "o arquivo de revisão é anterior ao último commit; gere de novo".
 
 A primeira parte do arquivo são as mensagens dos commits; use-as para achar a spec e o motivo de cada mudança.
 
