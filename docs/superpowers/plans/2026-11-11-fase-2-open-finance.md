@@ -204,7 +204,7 @@ As chaves vêm de `infra/secrets/pluggy_<slot>_*`.
   internal sealed record CredenciaisPluggy(int Slot, string ClientId, string ClientSecret);
   internal sealed record ItemPluggy(string Id, string Status, string? ExecutionStatus, DateTimeOffset? ConsentimentoVenceEm, DateTimeOffset? AtualizadoEm);
   internal sealed record ContaPluggy(string Id, string Tipo, string? Subtipo, string Nome, string? Numero, string? AgenciaEConta,
-      string? CodigoDoBanco /* campo medido na Tarefa 1.0; nulo se a Pluggy não trouxer */, long SaldoCentavos, long? LimiteCentavos, string? Portador, string? FinalDoCartao);
+      long SaldoCentavos, long? LimiteCentavos, string? Portador, string? FinalDoCartao);
   internal sealed record TransacaoPluggy(string Id, DateOnly Data, long ValorCentavos, string Tipo /* DEBIT|CREDIT */, string Status /* POSTED|PENDING */,
       string? Descricao, string? CategoriaId, string? Categoria, int? Parcela, int? Parcelas, string? FaturaId);
   internal sealed record FaturaPluggy(string Id, DateOnly Vencimento, DateOnly? Fechamento, long TotalCentavos);
@@ -389,8 +389,8 @@ public interface IMetasDeContas { Task<bool> LigarContaAMetaAsync(Guid contaId, 
 - `ux_vinculos_identidade (casal_id, identidade_hmac) WHERE NOT is_deleted AND identidade_hmac IS NOT NULL`;
 - `audit.proteger`.
 - `identidade_hmac`, com `ICofre.IndiceCego(…, "integracoes.identidade")`:
-  - conta: `"<CodigoDoBanco ou vazio>|<AgenciaEConta>"`;
-  - cartão: `"<CodigoDoBanco ou vazio>|<FinalDoCartao>|<Portador normalizado>"` (portador por HMAC, decisão 6);
+  - conta: `ConversaoPluggy.TransferNumberNormalizado(AgenciaEConta)`, ou seja, o `bankData.transferNumber` só com os dígitos, sem código do banco (decisão 11);
+  - cartão: `"<FinalDoCartao>|<Portador normalizado>"` (portador por HMAC, decisão 6);
   - investimento: nulo.
 - O nome do banco digitado na tela do item **nunca** entra no `identidade_hmac`; ele serve só ao apelido (decisão 1).
 
@@ -821,3 +821,4 @@ Decisões sobre o "Para o CEO" da primeira versão deste plano (PR #30). Elas va
 ### Sobre o resultado da medição (CEO 11/11 21h)
 
 10. **Sinal** (CEO 11/11 21h). O conversor normaliza o sinal por tipo de conta: na corrente, o da Pluggy já é o do sistema; no cartão, DEBIT positivo é gasto e CREDIT negativo é pagamento ou estorno, então o sinal se inverte. → `ConversaoPluggy.ValorNoSistema` (etapa 1) e Tarefa 4.3.
+11. **Trava de conta repetida** (CEO 11/11 21h). HMAC do `transferNumber` normalizado (só os dígitos), sem código do banco: a Pluggy não o traz. `ContaPluggy.CodigoDoBanco` sai do modelo. Substitui a parte do código na decisão 1; o nome digitado continua fora da trava. → `ConversaoPluggy.TransferNumberNormalizado` (etapa 1) e Tarefa 3.2.

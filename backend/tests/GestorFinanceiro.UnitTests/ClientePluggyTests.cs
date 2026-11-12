@@ -166,9 +166,9 @@ public class ClientePluggyTests
         var contas = await m.Cliente.ListarContasAsync(Credenciais, "item-sintetico", default);
 
         Assert.Equal("/accounts?itemId=item-sintetico", m.Pluggy.Pedidos.Last().Caminho);
-        Assert.Equal(new ContaPluggy("k1", "BANK", "CHECKING_ACCOUNT", "Conta Sintética", "99999-9", "0001/99999-9", null,
+        Assert.Equal(new ContaPluggy("k1", "BANK", "CHECKING_ACCOUNT", "Conta Sintética", "99999-9", "0001/99999-9",
             1234567, null, null, null), contas[0]);
-        Assert.Equal(new ContaPluggy("c1", "CREDIT", "CREDIT_CARD", "Cartão Sintético", "5555 4444 3333 4321", null, null,
+        Assert.Equal(new ContaPluggy("c1", "CREDIT", "CREDIT_CARD", "Cartão Sintético", "5555 4444 3333 4321", null,
             150010, 800000, "PORTADOR SINTETICO", "4321"), contas[1]);
     }
 

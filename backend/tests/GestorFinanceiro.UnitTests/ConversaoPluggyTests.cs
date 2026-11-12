@@ -47,6 +47,22 @@ public class ConversaoPluggyTests
     public void Tipo_de_conta_desconhecido_e_formato_invalido(string tipoDaConta) =>
         Assert.Throws<FormatException>(() => ConversaoPluggy.ValorNoSistema(tipoDaConta, 100));
 
+    // Trava de conta repetida (CEO 11/11 21h, decisão 11): HMAC do transferNumber normalizado, só os dígitos, para que
+    // a mesma conta vinda das duas conexões dê o mesmo índice mesmo com pontuação ou espaços diferentes.
+    [Theory]
+    [InlineData("0001/12345-6", "0001123456")]
+    [InlineData(" 0001 / 12345-6 ", "0001123456")]
+    [InlineData("0001.12345.6", "0001123456")]
+    public void TransferNumber_normalizado_fica_so_com_os_digitos(string transferNumber, string esperado) =>
+        Assert.Equal(esperado, ConversaoPluggy.TransferNumberNormalizado(transferNumber));
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("  /-  ")]
+    public void TransferNumber_sem_digitos_e_nulo(string? transferNumber) =>
+        Assert.Null(ConversaoPluggy.TransferNumberNormalizado(transferNumber));
+
     [Theory]
     [InlineData("2026-02-01T02:30:00.000Z", "2026-01-31")]
     [InlineData("2026-03-10T12:00:00.000Z", "2026-03-10")]

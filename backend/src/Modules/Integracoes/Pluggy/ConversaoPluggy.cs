@@ -43,6 +43,16 @@ internal static class ConversaoPluggy
         _ => throw new FormatException("Tipo de conta da Pluggy desconhecido."),
     };
 
+    /// <summary>
+    /// <c>bankData.transferNumber</c> só com os dígitos (agência e conta), para o índice cego da trava de conta repetida
+    /// (CEO 11/11 21h). Nulo se não houver dígito.
+    /// </summary>
+    public static string? TransferNumberNormalizado(string? transferNumber)
+    {
+        var digitos = new string((transferNumber ?? "").Where(char.IsAsciiDigit).ToArray());
+        return digitos.Length == 0 ? null : digitos;
+    }
+
     public static DateOnly DiaDeSaoPaulo(string instanteIso)
     {
         if (!DateTimeOffset.TryParse(instanteIso, CultureInfo.InvariantCulture,

@@ -38,7 +38,6 @@ internal sealed partial class ClientePluggy(
             var credito = Objeto(e, "creditData");
             return new ContaPluggy(Texto(e, "id")!, tipo, Texto(e, "subtype"), Texto(e, "name") ?? "", numero,
                 Objeto(e, "bankData") is { } banco ? Texto(banco, "transferNumber") : null,
-                CodigoDoBanco: null, // campo apontado pela medição da Tarefa 1.0
                 ConversaoPluggy.Centavos(e.GetProperty("balance")),
                 credito is { } cr && cr.TryGetProperty("creditLimit", out var limite) && limite.ValueKind == JsonValueKind.Number
                     ? ConversaoPluggy.Centavos(limite) : null,
