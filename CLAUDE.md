@@ -40,6 +40,6 @@ Sistema financeiro pessoal de um casal, rodando num PC de casa. Dados reais de b
 
 - Visão da arquitetura e fases: `docs/SPEC.md`; decisões: `docs/adr/`
 - Regras específicas: `.claude/rules/backend.md` e `.claude/rules/frontend.md` (carregam só nos arquivos certos)
-- Agentes do projeto: `.claude/agents/revisor-seguranca.md` (antes de todo PR, depois de `git diff origin/main...HEAD > .git/revisao.diff`) e `.claude/agents/testador-de-telas.md` (toda tarefa com tela, pelo Playwright); skill `integracao-pluggy` para tudo da Fase 2
+- Agentes do projeto: `.claude/agents/revisor-seguranca.md` (antes de todo PR, depois de `{ git log --format='%h %s%n%b' origin/main..HEAD; echo '---'; git diff origin/main...HEAD; } > .git/revisao.diff`) e `.claude/agents/testador-de-telas.md` (toda tarefa com tela, pelo Playwright); skill `integracao-pluggy` para tudo da Fase 2
 - Guardas (DELETE físico, segredos, migrações): `scripts/guardas/regras.sh`, usadas pelos hooks do Claude, pelo `.githooks/pre-commit` e pelo CI
 - Trabalho com o Antigravity: `docs/desenvolvimento/dois-agentes.md`; revisões em `.revisoes/<branch>.md`
