@@ -197,8 +197,10 @@ passo_7_backup_antes_da_migracao() {
   [ "$migrar" -lt "$(linha_de "$COMPOSE_OPT up -d api web")" ] || { echo "  subida antes da migração"; return 1; }
   grep -qF "backup ok" "$T/passo7" || { echo "  não diz o que conferir no journal"; return 1; }
   # A frase inteira: "pare" sozinho casaria com "aparecer".
-  grep -qF "Se o start der erro ou o \"backup ok\" não" "$T/passo7" && grep -qF "pare aqui e não siga para os próximos itens" "$T/passo7" \
-    || { echo "  não manda parar se o backup falhar"; return 1; }
+  if ! grep -qF "Se o start der erro ou o \"backup ok\" não" "$T/passo7" \
+     || ! grep -qF "pare aqui e não siga para os próximos itens" "$T/passo7"; then
+    echo "  não manda parar se o backup falhar"; return 1
+  fi
 }
 
 # A api tem IP fixo no compose: com ela de pé, o "run --rm api" falha com "Address already in use". Ela para antes
@@ -226,8 +228,10 @@ passo_7_migracao_com_a_api_parada_e_parada_se_falhar() {
   [ -n "$anotar" ] && [ "$anotar" -lt "$pull" ] || { echo "  sem anotar o commit antes do pull"; return 1; }
   voltar="$(linha_de "sudo git -C /opt/gestor-financeiro checkout <commit anotado no item a>")"
   [ -n "$voltar" ] && [ "$voltar" -gt "$start" ] || { echo "  sem o checkout do commit anotado depois do start"; return 1; }
-  [ "$(linha_de "$COMPOSE_OPT build api web")" -lt "$voltar" ] && grep -n -F "$COMPOSE_OPT build api web" "$T/passo7" | cut -d: -f1 | awk -v v="$voltar" '$1 > v' | grep -q . \
-    || { echo "  sem o build depois do checkout de volta"; return 1; }
+  # Precisa de um "build api web" depois do checkout de volta (além do build do item f).
+  if ! grep -n -F "$COMPOSE_OPT build api web" "$T/passo7" | cut -d: -f1 | awk -v v="$voltar" '$1 > v' | grep -q .; then
+    echo "  sem o build depois do checkout de volta"; return 1
+  fi
 }
 
 # De a) a g) de uma vez, longe do backup das 03:00 e do reinício das 04:00.
@@ -246,8 +250,7 @@ passo_7_shred_so_depois_do_stat() {
   shred="$(linha_de "$SHRED_11_11")"
   [ -n "$stat" ] && [ -n "$cmp" ] && [ -n "$condicao" ] && [ -n "$shred" ] || { echo "  falta stat, cmp, condição ou shred"; return 1; }
   [ "$stat" -lt "$cmp" ] && [ "$cmp" -lt "$condicao" ] && [ "$condicao" -lt "$shred" ] || { echo "  shred antes do stat e do cmp, ou sem a condição"; return 1; }
-  [ "$(grep -cF "shred" "$T/passo7")" -ge 1 ] && ! grep -F "shred" "$T/passo7" | grep -qF "/opt/" \
-    || { echo "  shred tocando /opt"; return 1; }
+  if grep -F "shred" "$T/passo7" | grep -qF "/opt/"; then echo "  shred tocando /opt"; return 1; fi
 }
 
 # O client_secret de 11/11 também vai para o slot 1 (não para o 2), com o mesmo dono e modo, e é conferido.
