@@ -31,6 +31,11 @@ os dois funcionam.
 
 Sem KVM: testes no aparelho.
 
+## Para a ADR do app (E1)
+
+Decisão do CEO a registrar na ADR: a keystore de release nunca fica nesta máquina, e o build
+local não assina release (a assinatura só acontece no CI, com GitHub Secrets).
+
 ## Regras
 
 As regras do app estão em `.claude/rules/android.md`; a verificação antes de todo PR, em

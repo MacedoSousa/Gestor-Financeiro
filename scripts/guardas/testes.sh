@@ -75,6 +75,49 @@ espera_sucesso "git status passa"                 checar_comando_bash "git statu
 espera_sucesso "grep -l por senha no android passa" checar_comando_bash "git ls-files -z android | xargs -0 grep -lE 'storePassword|keyPassword' || true"
 espera_sucesso "properties fora do gradlew passa" checar_comando_bash "grep -rn properties docs"
 
+# 2º revisor, achado 2: lista positiva do gradlew/gradle (tarefas do settings.json + 4 opções).
+espera_sucesso "gradlew com as 4 opções liberadas" checar_comando_bash "./gradlew --offline --console=plain --stacktrace -q testDebugUnitTest"
+espera_sucesso "gradlew com várias tarefas liberadas" checar_comando_bash "cd android && ./gradlew lint ktlintCheck koverXmlReport"
+espera_sucesso "gradlew com saída redirecionada"  checar_comando_bash "./gradlew assembleDebug > /tmp/build.log 2>&1"
+espera_sucesso "gradlew seguido de tail"          checar_comando_bash "./gradlew lint | tail -20"
+espera_falha   "abreviação camelCase é barrada"   checar_comando_bash "./gradlew signingR"
+espera_falha   "abreviação de properties é barrada" checar_comando_bash "./gradlew prope"
+espera_falha   ":app:sigRep é barrado"            checar_comando_bash "./gradlew :app:sigRep"
+espera_falha   ":app:lint fora da lista é barrado" checar_comando_bash "./gradlew :app:lint"
+espera_falha   "gradlew entre aspas é vigiado"    checar_comando_bash "\"./gradlew\" signingReport"
+espera_falha   "gradlew entre aspas simples"      checar_comando_bash "'./gradlew' signingReport"
+espera_falha   "gradle do sistema é vigiado"      checar_comando_bash "gradle -p android signingReport"
+espera_falha   "gradle por caminho absoluto"      checar_comando_bash "/usr/bin/gradle tasks"
+espera_falha   "gradlew por bash -c é vigiado"    checar_comando_bash "bash -c './gradlew signingReport'"
+espera_falha   "gradlew com env antes é vigiado"  checar_comando_bash "env JAVA_HOME=/x ./gradlew dependencies"
+espera_falha   "tarefa fora da lista é barrada"   checar_comando_bash "./gradlew dependencies"
+espera_falha   "opção fora da lista é barrada"    checar_comando_bash "./gradlew --console=rich lint"
+espera_falha   "gradlew -D é barrado"             checar_comando_bash "./gradlew -Dorg.gradle.jvmargs=x lint"
+
+# 2º revisor, achado 3: glob, barra invertida e cd para ~/.gradle.
+espera_falha   "glob release.jk? é barrado"       checar_comando_bash "cat android/release.jk?"
+espera_falha   "glob *.j*s é barrado"             checar_comando_bash "cat android/*.j*s"
+espera_falha   "glob ~/.andr*/adbkey é barrado"   checar_comando_bash "cat ~/.andr*/adbkey"
+espera_falha   "glob keystore.prop* é barrado"    checar_comando_bash "cat android/keystore.prop*"
+espera_falha   "glob *.p1? é barrado"             checar_comando_bash "base64 a/*.p1?"
+espera_falha   "barra invertida no nome é barrada" checar_comando_bash 'cat android/keystore\.properties'
+espera_falha   "cd ~/.gradle e cat gradle.properties" checar_comando_bash "cd ~/.gradle && cat gradle.properties"
+espera_falha   "cd ~/.gradle e glob gradle.prop*" checar_comando_bash "cd ~/.gradle; cat gradle.prop*"
+espera_sucesso "gradle.properties do projeto passa" checar_comando_bash "cat android/gradle.properties"
+espera_sucesso "glob comum passa"                 checar_comando_bash "ls android/app/src/main/*.kt"
+
+# 2º revisor, achado 4: mensagem por arquivo, palavra .x do jq, gradlew só no trecho dele.
+espera_sucesso "git commit -F passa"              checar_comando_bash "git commit -q -F /tmp/msg.txt"
+espera_sucesso "gh pr create --body-file passa"   checar_comando_bash "gh pr create --draft --title 'chore(android): ferramentas do app' --body-file /tmp/pr.md"
+espera_sucesso "gh pr comment --body-file passa"  checar_comando_bash "gh pr comment 40 --body-file /tmp/revisao.md"
+espera_sucesso "jq '.key' passa"                  checar_comando_bash "jq -r '.key' a.json"
+espera_sucesso "gh api --jq '.[].key' passa"      checar_comando_bash "gh api repos/x/y/keys --jq '.[].key'"
+espera_falha   "cat .env continua barrado"        checar_comando_bash "cat .env"
+espera_falha   "ls .android continua barrado"     checar_comando_bash "cd ~ && ls .android"
+espera_sucesso "-I e properties fora do trecho do gradlew" checar_comando_bash "./gradlew lint && grep -rnI properties docs"
+espera_sucesso "gradlew depois de ; e ||"         checar_comando_bash "true; ./gradlew lint || echo falhou"
+espera_falha   "flag barrada no 2º trecho do gradlew" checar_comando_bash "cd android && ./gradlew lint --scan | tail"
+
 # .gitignore cobre os segredos do app.
 for ignorado in android/app/release.jks android/release.keystore android/keystore.properties android/local.properties a/x.p12; do
   espera_sucesso ".gitignore ignora $ignorado"   git -C "$raiz" check-ignore -q --no-index "$ignorado"

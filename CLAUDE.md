@@ -35,6 +35,7 @@ Sistema financeiro pessoal de um casal, rodando num PC de casa. Dados reais de b
 - Antes de concluir, rode o teste de arquitetura; o hook `Stop` roda `scripts/verificar.sh` e bloqueia se falhar.
 - Agentes nunca operam em `/opt/gestor-financeiro` (a instalação de verdade, de root); só a pessoa, com `sudo`.
 - Estas regras valem para todo agente, não só para o Claude. Papéis (ADR-012, `AGENTS.md`): o CEO (claude.ai) decide e escreve specs; o Claude Code implementa; o Antigravity faz QA e documentação. Siga a ordem de serviço do CEO; o que questiona a spec sobe para ele. Melhoria visual: skill `melhorar-tela`. Ao terminar uma tarefa, use a skill `revisao-cruzada`; nunca `git commit --no-verify`.
+- Mensagem de commit e corpo de PR ou comentário vão sempre por arquivo (`git commit -F`, `gh pr create --body-file`, `gh pr comment --body-file`): o hook `guardar-bash.sh` barra comando que cita caminho de segredo, inclusive dentro de `-m` ou `--body`.
 
 ## Onde está cada coisa
 

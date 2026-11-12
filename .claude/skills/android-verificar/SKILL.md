@@ -7,7 +7,7 @@ description: Verificação do app Android do Gestor Financeiro antes de commit o
 
 Rode a partir da raiz do repositório e mostre a saída real de cada passo. Se um passo falhar, pare, corrija e rode de novo desde o início. Nunca declare pronto sem todos verdes.
 
-Cada tarefa do Gradle roda num comando próprio, do jeito que está liberado no `.claude/settings.json`. `--scan`, `-I`/`--init-script`, `properties` e `signingReport` são barrados pelo hook `guardar-bash.sh`.
+Cada tarefa do Gradle roda num comando próprio, do jeito que está liberado no `.claude/settings.json`. O hook `guardar-bash.sh` só deixa passar essas tarefas e as opções `--offline`, `--console=plain`, `--stacktrace` e `-q` (ver "Comandos" em `.claude/rules/android.md`).
 
 ## 1. Cliente da API em dia com o contrato
 ```bash

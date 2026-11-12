@@ -20,7 +20,7 @@ App nativo (Kotlin + Jetpack Compose, Material 3) que é só um cliente da API `
 
 ## Login e sessão
 - Celular novo entra pelo código de 6 dígitos; dia a dia por passkey (`androidx.credentials`); TOTP como alternativa; biometria (`BIOMETRIC_STRONG` ou `DEVICE_CREDENTIAL`) só destrava localmente. Nada de senha no app.
-- Sessão e CSRF: seguir a ADR-011 (`docs/adr/0011-sessao-em-cookie.md`: cookie `__Host-`, `SameSite=Strict`, cabeçalho `X-Requested-With`). Como o app guarda e envia a sessão, e o valor do cabeçalho no app, ficam para o spec da E1. Até lá, nada de `EncryptedSharedPreferences` (descontinuado).
+- Sessão e CSRF: seguir a ADR-011 (`docs/adr/0011-sessao-em-cookie.md`). Como o app guarda e envia a sessão, e o valor do cabeçalho no app, ficam para o spec da E1. Até lá, nada de `EncryptedSharedPreferences` (descontinuado).
 - Logout limpa tudo o que o app guardou.
 
 ## Vazamento
@@ -37,6 +37,10 @@ App nativo (Kotlin + Jetpack Compose, Material 3) que é só um cliente da API `
 - Acessibilidade: `contentDescription`, toque mínimo de 48 dp, contraste, TalkBack e escala de fonte.
 - Animações com propósito; tokens de duração e curva só em `ui/theme/Motion.kt`; respeitar a escala de animação do sistema (`ANIMATOR_DURATION_SCALE` 0 = sem animação decorativa).
 - TDD: ViewModels e repositórios com JUnit + Turbine + MockWebServer; fluxos de login com testes de Compose UI.
+
+## Comandos
+- `./gradlew` (ou `gradle`) só com as tarefas liberadas no `.claude/settings.json` e as opções `--offline`, `--console=plain`, `--stacktrace` e `-q`; o hook `guardar-bash.sh` barra o resto (abreviação, tarefa de módulo, `--scan`, `-I`, `-D`, `-p`...).
+- Mensagem de commit e corpo de PR ou comentário sempre por arquivo: `git commit -F <arquivo>`, `gh pr create --body-file <arquivo>`, `gh pr comment <n> --body-file <arquivo>`. O hook olha o texto do comando inteiro e barraria um caminho de segredo citado em `-m` ou `--body`.
 
 ## Antes do PR
 1. Skill `android-verificar` (inclui as guardas e `scripts/verificar.sh`).
