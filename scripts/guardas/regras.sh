@@ -120,6 +120,7 @@ checar_comando_bash() {
   done
   for palavra in "${palavras[@]}"; do
     [ -z "$palavra" ] && continue
+    # shellcheck disable=SC2053 # no elif, a palavra pode ser um glob: o lado direito do == é o padrão de propósito
     if palavra_cita_segredo "$palavra"; then
       echo "Bloqueado: o comando cita $palavra, que guarda segredo (regra 5 do CLAUDE.md)." >&2
       falhou=1
