@@ -38,4 +38,19 @@ public class CategoriasDoBancoTests
 
         Assert.All(papeis, p => Assert.Contains(p, comCodigo));
     }
+
+    /// <summary>D23: fatura, mesma titularidade e investimento esperam a etapa 6; boleto, IOF, IR e o resto, não.</summary>
+    [Theory]
+    [InlineData("05100000", true)]
+    [InlineData("04000000", true)]
+    [InlineData("03000000", true)]
+    [InlineData("03020000", true)]
+    [InlineData("03060000", true)]
+    [InlineData("05010000", false)]
+    [InlineData("15030000", false)]
+    [InlineData("15010000", false)]
+    [InlineData("01010000", false)]
+    [InlineData(null, false)]
+    public void Reconhecido_na_proxima_etapa(string? codigo, bool esperado) =>
+        Assert.Equal(esperado, CategoriasDoBanco.ReconhecidoNaProximaEtapa(codigo));
 }

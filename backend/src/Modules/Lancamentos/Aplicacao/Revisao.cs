@@ -18,6 +18,10 @@ internal sealed class Revisao(LancamentosDbContext db, IUsuarioAtual atual, ICof
     internal const int LoteMaximo = 500;
     internal const string TituloJaRevisado = "Algum lançamento do lote já foi revisado. Atualize a página.";
     internal const string TituloCategoriaArquivada = "Categoria arquivada: escolha outra.";
+
+    /// <summary>D23: o que a etapa 6 reconhece não é revisado nem mapeado à mão até lá (a tela mostra a mesma frase).</summary>
+    internal const string TituloReconhecidoNaProximaEtapa =
+        "Pagamento de fatura e transferência entre as contas de vocês são reconhecidos na próxima etapa; não entram no orçamento.";
     private static readonly string[] Aplicacoes = ["SO_ESTA", "SEMPRE", "SEMPRE_DO_BANCO"];
 
     public async Task<IReadOnlyList<GrupoARevisarDto>?> ListarAsync(CancellationToken ct)
@@ -29,6 +33,8 @@ internal sealed class Revisao(LancamentosDbContext db, IUsuarioAtual atual, ICof
             .ToListAsync(ct);
 
         return linhas
+            // D23: pagamento de fatura, mesma titularidade e investimento esperam a etapa 6.
+            .Where(t => !CategoriasDoBanco.ReconhecidoNaProximaEtapa(t.CategoriaExterna))
             .Select(t => (T: t, Descricao: t.LerDescricaoDoBanco(cofre)))
             .GroupBy(x => (Chave: SugestaoDeCategoria.Normalizada(x.T, cofre) ?? $"#{x.T.Id}", x.T.Natureza))
             // Grupo maior que o lote máximo vem em partes, cada uma revisável de uma vez.
@@ -71,6 +77,8 @@ internal sealed class Revisao(LancamentosDbContext db, IUsuarioAtual atual, ICof
             var lote = await db.Transacoes.Where(t => ids.Contains(t.Id)).ToListAsync(ct);
             if (lote.Count != ids.Count) return new ResultadoDeLancamento.NaoEncontrado();
             if (lote.Any(t => t.Revisao != RevisaoDaTransacao.ARevisar)) return new ResultadoDeLancamento.Recusado(TituloJaRevisado, 409);
+            if (lote.Any(t => CategoriasDoBanco.ReconhecidoNaProximaEtapa(t.CategoriaExterna)))
+                return new ResultadoDeLancamento.Recusado(TituloReconhecidoNaProximaEtapa, 400);
             await db.Database.ExecuteSqlAsync($"SELECT pg_advisory_xact_lock(hashtextextended('lancamentos.categoria:' || {categoriaId}::text, 0))", ct);
             var naturezas = lote.Select(t => t.Natureza).Distinct().ToList();
             if (naturezas is not [var natureza] || natureza == NaturezaDaTransacao.Transferencia)
@@ -123,6 +131,7 @@ internal sealed class Revisao(LancamentosDbContext db, IUsuarioAtual atual, ICof
         var (codigo, nome) = pedido is null
             ? CodigoMaisComum(lote)
             : (pedido, lote.Where(t => t.CategoriaExterna == pedido).Select(t => t.CategoriaExternaNome).FirstOrDefault(n => n is not null));
+        if (CategoriasDoBanco.ReconhecidoNaProximaEtapa(codigo)) return new ResultadoDeLancamento.Recusado(TituloReconhecidoNaProximaEtapa, 400);
         if (codigo is null || !MapaDeCategoriaExterna.CodigoValido(codigo) || !lote.Any(t => t.CategoriaExterna == codigo))
             return Invalido("categoriaDoBanco", "O banco não mandou essa categoria nestes lançamentos.");
         var entrada = await db.Mapa.FirstOrDefaultAsync(m => m.CategoriaExterna == codigo, ct);
@@ -156,6 +165,8 @@ internal sealed class Revisao(LancamentosDbContext db, IUsuarioAtual atual, ICof
         await db.Database.ExecuteSqlAsync($"SELECT pg_advisory_xact_lock(hashtextextended('lancamentos.categoria:' || {categoriaId}::text, 0))", ct);
         var entrada = await db.Mapa.FirstOrDefaultAsync(m => m.Id == id, ct);
         if (entrada is null) return new ResultadoDeLancamento.NaoEncontrado();
+        if (CategoriasDoBanco.ReconhecidoNaProximaEtapa(entrada.CategoriaExterna))
+            return new ResultadoDeLancamento.Recusado(TituloReconhecidoNaProximaEtapa, 400);
         var categoria = await db.Categorias.AsNoTracking().FirstOrDefaultAsync(c => c.Id == categoriaId, ct);
         if (categoria is null) return Invalido("categoriaId", "Categoria não encontrada.");
         if (categoria.Arquivada) return new ResultadoDeLancamento.Recusado(TituloCategoriaArquivada, 400);

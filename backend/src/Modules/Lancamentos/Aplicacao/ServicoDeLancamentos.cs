@@ -135,6 +135,10 @@ internal sealed class ServicoDeLancamentos(LancamentosDbContext db, IUsuarioAtua
 
         var hoje = Brasilia.Hoje(relogio);
         var lista = await AlvosAsync(alvo, proximas, ct);
+        // D23: pagamento de fatura, mesma titularidade e investimento do banco não recebem categoria de gasto até a etapa 6.
+        if (lista.Any(t => t.Origem == OrigemDaTransacao.OpenFinance && CategoriasDoBanco.ReconhecidoNaProximaEtapa(t.CategoriaExterna))
+            && await db.Categorias.AsNoTracking().AnyAsync(c => c.Id == categoriaId && c.Tipo == TipoDeCategoria.Despesa, ct))
+            return new ResultadoDeLancamento.Recusado(Revisao.TituloReconhecidoNaProximaEtapa, 400);
         var valorComSinal = natureza == NaturezaDaTransacao.Despesa ? -p.ValorCentavos : p.ValorCentavos;
         var dataMudou = p.Data != alvo.Data;
 

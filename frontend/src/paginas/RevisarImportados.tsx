@@ -243,6 +243,10 @@ export function RevisarImportados() {
           <h2 id="titulo-a-revisar" className="cartao-titulo" tabIndex={-1} ref={titulo}>
             A revisar
           </h2>
+          {/* D23: o que a etapa 6 reconhece não aparece aqui (a mesma frase da recusa da API). */}
+          <p className="cartao-nota" style={{ margin: 0 }}>
+            Pagamento de fatura e transferência entre as contas de vocês são reconhecidos na próxima etapa; não entram no orçamento.
+          </p>
           {carregando && <p className="cartao-nota">Carregando…</p>}
           {grupos.isError && <p className="alerta-form">{grupos.error.message}</p>}
           {categorias.isError && <p className="alerta-form">{categorias.error.message}</p>}

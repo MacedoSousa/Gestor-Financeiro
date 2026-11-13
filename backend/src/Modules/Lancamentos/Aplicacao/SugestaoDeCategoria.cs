@@ -1,3 +1,4 @@
+using GestorFinanceiro.Modules.Lancamentos.Contracts;
 using GestorFinanceiro.Modules.Lancamentos.Dominio;
 using GestorFinanceiro.Modules.Lancamentos.Infra;
 using GestorFinanceiro.SharedKernel.Seguranca;
@@ -15,8 +16,10 @@ internal sealed class SugestaoDeCategoria(LancamentosDbContext db, ICofre cofre)
 {
     public async Task SugerirAsync(Guid casalId, IReadOnlyList<Transacao> novas, CancellationToken ct)
     {
+        // D23: o que a etapa 6 reconhece (fatura, mesma titularidade, investimento) não recebe sugestão.
         var candidatas = novas.Where(t => t.Revisao == RevisaoDaTransacao.ARevisar && t.CategoriaId is null
-                                          && t.Natureza != NaturezaDaTransacao.Transferencia).ToList();
+                                          && t.Natureza != NaturezaDaTransacao.Transferencia
+                                          && !CategoriasDoBanco.ReconhecidoNaProximaEtapa(t.CategoriaExterna)).ToList();
         if (candidatas.Count == 0) return;
 
         // Poucas por casal: carregadas inteiras (sob os filtros Casal e SoftDelete).

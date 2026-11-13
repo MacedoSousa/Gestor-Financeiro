@@ -34,6 +34,13 @@ public static class CategoriasDoBanco
         ["15010000"] = PapelDaCategoriaDoBanco.ImpostoDeRenda,      // Income taxes
     }.ToFrozenDictionary(StringComparer.Ordinal);
 
+    /// <summary>
+    /// Pagamento de fatura, transferência para a mesma pessoa e investimento (aplicação, resgate ou rendimento): a etapa 6
+    /// reconhece esses lançamentos. Até lá ficam "a revisar", fora da revisão em lote, do mapa e do orçamento (CEO, D23).
+    /// </summary>
+    public static bool ReconhecidoNaProximaEtapa(string? codigo) => Papel(codigo) is PapelDaCategoriaDoBanco.PagamentoDeFatura
+        or PapelDaCategoriaDoBanco.MesmaTitularidade or PapelDaCategoriaDoBanco.Aplicacao or PapelDaCategoriaDoBanco.ResgateOuRendimento;
+
     public static PapelDaCategoriaDoBanco Papel(string? codigo) =>
         codigo is not null && Codigos.TryGetValue(codigo, out var papel) ? papel : PapelDaCategoriaDoBanco.Nenhum;
 }

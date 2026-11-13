@@ -499,4 +499,91 @@ public class RevisaoTests(PostgresFixture pg)
         Assert.Equal($"A_REVISAR|{categoriaAlheia}", await EscalarAsync<string>(c.Banco,
             $"SELECT t.revisao || '|' || m.categoria_id FROM lancamentos.transacoes t, lancamentos.mapa_categoria_externa m WHERE t.id = '{linhaAlheia}' AND m.id = '{mapaAlheio}'"));
     }
+
+    // ------------------------------------------------------------------ Ordem D23 do CEO
+
+    private const string ReconhecidosNaE6 =
+        "Pagamento de fatura e transferência entre as contas de vocês são reconhecidos na próxima etapa; não entram no orçamento.";
+
+    private static readonly string[] CodigosDaE6 = ["05100000", "04000000", "03000000", "03020000", "03060000"];
+
+    private static async Task<string> TituloAsync(HttpResponseMessage r) =>
+        JsonDocument.Parse(await r.Content.ReadAsStringAsync()).RootElement.GetProperty("title").GetString()!;
+
+    /// <summary>
+    /// D23: pagamento de fatura, transferência para a mesma pessoa e investimento ficam fora da revisão em lote e da faixa até
+    /// a E6; continuam "a revisar" e fora do orçamento.
+    /// </summary>
+    [Fact]
+    public async Task Pagamento_de_fatura_e_transferencia_nao_aparecem_na_revisao()
+    {
+        await using var c = await IniciarAsync();
+        await ImportarAsync(c, [Linha("tx-normal", -1_000, "PADARIA 1"),
+            .. CodigosDaE6.Select((codigo, i) => Linha($"tx-e6-{i}", -10_000 - i, $"MOVIMENTO {(char)('A' + i)}", codigo, "Banco"))]);
+
+        var grupos = (await JsonAsync(await c.Cliente.GetAsync("/api/v1/lancamentos/a-revisar"))).EnumerateArray().ToList();
+
+        Assert.Equal([await IdAsync(c, "tx-normal")], grupos.SelectMany(g => g.GetProperty("ids").EnumerateArray().Select(x => x.GetGuid())).ToList());
+        Assert.Equal(5L, await EscalarAsync<long>(c.Banco,
+            "SELECT count(*) FROM lancamentos.transacoes WHERE id_externo LIKE 'tx-e6-%' AND revisao = 'A_REVISAR' AND categoria_id IS NULL"));
+    }
+
+    /// <summary>D23: mesmo pela API, o lote com um desses lançamentos é recusado inteiro, com a frase.</summary>
+    [Fact]
+    public async Task Revisao_em_lote_recusa_pagamento_de_fatura_e_transferencia()
+    {
+        await using var c = await IniciarAsync();
+        await ImportarAsync(c, Linha("tx-normal", -1_000, "PADARIA 1"), Linha("tx-fatura", -50_000, "PAGAMENTO FATURA", "05100000", "Credit card payment"));
+
+        var r = await RevisarAsync(c, [await IdAsync(c, "tx-normal"), await IdAsync(c, "tx-fatura")], await CategoriaAsync(c.Cliente, "Mercado"), "SO_ESTA");
+
+        Assert.Equal(HttpStatusCode.BadRequest, r.StatusCode);
+        Assert.Equal(ReconhecidosNaE6, await TituloAsync(r));
+        Assert.Equal("-|A_REVISAR", await EstadoAsync(c, "tx-normal"));
+        Assert.Equal("-|A_REVISAR", await EstadoAsync(c, "tx-fatura"));
+    }
+
+    /// <summary>D23: a edição individual recusa categoria de gasto para esses lançamentos (400, com a frase).</summary>
+    [Fact]
+    public async Task Edicao_individual_recusa_categoria_de_gasto_para_pagamento_de_fatura_e_transferencia()
+    {
+        await using var c = await IniciarAsync();
+        await ImportarAsync(c, Linha("tx-mesma-pessoa", -20_000, "TED MESMA TITULARIDADE", "04000000", "Same person transfer"));
+        var id = await IdAsync(c, "tx-mesma-pessoa");
+
+        var r = await c.Cliente.PutAsJsonAsync($"/api/v1/lancamentos/{id}", new
+        {
+            natureza = "DESPESA", valorCentavos = 20_000L, data = "2026-11-03", descricao = "TED", categoriaId = await CategoriaAsync(c.Cliente, "Mercado"),
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, r.StatusCode);
+        Assert.Equal(ReconhecidosNaE6, await TituloAsync(r));
+        Assert.Equal("-|A_REVISAR", await EstadoAsync(c, "tx-mesma-pessoa"));
+    }
+
+    /// <summary>D23, item 1: o mapa recusa esses códigos, nem pelo botão, nem pela edição, nem como sugestão.</summary>
+    [Fact]
+    public async Task Mapa_recusa_os_codigos_reconhecidos_na_E6()
+    {
+        await using var c = await IniciarAsync();
+        await ImportarAsync(c, Linha("tx-1", -1_000, "PADARIA 1"));
+        var mercado = await CategoriaAsync(c.Cliente, "Mercado");
+
+        var botao = await c.Cliente.PostAsJsonAsync("/api/v1/lancamentos/revisao",
+            new { ids = new[] { await IdAsync(c, "tx-1") }, categoriaId = mercado, aplicar = "SEMPRE_DO_BANCO", categoriaDoBanco = "05100000" });
+        Assert.Equal(HttpStatusCode.BadRequest, botao.StatusCode);
+        Assert.Equal(ReconhecidosNaE6, await TituloAsync(botao));
+        Assert.Equal(0L, await MapaAsync(c));
+
+        // Entrada antiga (gravada direto): a edição é recusada e ela não sugere nada.
+        var casal = await EscalarAsync<Guid>(c.Banco, "SELECT casal_id FROM identidade.usuarios WHERE nome_completo = 'Ana Teste'");
+        var entrada = Guid.NewGuid();
+        await EscalarAsync<int>(c.Banco, "INSERT INTO lancamentos.mapa_categoria_externa (id, casal_id, categoria_externa, categoria_id) " +
+                                         $"VALUES ('{entrada}', '{casal}', '03000000', '{mercado}') RETURNING 1");
+        var put = await c.Cliente.PutAsJsonAsync($"/api/v1/lancamentos/categorias-externas/{entrada}", new { categoriaId = mercado });
+        Assert.Equal(HttpStatusCode.BadRequest, put.StatusCode);
+        Assert.Equal(ReconhecidosNaE6, await TituloAsync(put));
+        await ImportarAsync(c, Linha("tx-aplicacao", -5_000, "APLICACAO CDB", "03000000", "Investments"));
+        Assert.Equal("-|A_REVISAR", await EstadoAsync(c, "tx-aplicacao"));
+    }
 }
