@@ -3,7 +3,7 @@
 Três papéis trabalham aqui (CEO, Dev e QA), com **as mesmas regras**. A fonte das regras é uma só:
 
 1. [`CLAUDE.md`](CLAUDE.md) — regras que não se negociam e comandos. Vale para qualquer agente, não só para o Claude.
-2. [`.claude/rules/backend.md`](.claude/rules/backend.md) e [`.claude/rules/frontend.md`](.claude/rules/frontend.md) — regras por pasta.
+2. [`.claude/rules/backend.md`](.claude/rules/backend.md), [`.claude/rules/frontend.md`](.claude/rules/frontend.md) e [`.claude/rules/android.md`](.claude/rules/android.md) — regras por pasta.
 3. [`docs/SPEC.md`](docs/SPEC.md) e [`docs/adr/`](docs/adr/) — arquitetura e decisões.
 
 Nenhum arquivo de regra de agente (este, `.agent/rules/`) repete regra: só aponta para os de cima.

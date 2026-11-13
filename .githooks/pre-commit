@@ -21,6 +21,12 @@ while IFS=$'\t' read -r estado caminho destino; do
     continue
   fi
 
+  if [ "${estado:0:1}" != "D" ] && [[ "$caminho" == *.json ]] && git show ":$caminho" | eh_json_de_conta_de_servico; then
+    echo "Bloqueado: $caminho é chave de conta de serviço e não entra no git." >&2
+    falhou=1
+    continue
+  fi
+
   case "$caminho" in
     db/migrations/*.sql)
       if [ "${estado:0:1}" != "A" ]; then
