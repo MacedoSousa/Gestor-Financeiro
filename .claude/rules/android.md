@@ -27,8 +27,12 @@ App nativo (Kotlin + Jetpack Compose, Material 3) que é só um cliente da API `
 - `FLAG_SECURE` em toda tela que mostra valores. Nada financeiro em disco no MVP.
 - Só HTTPS; cleartext desligado em release (`network_security_config` sem `cleartextTrafficPermitted="true"`). Sem pinning de certificado folha.
 - `android:allowBackup="false"`, ou regras de backup que excluem a sessão.
-- Nunca logar valor, CPF, cookie ou token (regra 5). `HttpLoggingInterceptor` só no build debug, nunca em `BODY`/`HEADERS` sem `redactHeader("Cookie")` e `redactHeader("Set-Cookie")`. Nada de `printStackTrace`.
-- Keystore, senhas de assinatura, `keystore.properties`, `~/.android` e `~/.gradle/gradle.properties` não são lidos, impressos nem commitados por agentes; a assinatura de release só acontece no CI, com GitHub Secrets. As guardas (`scripts/guardas/regras.sh`) barram isso na edição, no Bash, no pre-commit e no CI.
+- Nunca logar valor, CPF, cookie ou token (regra 5). `HttpLoggingInterceptor` só em `src/debug`, no nível `HEADERS` no máximo (nunca `BODY`), com `redactHeader("Cookie")` e `redactHeader("Set-Cookie")`. Nada de `printStackTrace`.
+- Keystore, senhas de assinatura, `keystore.properties`, `~/.android` e `~/.gradle/gradle.properties` não são lidos, impressos nem commitados por agentes. As guardas (`scripts/guardas/regras.sh`) barram isso na edição, no Bash, no pre-commit e no CI.
+- Assinatura (ADR-016):
+  - só no CI, pelo Environment `android-release` com aprovador obrigatório, e só a `main` e as tags `app-v*`;
+  - agente não cria nem empurra tag `app-v*`, não roda `gh release create/upload/edit` nem `gh workflow run`, e não chama a API de deployment, Environment, ruleset ou proteção; o hook `guardar-bash.sh` barra;
+  - PR que edita workflow que assina só entra com a aprovação do CEO no PR.
 
 ## Qualidade
 - Camadas: ui (Compose) → ViewModel (`StateFlow`, estado imutável, eventos únicos) → repositório → cliente gerado. Hilt; Navigation Compose.
