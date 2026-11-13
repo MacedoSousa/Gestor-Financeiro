@@ -3717,7 +3717,8 @@
           "arquivada",
           "historicoDesde",
           "diferencaCentavos",
-          "faturasDivergentes"
+          "faturasDivergentes",
+          "valorNoBancoCentavos"
         ],
         "type": "object",
         "properties": {

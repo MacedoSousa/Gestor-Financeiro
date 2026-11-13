@@ -250,13 +250,14 @@ public class ClientePluggyTests
               {"id":"i3","type":"MUTUAL_FUND","subtype":null,"name":"C","balance":null},
               {"id":"i4","type":"MUTUAL_FUND","name":"D","balance":1234.5678},
               {"id":"i5","type":"EQUITY","name":"E","balance":"12,30"},
-              {"id":"i6","type":"EQUITY","name":"F","balance":0}
+              {"id":"i6","type":"EQUITY","name":"F","balance":0},
+              {"id":"i7","type":"EQUITY","name":"G","balance":10000000000000000000000000000}
             ]}
             """);
 
         var investimentos = await m.Cliente.ListarInvestimentosAsync(Credenciais, "item-sintetico", default);
 
-        Assert.Equal([1050, null, null, null, null, 0], investimentos.Select(i => i.SaldoCentavos).ToArray());
+        Assert.Equal([1050, null, null, null, null, 0, null], investimentos.Select(i => i.SaldoCentavos).ToArray());
     }
 
     [Fact]

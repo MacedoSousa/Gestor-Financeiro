@@ -214,9 +214,13 @@ describe("textos da sincronização (Tarefa 4.5)", () => {
   });
 
   it("patrimônio: investimentos contam a partir da confirmação do grupo (D21)", () => {
-    const conta = (tipo: string, ligada: boolean, saldoInicialEm: string) => ({ tipo, ligada, saldoInicialEm });
+    const conta = (tipo: string, ligada: boolean, saldoInicialEm: string, arquivada = false) => ({ tipo, ligada, saldoInicialEm, arquivada });
     expect(textoDoPatrimonioDosInvestimentos([conta("CORRENTE", true, "2026-01-01")])).toBeNull();
     expect(textoDoPatrimonioDosInvestimentos([conta("INVESTIMENTO", false, "2026-01-01")])).toBeNull();
+    // Grupo arquivado não entra na nota (revisão da D21).
+    expect(textoDoPatrimonioDosInvestimentos([conta("INVESTIMENTO", true, "2026-11-10", true), conta("INVESTIMENTO", true, "2026-11-12")])).toBe(
+      "Investimentos contam a partir de 12/11/2026 (data da confirmação).",
+    );
     expect(textoDoPatrimonioDosInvestimentos([conta("INVESTIMENTO", true, "2026-11-12"), conta("INVESTIMENTO", true, "2026-11-12")])).toBe(
       "Investimentos contam a partir de 12/11/2026 (data da confirmação).",
     );

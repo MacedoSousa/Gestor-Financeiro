@@ -101,7 +101,6 @@ internal sealed class Vinculo : Entidade, ICasalScoped
         ImportadoAte = hoje;
     }
 
-    /// <summary>Conferência de saldo (só CONTA): diferença zero zera a contagem; outra soma uma sincronização seguida.</summary>
     /// <summary>Aplicação: o valor que o banco mandou agora (nulo = sem valor válido). Nada é lançado (D21).</summary>
     public void RegistrarValorNoBanco(long? centavos)
     {
@@ -119,6 +118,10 @@ internal sealed class Vinculo : Entidade, ICasalScoped
         ConferirSaldo(diferencaCentavos ?? 0);
     }
 
+    /// <summary>
+    /// Conferência de saldo (conta; e grupo de investimento, por <see cref="ConferirGrupo"/>): diferença zero zera a
+    /// contagem; outra soma uma sincronização seguida.
+    /// </summary>
     public void ConferirSaldo(long diferencaCentavos)
     {
         if (diferencaCentavos == 0)

@@ -364,7 +364,7 @@ internal sealed partial class ServicoDeConexoes(
                         grupos[x.Conta.Id].ValorNoBancoCentavos)
                     : new ContaDoItemDto(x.Conta.Id, x.Conta.Apelido, x.Conta.Tipo, x.Conta.Arquivada, x.Vinculo.HistoricoDesde,
                         x.Vinculo.Tipo == TipoDeVinculo.Conta ? x.Vinculo.DiferencaVisivel : null,
-                        x.Vinculo.FaturasVisiveis.Select(f => new FaturaDivergenteDto(f.Vencimento, f.DiferencaCentavos)).ToList()))
+                        x.Vinculo.FaturasVisiveis.Select(f => new FaturaDivergenteDto(f.Vencimento, f.DiferencaCentavos)).ToList(), null))
                 .ToList());
     }
 

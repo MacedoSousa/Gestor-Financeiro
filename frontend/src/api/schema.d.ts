@@ -1107,7 +1107,7 @@ export interface components {
             diferencaCentavos: null | number | string;
             faturasDivergentes: components["schemas"]["FaturaDivergenteDto"][];
             /** Format: int64 */
-            valorNoBancoCentavos?: null | number | string;
+            valorNoBancoCentavos: null | number | string;
         };
         ContaDoLancamentoDto: {
             /** Format: uuid */

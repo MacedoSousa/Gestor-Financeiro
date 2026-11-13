@@ -13,8 +13,12 @@ Dados (hoje = 2026-11-11 no teste):
 - horas das datas: em cada conta, uma às 00:00Z, uma às 03:00Z e as outras às 13:00Z.
 - corrente "k1": saldo 12345.67, uma transação "Mercado Sintético", uma de valor zero e uma
   sem descrição; nenhuma pendente. Transações em duas páginas (cursor "after").
+- aplicações (/investments): nenhuma, a não ser que a variável PLUGGY_FALSO_INVESTIMENTOS aponte
+  para um JSON sintético com a lista de "results". O arquivo é relido a cada requisição, para
+  mudar o balance (ou deixá-lo nulo) entre duas sincronizações (D21).
 """
 import json
+import os
 import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
@@ -129,10 +133,20 @@ class Pluggy(BaseHTTPRequestHandler):
         if url.path == "/bills":
             return self._json(200, {"results": FATURAS.get(q.get("accountId"), [])})
         if url.path == "/investments" and q.get("itemId") == ITEM:
-            return self._json(200, {"results": [], "total": 0})
+            aplicacoes = investimentos()
+            return self._json(200, {"results": aplicacoes, "total": len(aplicacoes), "page": 1, "totalPages": 1})
         if url.path == "/transactions":
             return self._json(410, {"message": "gone"})
         return self._json(404, {"message": "não existe"})
+
+
+def investimentos():
+    """A lista sintética de PLUGGY_FALSO_INVESTIMENTOS, relida agora; vazia sem a variável ou sem o arquivo."""
+    arquivo = os.environ.get("PLUGGY_FALSO_INVESTIMENTOS")
+    if not arquivo or not os.path.exists(arquivo):
+        return []
+    with open(arquivo, encoding="utf-8") as f:
+        return json.load(f)
 
 
 def main():

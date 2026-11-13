@@ -160,9 +160,10 @@ const dataBr = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.sl
  * inicial dele), não antes. Nulo sem grupo ligado ao banco.
  */
 export function textoDoPatrimonioDosInvestimentos(
-  contas: readonly { tipo: string; ligada?: boolean | null; saldoInicialEm: string }[],
+  contas: readonly { tipo: string; ligada?: boolean | null; arquivada?: boolean | null; saldoInicialEm: string }[],
 ): string | null {
-  const datas = [...new Set(contas.filter((c) => c.tipo === "INVESTIMENTO" && c.ligada).map((c) => c.saldoInicialEm))].sort();
+  // Grupo arquivado não conta mais para o que a nota explica.
+  const datas = [...new Set(contas.filter((c) => c.tipo === "INVESTIMENTO" && c.ligada && !c.arquivada).map((c) => c.saldoInicialEm))].sort();
   const lista = datas.map(dataBr);
   const ultima = lista.pop();
   if (ultima === undefined) return null;

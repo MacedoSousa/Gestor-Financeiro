@@ -198,6 +198,11 @@ internal sealed partial class Sincronizacao(
         DateOnly hoje, CancellationToken ct)
     {
         db.ChangeTracker.Clear();
+        // Na trava do casal (a mesma do nascimento e da reconciliação): a sincronização de outro item com aplicação no mesmo
+        // grupo, ou um agrupamento novo, espera; a diferença gravada bate com os valores gravados (revisão da D21, achado 3).
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
+        await db.Database.ExecuteSqlAsync(
+            $"SELECT pg_advisory_xact_lock(hashtextextended('integracoes.casal:' || {a.Item.CasalId}::text, 0))", ct);
         var desteItem = await db.Vinculos
             .Where(v => v.ItemId == a.Item.Id && v.Tipo == TipoDeVinculo.Investimento && v.ContaId != null)
             .ToListAsync(ct);
@@ -213,12 +218,14 @@ internal sealed partial class Sincronizacao(
         var sistema = (await saldos.SaldosAsync(hoje, ct)).ToDictionary(s => s.ContaId, s => s.SaldoCentavos);
         foreach (var membros in desteItem.Concat(deOutrosItems).GroupBy(v => v.ContaId!.Value))
         {
-            long? diferenca = doCasal.TryGetValue(membros.Key, out var grupo) && !grupo.Arquivada && membros.All(m => m.ValorBancoCentavos is not null)
+            long? diferenca = doCasal.TryGetValue(membros.Key, out var grupo) && grupo.Ligada && !grupo.Arquivada
+                              && membros.All(m => m.ValorBancoCentavos is not null)
                 ? membros.Sum(m => m.ValorBancoCentavos!.Value) - sistema.GetValueOrDefault(membros.Key)
                 : null;
             foreach (var m in membros) m.ConferirGrupo(diferenca);
         }
         await db.SaveChangesAsync(ct);
+        await tx.CommitAsync(ct);
     }
 
     /// <summary>

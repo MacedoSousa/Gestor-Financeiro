@@ -17,12 +17,11 @@ internal static class ConversaoPluggy
         if (valor.ValueKind != JsonValueKind.Number || !valor.TryGetDecimal(out var reais))
             throw new FormatException("Valor da Pluggy não é um número.");
 
-        var centavos = reais * 100m;
-        if (centavos != decimal.Truncate(centavos))
-            throw new FormatException("Valor da Pluggy com mais de duas casas decimais.");
-
         try
         {
+            var centavos = reais * 100m;
+            if (centavos != decimal.Truncate(centavos))
+                throw new FormatException("Valor da Pluggy com mais de duas casas decimais.");
             return decimal.ToInt64(centavos);
         }
         catch (OverflowException e)

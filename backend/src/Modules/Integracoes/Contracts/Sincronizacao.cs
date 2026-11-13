@@ -21,7 +21,7 @@ public sealed record SincronizacaoDto(int ContasSincronizadas, int ContasComFalh
 /// aplicação veio sem valor.
 /// </param>
 public sealed record ContaDoItemDto(Guid ContaId, string Apelido, string Tipo, bool Arquivada, DateOnly? HistoricoDesde, long? DiferencaCentavos,
-    IReadOnlyList<FaturaDivergenteDto> FaturasDivergentes, long? ValorNoBancoCentavos = null);
+    IReadOnlyList<FaturaDivergenteDto> FaturasDivergentes, long? ValorNoBancoCentavos);
 
 /// <summary>
 /// Um grupo de investimento (conta INVESTIMENTO ligada) e o que o banco diz dele hoje (D21), para a tela de Contas. Nada é

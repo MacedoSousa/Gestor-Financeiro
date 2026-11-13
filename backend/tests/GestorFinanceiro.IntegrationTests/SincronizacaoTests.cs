@@ -461,6 +461,79 @@ public class SincronizacaoTests(PostgresFixture pg)
         Assert.Equal(JsonValueKind.Null, naTela.GetProperty("diferencaCentavos").ValueKind);
     }
 
+    /// <summary>Revisão da D21: a aplicação que perde o valor limpa a diferença que o grupo já tinha.</summary>
+    [Fact]
+    public async Task Aplicacao_que_fica_sem_valor_limpa_a_diferenca_do_grupo()
+    {
+        await using var c = await IniciarAsync();
+        var (item, itemPluggy, _) = await NascerComGrupoAsync(c);
+        c.Pluggy.AtualizarInvestimento(itemPluggy, new InvestimentoPluggy("cdb-sintetico-1", "FIXED_INCOME", "CDB", "CDB 110%", 2_010_000));
+        await SincronizarOkAsync(c, item);
+        Assert.Equal("2010000;500050|10000", await EstadoDoGrupoAsync(c));
+
+        c.Pluggy.AtualizarInvestimento(itemPluggy, new InvestimentoPluggy("cdb-sintetico-2", "FIXED_INCOME", "CDB", "CDB 120%", null));
+        await SincronizarOkAsync(c, item);
+
+        Assert.Equal("2010000;-|-", await EstadoDoGrupoAsync(c));
+    }
+
+    /// <summary>Revisão da D21: grupo arquivado fica sem conferência (decisão 7); o valor da aplicação continua guardado.</summary>
+    [Fact]
+    public async Task Grupo_arquivado_fica_sem_conferencia()
+    {
+        await using var c = await IniciarAsync();
+        var (item, itemPluggy, grupo) = await NascerComGrupoAsync(c);
+        c.Pluggy.AtualizarInvestimento(itemPluggy, new InvestimentoPluggy("cdb-sintetico-1", "FIXED_INCOME", "CDB", "CDB 110%", 2_010_000));
+        await SincronizarOkAsync(c, item);
+        await EscalarAsync<int>(c.Banco, $"UPDATE contas.contas SET arquivada = true WHERE id = '{grupo}' RETURNING 1");
+
+        await SincronizarOkAsync(c, item);
+
+        Assert.Equal("2010000;500050|-", await EstadoDoGrupoAsync(c));
+    }
+
+    /// <summary>
+    /// Revisão da D21: a falha da conferência dos investimentos não muda o resultado das contas nem a última sincronização
+    /// do item, e o log não leva nada do banco.
+    /// </summary>
+    [Fact]
+    public async Task Falha_da_conferencia_nao_derruba_a_sincronizacao()
+    {
+        var logs = new LogsCapturados();
+        await using var c = await IniciarAsync(s => s.AddSingleton<ILoggerProvider>(logs));
+        var (item, itemPluggy, _) = await NascerComGrupoAsync(c);
+        c.Pluggy.CadastrarTransacao(Corrente.Id, Tx("tx-mercado", "2026-11-03", -30_000));
+        // O banco recusa gravar o valor 777: a conferência falha no SaveChanges.
+        await EscalarAsync<int>(c.Banco, """
+            CREATE FUNCTION integracoes.falhar_no_teste() RETURNS trigger LANGUAGE plpgsql AS
+            $$ BEGIN RAISE EXCEPTION 'falha sintética'; END $$;
+            CREATE TRIGGER falhar_no_teste BEFORE UPDATE ON integracoes.vinculos FOR EACH ROW
+            WHEN (NEW.valor_banco_centavos = 777) EXECUTE FUNCTION integracoes.falhar_no_teste();
+            SELECT 1
+            """);
+        c.Pluggy.AtualizarInvestimento(itemPluggy, new InvestimentoPluggy("cdb-sintetico-1", "FIXED_INCOME", "CDB", "CDB 110%", 777));
+
+        var r = await SincronizarOkAsync(c, item);
+
+        Assert.Equal(1, r.GetProperty("lancamentosNovos").GetInt32());
+        Assert.Equal(0, r.GetProperty("contasComFalha").GetInt32());
+        Assert.True(await EscalarAsync<bool>(c.Banco, $"SELECT ultima_sincronizacao_em IS NOT NULL FROM integracoes.items WHERE id = '{item}'"));
+        Assert.Equal("-;-|-", await EstadoDoGrupoAsync(c));
+        Assert.Contains(logs.Linhas, l => l.Contains("conferência dos investimentos", StringComparison.Ordinal));
+        foreach (var linha in logs.Linhas)
+            foreach (var p in new[] { itemPluggy, "cdb-sintetico-1", "cdb-sintetico-2", "777" })
+                Assert.DoesNotContain(p, linha, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>A rota dos grupos exige sessão, como todo /api/v1.</summary>
+    [Fact]
+    public async Task Grupos_de_investimento_exigem_sessao()
+    {
+        await using var c = await IniciarAsync();
+        Assert.Equal(HttpStatusCode.Unauthorized,
+            (await c.Api.CreateClient().GetAsync("/api/v1/integracoes/grupos-de-investimento")).StatusCode);
+    }
+
     /// <summary>"valor de cada aplicação (ordem do id externo)|diferença do grupo".</summary>
     private static Task<string> EstadoDoGrupoAsync(Ctx c) => EscalarAsync<string>(c.Banco,
         "SELECT string_agg(coalesce(valor_banco_centavos::text, '-'), ';' ORDER BY id_externo) || '|' || " +

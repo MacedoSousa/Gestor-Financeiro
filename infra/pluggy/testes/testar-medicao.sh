@@ -16,7 +16,7 @@ falha() { echo "FALHA $1"; falhas=$((falhas + 1)); }
 caso()  { if "$1"; then ok "$1"; else falha "$1"; fi; }
 
 mkdir -p "$T/servidor" "$T/raiz/infra/secrets" "$T/home" "$T/legado/infra/secrets"
-python3 "$DIR/pluggy-falso.py" "$T/servidor/porta" "$T/servidor/registro" &
+PLUGGY_FALSO_INVESTIMENTOS="$T/servidor/investimentos.json" python3 "$DIR/pluggy-falso.py" "$T/servidor/porta" "$T/servidor/registro" &
 servidor=$!
 for _ in $(seq 50); do [ -s "$T/servidor/porta" ] && break; sleep 0.1; done
 [ -s "$T/servidor/porta" ] || { echo "FALHA a Pluggy falsa não subiu"; exit 1; }
@@ -37,6 +37,18 @@ medir() {
 mostrar() { sed 's/^/  | /' "$T/saida"; }
 tem() { grep -qF -- "$1" "$T/saida" || { echo "  saída sem: $1"; mostrar; return 1; }; }
 nao_tem() { ! grep -qF -- "$1" "$T/saida" || { echo "  saída com: $1"; mostrar; return 1; }; }
+
+# A Pluggy falsa serve as aplicações do JSON sintético, relido a cada requisição (D21).
+investimentos_do_falso() {
+  local chave
+  chave="$(printf '{"clientId":"id-sintetico","clientSecret":"segredo-sintetico"}' |
+    curl -sS -X POST "$URL/auth" -H 'Content-Type: application/json' --data @- | jq -r .apiKey)"
+  [ "$(curl -sS "$URL/investments?itemId=item-sintetico" -H "X-API-KEY: $chave" | jq '.results | length')" = 0 ] || return 1
+  printf '[{"id":"i1","type":"FIXED_INCOME","subtype":"CDB","name":"CDB Sintético","balance":5000.00},{"id":"i2","type":"MUTUAL_FUND","name":"Fundo Sintético","balance":null}]' \
+    >"$T/servidor/investimentos.json"
+  [ "$(curl -sS "$URL/investments?itemId=item-sintetico" -H "X-API-KEY: $chave" | jq -c '[.results[].balance == null]')" = '[false,true]' ] || return 1
+  rm -f "$T/servidor/investimentos.json"
+}
 
 cartao_fecha_com_c() {
   medir "$T/raiz" ITEM=item-sintetico SLOT=1 || { mostrar; return 1; }
@@ -120,6 +132,7 @@ credencial_recusada_mostra_so_o_status() {
   nao_tem "segredo-errado"
 }
 
+caso investimentos_do_falso
 caso cartao_fecha_com_c
 caso banco_mostra_o_campo_do_codigo_sem_o_valor
 caso saida_sem_valores_nem_descricoes
