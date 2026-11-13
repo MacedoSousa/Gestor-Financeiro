@@ -42,6 +42,12 @@ internal sealed class TransacaoConfig : IEntityTypeConfiguration<Transacao>
         b.Property(x => x.Origem).HasConversion(
             v => v == OrigemDaTransacao.OpenFinance ? "OPEN_FINANCE" : v.ToString().ToUpperInvariant(),
             v => v == "OPEN_FINANCE" ? OrigemDaTransacao.OpenFinance : Enum.Parse<OrigemDaTransacao>(v, true));
+        b.Property(x => x.Revisao).HasConversion(
+            v => v == RevisaoDaTransacao.ARevisar ? "A_REVISAR" : "REVISADA",
+            v => v == "A_REVISAR" ? RevisaoDaTransacao.ARevisar : RevisaoDaTransacao.Revisada);
+        b.Property(x => x.Confirmacao).HasConversion(
+            v => v == ConfirmacaoDaTransacao.AConfirmar ? "A_CONFIRMAR" : "CONFIRMADA",
+            v => v == "A_CONFIRMAR" ? ConfirmacaoDaTransacao.AConfirmar : ConfirmacaoDaTransacao.Confirmada);
         b.Property(x => x.Parcela).HasColumnType("smallint");
         b.Property(x => x.Parcelas).HasColumnType("smallint");
     }

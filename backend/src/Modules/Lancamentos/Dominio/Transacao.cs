@@ -15,6 +15,23 @@ internal enum OrigemDaTransacao
     Manual,
     OpenFinance,
     Whatsapp,
+
+    /// <summary>Criado pelo sistema em conta ligada (rendimento, ajuste, lado manual de um par; D12).</summary>
+    Sistema,
+}
+
+/// <summary>Coluna <c>revisao</c> (D14, D15): o que veio do banco fica "a revisar" até o casal conferir.</summary>
+internal enum RevisaoDaTransacao
+{
+    ARevisar,
+    Revisada,
+}
+
+/// <summary>Coluna <c>confirmacao</c>: pendente no banco (PENDING) é "a confirmar" e conta no orçamento (D14).</summary>
+internal enum ConfirmacaoDaTransacao
+{
+    AConfirmar,
+    Confirmada,
 }
 
 /// <summary>
@@ -42,6 +59,14 @@ internal sealed class Transacao : Entidade, ICasalScoped
     public Guid? GrupoId { get; private set; }
     public short? Parcela { get; private set; }
     public short? Parcelas { get; private set; }
+    public RevisaoDaTransacao Revisao { get; private set; } = RevisaoDaTransacao.Revisada;
+    public ConfirmacaoDaTransacao Confirmacao { get; private set; } = ConfirmacaoDaTransacao.Confirmada;
+
+    /// <summary>Código da categoria da Pluggy (etapas 5 e 6); id opaco do banco.</summary>
+    public string? CategoriaExterna { get; private set; }
+
+    /// <summary>billId da Pluggy, só para conferência: a fatura do sistema é a do calendário (D2).</summary>
+    public string? FaturaIdExterno { get; private set; }
 
     public Dinheiro Valor => new(ValorCentavos);
 
@@ -89,6 +114,7 @@ internal sealed class Transacao : Entidade, ICasalScoped
         ExigirPositivo(valor);
         ArgumentException.ThrowIfNullOrWhiteSpace(descricao);
         Natureza = natureza;
+        Revisao = RevisaoDaTransacao.Revisada; // Quem edita e escolhe a categoria revisou (decisão 5).
         ValorCentavos = natureza == NaturezaDaTransacao.Despesa ? -valor.Centavos : valor.Centavos;
         Data = data;
         CategoriaId = categoriaId;

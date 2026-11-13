@@ -699,8 +699,8 @@ public class LancamentosTests(PostgresFixture pg)
             "INSERT INTO contas.contas (id, casal_id, tipo, apelido, saldo_inicial_centavos, saldo_inicial_em) " +
             $"VALUES ('{contaDeFora}', '{outroCasal}', 'CORRENTE', 'Alheia', 0, '2026-01-01')");
         await ExecutarAsync(c.Banco,
-            "INSERT INTO lancamentos.transacoes (id, casal_id, conta_id, data, valor_centavos, natureza, descricao_cifrada, origem, id_externo) " +
-            $"VALUES ('{lancamentoDeFora}', '{outroCasal}', '{contaDeFora}', '2026-11-02', -43210, 'DESPESA', convert_to('Segredo alheio', 'UTF8'), 'MANUAL', '{chave}')");
+            "INSERT INTO lancamentos.transacoes (id, casal_id, conta_id, data, valor_centavos, natureza, descricao_cifrada, origem, id_externo, revisao) " +
+            $"VALUES ('{lancamentoDeFora}', '{outroCasal}', '{contaDeFora}', '2026-11-02', -43210, 'DESPESA', convert_to('Segredo alheio', 'UTF8'), 'MANUAL', '{chave}', 'A_REVISAR')");
 
         var resposta = await c.Cliente.PostAsJsonAsync(Rota, Novo(conta, mercado, 1_000, chave: chave));
 

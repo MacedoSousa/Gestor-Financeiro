@@ -91,9 +91,10 @@ public class SaldosTests(PostgresFixture pg)
     private static Task InserirAsync(BancoDeTeste banco, Guid casal, Guid conta, string data, long valor, string natureza,
         string? faturaVencimento = null, bool apagada = false) =>
         ExecutarAsync(banco,
-            "INSERT INTO lancamentos.transacoes (id, casal_id, conta_id, data, valor_centavos, natureza, descricao_cifrada, origem, id_externo, fatura_vencimento, is_deleted) " +
+            "INSERT INTO lancamentos.transacoes (id, casal_id, conta_id, data, valor_centavos, natureza, descricao_cifrada, origem, id_externo, fatura_vencimento, is_deleted, revisao) " +
             $"VALUES ('{Guid.NewGuid()}', '{casal}', '{conta}', '{data}', {valor}, '{natureza}', '\\x01', 'MANUAL', '{Guid.NewGuid()}', " +
-            $"{(faturaVencimento is null ? "NULL" : $"'{faturaVencimento}'")}, {(apagada ? "true" : "false")})");
+            $"{(faturaVencimento is null ? "NULL" : $"'{faturaVencimento}'")}, {(apagada ? "true" : "false")}, " +
+            $"'{(natureza == "TRANSFERENCIA" ? "REVISADA" : "A_REVISAR")}')"); // sem categoria: só "a revisar" (D15)
 
     private static async Task<JsonElement> SaldoDaContaAsync(HttpClient cliente, Guid conta, string em)
     {
