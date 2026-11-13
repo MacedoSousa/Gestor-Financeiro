@@ -44,6 +44,9 @@ const TITULOS: ReadonlySet<string> = new Set([
   // Integracoes (banco escolhido pelo código, D18)
   "Escolha o banco desta conexão antes de ver as contas.",
   "O banco desta conexão já foi escolhido.",
+  // Lancamentos (revisão em lote, E5, e o que espera a E6, D23)
+  "Algum lançamento do lote já foi revisado. Atualize a página.",
+  "Pagamento de fatura e transferência entre as contas de vocês são reconhecidos na próxima etapa; não entram no orçamento.",
 ]);
 
 /** Títulos com o nome do cônjuge ou do grupo: só no formato exato, com o nome curto e sem ponto no meio. */

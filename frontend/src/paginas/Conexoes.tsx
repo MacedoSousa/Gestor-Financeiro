@@ -366,6 +366,8 @@ function NovaConexao({
 
   async function enviar(e: FormEvent) {
     e.preventDefault();
+    // O botão não se desabilita na consulta (o foco ficaria perdido entre "Conferir" e "Salvar"): o envio repetido é ignorado.
+    if (ocupado) return;
     const encontrados = validarCadastro({ slot, itemId, banco });
     setErros(encontrados);
     if (Object.keys(encontrados).length > 0 || slot === null) {
@@ -431,7 +433,8 @@ function NovaConexao({
         <button
           type="submit"
           className="botao-primario"
-          disabled={ocupado || nenhumSlot}
+          disabled={nenhumSlot}
+          aria-busy={ocupado || undefined}
         >
           {ocupado ? "Consultando o banco…" : conferido ? "Salvar" : "Conferir no banco"}
         </button>
@@ -480,6 +483,8 @@ function NovoBanco({
 
   async function enviar(e: FormEvent) {
     e.preventDefault();
+    // O botão não se desabilita na consulta (o foco ficaria perdido entre "Conferir" e "Salvar"): o envio repetido é ignorado.
+    if (ocupado) return;
     const encontrados = validarCadastro({ itemId, banco });
     setErros(encontrados);
     if (Object.keys(encontrados).length > 0) {
@@ -537,7 +542,7 @@ function NovoBanco({
       <Alerta mensagem={erro} tentativa={tentativa} />
       <PreviaDoItem texto={conferido ? previa.texto : undefined} />
       <div className="acoes-linha">
-        <button type="submit" className="botao-primario" disabled={ocupado}>
+        <button type="submit" className="botao-primario" aria-busy={ocupado || undefined}>
           {ocupado ? "Consultando o banco…" : conferido ? "Salvar" : "Conferir no banco"}
         </button>
         <button

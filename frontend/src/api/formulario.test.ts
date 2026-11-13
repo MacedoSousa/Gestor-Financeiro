@@ -25,6 +25,14 @@ describe("títulos da API que vão para a tela", () => {
     expect(await mensagem(409, { title: "Esta aplicação já está em outro grupo." })).toBe("Esta aplicação já está em outro grupo.");
   });
 
+  it("os da revisão em lote e da D23 passam", async () => {
+    const d23 = "Pagamento de fatura e transferência entre as contas de vocês são reconhecidos na próxima etapa; não entram no orçamento.";
+    expect(await mensagem(400, { title: d23 })).toBe(d23);
+    expect(await mensagem(409, { title: "Algum lançamento do lote já foi revisado. Atualize a página." })).toBe(
+      "Algum lançamento do lote já foi revisado. Atualize a página.",
+    );
+  });
+
   it("os do banco escolhido pelo código (D18) passam", async () => {
     expect(await mensagem(409, { title: "Escolha o banco desta conexão antes de ver as contas." })).toBe(
       "Escolha o banco desta conexão antes de ver as contas.",

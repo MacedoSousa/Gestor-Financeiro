@@ -71,7 +71,9 @@ function GrupoDaRevisao({ grupo, categorias, aoRevisar }: { grupo: GrupoARevisar
         </div>
         <Alerta mensagem={erro} tentativa={tentativa} />
         <fieldset className="escolha" disabled={ocupado}>
-          <legend className="sr-only">Como revisar {grupo.descricao}</legend>
+          <legend className="sr-only">
+            Como revisar {grupo.descricao} ({natureza})
+          </legend>
           <CampoSelecao
             rotulo="Categoria"
             valor={categoria}
