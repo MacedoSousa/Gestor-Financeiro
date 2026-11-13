@@ -20,6 +20,10 @@ while read -r arquivo; do
     echo "Segredo versionado: $arquivo" >&2
     falhou=1
   fi
+  if [[ "$arquivo" == *.json ]] && eh_json_de_conta_de_servico < "$arquivo"; then
+    echo "Chave de conta de serviço versionada: $arquivo" >&2
+    falhou=1
+  fi
   if eh_codigo_vigiado "$arquivo"; then
     # shellcheck disable=SC2094 # o nome só aparece na mensagem; o arquivo é apenas lido
     checar_delete_fisico "$arquivo" < "$arquivo" || falhou=1
