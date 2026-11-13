@@ -212,7 +212,7 @@ public class ImportacaoTests(PostgresFixture pg)
 
     /// <summary>D19 (a): um lote sem a linha não apaga; só conta uma ausência.</summary>
     [Fact]
-    public async Task Lote_incompleto_uma_vez_nao_apaga()
+    public async Task Uma_sincronizacao_sem_a_linha_nao_apaga()
     {
         await using var c = await IniciarAsync();
         await ImportarAsync(c, c.Corrente, Linha("tx-sintetica-1", -2_550), Linha("tx-sintetica-2", -1_000));

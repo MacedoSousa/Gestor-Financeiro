@@ -4,7 +4,8 @@ namespace GestorFinanceiro.ArchitectureTests;
 
 /// <summary>
 /// Regra 9 do CLAUDE.md: <c>IgnoreQueryFilters</c> sempre com o nome do filtro e só nos lugares permitidos.
-/// Casal: fluxos do Identidade anteriores à sessão (D27). SoftDelete: checagem de chave natural da importação (D6).
+/// Casal: fluxos do Identidade anteriores à sessão (D27). SoftDelete: checagem de chave natural da importação (D6), que
+/// também traz de volta a linha apagada por ausência no banco (D19); nada da linha apagada sai na resposta.
 /// A tela de lixeira, quando existir, entra aqui.
 /// </summary>
 internal static class VerificadorDeFiltros
