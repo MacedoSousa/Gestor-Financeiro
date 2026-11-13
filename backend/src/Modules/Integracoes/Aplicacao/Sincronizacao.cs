@@ -198,6 +198,8 @@ internal sealed partial class Sincronizacao(
         DateOnly hoje, CancellationToken ct)
     {
         db.ChangeTracker.Clear();
+        // O saldo é do Lancamentos (outra conexão, sem trava): lido antes, para não segurar a trava do casal durante ele.
+        var sistema = (await saldos.SaldosAsync(hoje, ct)).ToDictionary(s => s.ContaId, s => s.SaldoCentavos);
         // Na trava do casal (a mesma do nascimento e da reconciliação): a sincronização de outro item com aplicação no mesmo
         // grupo, ou um agrupamento novo, espera; a diferença gravada bate com os valores gravados (revisão da D21, achado 3).
         await using var tx = await db.Database.BeginTransactionAsync(ct);
@@ -215,7 +217,6 @@ internal sealed partial class Sincronizacao(
         var deOutrosItems = await db.Vinculos
             .Where(v => v.ItemId != a.Item.Id && v.Tipo == TipoDeVinculo.Investimento && v.ContaId != null && grupos.Contains(v.ContaId.Value))
             .ToListAsync(ct);
-        var sistema = (await saldos.SaldosAsync(hoje, ct)).ToDictionary(s => s.ContaId, s => s.SaldoCentavos);
         foreach (var membros in desteItem.Concat(deOutrosItems).GroupBy(v => v.ContaId!.Value))
         {
             long? diferenca = doCasal.TryGetValue(membros.Key, out var grupo) && grupo.Ligada && !grupo.Arquivada

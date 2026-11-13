@@ -503,15 +503,16 @@ public class SincronizacaoTests(PostgresFixture pg)
         await using var c = await IniciarAsync(s => s.AddSingleton<ILoggerProvider>(logs));
         var (item, itemPluggy, _) = await NascerComGrupoAsync(c);
         c.Pluggy.CadastrarTransacao(Corrente.Id, Tx("tx-mercado", "2026-11-03", -30_000));
-        // O banco recusa gravar o valor 777: a conferência falha no SaveChanges.
+        // O banco recusa gravar o valor 9876543210: a conferência falha no SaveChanges. Valor que não aparece por acaso
+        // em Guid ou duração de log.
         await EscalarAsync<int>(c.Banco, """
             CREATE FUNCTION integracoes.falhar_no_teste() RETURNS trigger LANGUAGE plpgsql AS
             $$ BEGIN RAISE EXCEPTION 'falha sintética'; END $$;
             CREATE TRIGGER falhar_no_teste BEFORE UPDATE ON integracoes.vinculos FOR EACH ROW
-            WHEN (NEW.valor_banco_centavos = 777) EXECUTE FUNCTION integracoes.falhar_no_teste();
+            WHEN (NEW.valor_banco_centavos = 9876543210) EXECUTE FUNCTION integracoes.falhar_no_teste();
             SELECT 1
             """);
-        c.Pluggy.AtualizarInvestimento(itemPluggy, new InvestimentoPluggy("cdb-sintetico-1", "FIXED_INCOME", "CDB", "CDB 110%", 777));
+        c.Pluggy.AtualizarInvestimento(itemPluggy, new InvestimentoPluggy("cdb-sintetico-1", "FIXED_INCOME", "CDB", "CDB 110%", 9_876_543_210));
 
         var r = await SincronizarOkAsync(c, item);
 
@@ -521,7 +522,7 @@ public class SincronizacaoTests(PostgresFixture pg)
         Assert.Equal("-;-|-", await EstadoDoGrupoAsync(c));
         Assert.Contains(logs.Linhas, l => l.Contains("conferência dos investimentos", StringComparison.Ordinal));
         foreach (var linha in logs.Linhas)
-            foreach (var p in new[] { itemPluggy, "cdb-sintetico-1", "cdb-sintetico-2", "777" })
+            foreach (var p in new[] { itemPluggy, "cdb-sintetico-1", "cdb-sintetico-2", "9876543210", "98765432.1", "98.765.432,10" })
                 Assert.DoesNotContain(p, linha, StringComparison.OrdinalIgnoreCase);
     }
 
