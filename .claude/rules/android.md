@@ -45,5 +45,5 @@ App nativo (Kotlin + Jetpack Compose, Material 3) que é só um cliente da API `
 ## Antes do PR
 1. Skill `android-verificar` (inclui as guardas e `scripts/verificar.sh`).
 2. Agente `revisor-seguranca` **e** agente `android-revisor` no mesmo diff (o segundo complementa o primeiro, não o substitui).
-3. Skill `revisao-cruzada`.
+3. Skill `revisao-cruzada`. Nesta frente, a revisão cruzada é feita pela sessão Claude QA (worktree `~/Gestor-Financeiro-qa`), não pelo Antigravity.
 4. `gh pr create --draft`; o relato termina com o commit do topo do PR.

@@ -71,14 +71,9 @@ glob_cita_segredo() {
 palavra_cita_segredo() {
   local palavra="$1"
   if [[ "$palavra" == *[\*\?\[]* ]] && glob_cita_segredo "$palavra"; then return 0; fi
-  # Começa com "." e não tem "/": não é caminho (ex.: '.key' do jq), salvo os dotfiles de segredo.
-  if [[ "$palavra" == .* && "$palavra" != */* ]]; then
-    case "$palavra" in
-      .env.example) return 1 ;;
-      .env|.env.*|.android) return 0 ;;
-    esac
-    return 1
-  fi
+  # Só os filtros do jq com sufixo de segredo ficam livres ('.key', '.pem', '.dump', '.[].key');
+  # .keystore, .x.jks, .chave-servico.json etc. caem na regra de caminho como qualquer palavra.
+  case "$palavra" in .key|.pem|.dump|.\[*) return 1 ;; esac
   eh_caminho_de_segredo "$palavra"
 }
 

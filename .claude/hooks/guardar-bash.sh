@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# PreToolUse (Bash): impede comando que cite caminho de segredo (keystore, .env, ~/.android...)
-# e ./gradlew com --scan, -I/--init-script, properties ou signingReport.
+# PreToolUse (Bash): impede comando que cite caminho de segredo (keystore, .env, ~/.android,
+# ~/.gradle/gradle.properties...), também por glob, e gradlew/gradle fora da lista positiva
+# de tarefas e opções (GRADLE_TAREFAS_LIBERADAS e GRADLE_OPCOES_LIBERADAS em regras.sh).
 # Recebe o JSON da ferramenta no stdin. Exit 2 = bloqueia e devolve a mensagem ao Claude.
 # As regras moram em scripts/guardas/regras.sh (as mesmas do pre-commit e do CI).
 set -uo pipefail

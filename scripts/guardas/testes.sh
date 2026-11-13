@@ -114,6 +114,9 @@ espera_sucesso "jq '.key' passa"                  checar_comando_bash "jq -r '.k
 espera_sucesso "gh api --jq '.[].key' passa"      checar_comando_bash "gh api repos/x/y/keys --jq '.[].key'"
 espera_falha   "cat .env continua barrado"        checar_comando_bash "cat .env"
 espera_falha   "ls .android continua barrado"     checar_comando_bash "cd ~ && ls .android"
+# 3º revisor, achado 4: só os sufixos do jq (.key, .pem, .dump) ficam livres sem "/".
+espera_falha   "cd ~ e cat .keystore barrado"     checar_comando_bash "cd ~ && cat .keystore"
+espera_falha   "cat .chave-servico.json barrado"  checar_comando_bash "cat .chave-servico.json"
 espera_sucesso "-I e properties fora do trecho do gradlew" checar_comando_bash "./gradlew lint && grep -rnI properties docs"
 espera_sucesso "gradlew depois de ; e ||"         checar_comando_bash "true; ./gradlew lint || echo falhou"
 espera_falha   "flag barrada no 2º trecho do gradlew" checar_comando_bash "cd android && ./gradlew lint --scan | tail"
