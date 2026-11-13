@@ -586,4 +586,50 @@ public class RevisaoTests(PostgresFixture pg)
         await ImportarAsync(c, Linha("tx-aplicacao", -5_000, "APLICACAO CDB", "03000000", "Investments"));
         Assert.Equal("-|A_REVISAR", await EstadoAsync(c, "tx-aplicacao"));
     }
+
+    /// <summary>
+    /// D23, revisão (Bloqueia 1): nem categoria de receita. A TED recebida da mesma pessoa editada como receita em "Salário"
+    /// entraria nas receitas do orçamento; continua a revisar e fora dele.
+    /// </summary>
+    [Fact]
+    public async Task Edicao_individual_recusa_qualquer_categoria_e_nada_entra_no_orcamento()
+    {
+        await using var c = await IniciarAsync();
+        await ImportarAsync(c, Linha("tx-ted", 30_000, "TED RECEBIDA MESMA TITULARIDADE", "04000000", "Same person transfer"));
+        var id = await IdAsync(c, "tx-ted");
+
+        var r = await c.Cliente.PutAsJsonAsync($"/api/v1/lancamentos/{id}", new
+        {
+            natureza = "RECEITA", valorCentavos = 30_000L, data = "2026-11-03", descricao = "TED", categoriaId = await CategoriaAsync(c.Cliente, "Salário"),
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, r.StatusCode);
+        Assert.Equal(ReconhecidosNaE6, await TituloAsync(r));
+        Assert.Equal("-|A_REVISAR", await EstadoAsync(c, "tx-ted"));
+        await using var escopo = c.Api.Services.CreateAsyncScope();
+        Assert.Equal(0, await escopo.ServiceProvider.GetRequiredService<IConsultaDeUso>().ReceitasAsync(new DateOnly(2026, 11, 1)));
+    }
+
+    /// <summary>
+    /// D23, revisão (Deveria 2): a pendente que o casal revisou com categoria de gasto não passa a revisão para a definitiva
+    /// que chega com código da E6 (pagamento de fatura): ela fica a revisar, sem categoria, fora do orçamento.
+    /// </summary>
+    [Fact]
+    public async Task Definitiva_com_codigo_da_E6_nao_herda_a_revisao_da_pendente()
+    {
+        await using var c = await IniciarAsync();
+        var mercado = await CategoriaAsync(c.Cliente, "Mercado");
+        await ImportarAsync(c, new LancamentoImportado("tx-pendente", new DateOnly(2026, 11, 3), -50_000, "PAGAMENTO FATURA", true, null, null, null, null));
+        await RevisarOkAsync(c, [await IdAsync(c, "tx-pendente")], mercado, "SO_ESTA");
+
+        await using (var escopo = c.Api.Services.CreateAsyncScope())
+            await escopo.ServiceProvider.GetRequiredService<IImportacaoDeLancamentos>().ImportarAsync(c.Corrente, Desde,
+                [new LancamentoImportado("tx-definitiva", new DateOnly(2026, 11, 4), -50_000, "PAGAMENTO FATURA", false, null, null, "05100000", null, "Credit card payment")],
+                apagarAusentes: true, CancellationToken.None);
+
+        Assert.Equal("-|A_REVISAR", await EstadoAsync(c, "tx-definitiva"));
+        await using var leitura = c.Api.Services.CreateAsyncScope();
+        var uso = await leitura.ServiceProvider.GetRequiredService<IConsultaDeUso>().UsoPorCategoriaAsync(new DateOnly(2026, 11, 1));
+        Assert.Equal(0, uso.Where(u => u.CategoriaId == mercado).Sum(u => u.UsadoCentavos));
+    }
 }

@@ -125,6 +125,9 @@ internal sealed class ServicoDeLancamentos(LancamentosDbContext db, IUsuarioAtua
         if (alvo.Natureza == NaturezaDaTransacao.Transferencia) return await EditarTransferenciaAsync(alvo, p, tx, ct);
         // Antes da trava da categoria, na mesma ordem do criar (conta, depois categoria).
         await TravaDeConta.TomarAsync(db, [alvo.ContaId], ct);
+        // Relida sob a trava: uma importação ou um lote em curso já terminou (código do banco e revisão atuais).
+        await db.Entry(alvo).ReloadAsync(ct);
+        if (alvo.IsDeleted) return new ResultadoDeLancamento.NaoEncontrado();
         if (p.Natureza == "TRANSFERENCIA") return Invalido("natureza", "Despesa ou receita não vira transferência.");
         if (p.CategoriaId is not { } categoriaId) return Invalido("categoriaId", "Informe a categoria.");
         var natureza = LerNatureza(p.Natureza);
@@ -135,9 +138,10 @@ internal sealed class ServicoDeLancamentos(LancamentosDbContext db, IUsuarioAtua
 
         var hoje = Brasilia.Hoje(relogio);
         var lista = await AlvosAsync(alvo, proximas, ct);
-        // D23: pagamento de fatura, mesma titularidade e investimento do banco não recebem categoria de gasto até a etapa 6.
-        if (lista.Any(t => t.Origem == OrigemDaTransacao.OpenFinance && CategoriasDoBanco.ReconhecidoNaProximaEtapa(t.CategoriaExterna))
-            && await db.Categorias.AsNoTracking().AnyAsync(c => c.Id == categoriaId && c.Tipo == TipoDeCategoria.Despesa, ct))
+        // D23: pagamento de fatura, mesma titularidade e investimento do banco não recebem categoria nenhuma até a etapa 6:
+        // editar exige categoria e marca REVISADA, e tanto a de gasto (uso) quanto a de receita (receitas) poriam o lançamento
+        // no orçamento. Continuam a revisar.
+        if (lista.Any(t => t.Origem == OrigemDaTransacao.OpenFinance && CategoriasDoBanco.ReconhecidoNaProximaEtapa(t.CategoriaExterna)))
             return new ResultadoDeLancamento.Recusado(Revisao.TituloReconhecidoNaProximaEtapa, 400);
         var valorComSinal = natureza == NaturezaDaTransacao.Despesa ? -p.ValorCentavos : p.ValorCentavos;
         var dataMudou = p.Data != alvo.Data;

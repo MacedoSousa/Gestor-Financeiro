@@ -195,6 +195,8 @@ internal sealed class Transacao : Entidade, ICasalScoped
     {
         ArgumentNullException.ThrowIfNull(pendente);
         if (pendente.Revisao != RevisaoDaTransacao.Revisada) return;
+        // D23: a definitiva que veio como pagamento de fatura, mesma titularidade ou investimento espera a etapa 6, a revisar.
+        if (Contracts.CategoriasDoBanco.ReconhecidoNaProximaEtapa(CategoriaExterna)) return;
         Revisao = RevisaoDaTransacao.Revisada;
         CategoriaId = pendente.CategoriaId;
         DescricaoCifrada = cofre.Cifrar(pendente.LerDescricao(cofre), Cofre.Aad(Tabela, ColunaDescricao, Id));
