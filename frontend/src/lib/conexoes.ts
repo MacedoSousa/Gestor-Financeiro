@@ -171,6 +171,14 @@ export function textoDoPatrimonioDosInvestimentos(
   return `Investimentos contam a partir de ${lista.join(", ")} e ${ultima} (data da confirmação de cada grupo).`;
 }
 
+const TIPOS_DA_PREVIA: Record<string, string> = { CORRENTE: "Conta corrente", POUPANCA: "Poupança", CARTAO: "Cartão" };
+
+/** Prévia do item antes de salvar (pedido da pessoa, E5): o tipo e o nome que o banco dá a cada conta. */
+export function textoDaPrevia(contas: readonly { tipo: string; nome: string }[]): string {
+  if (contas.length === 0) return "O banco não mostrou nenhuma conta neste item. Confira se o id é do banco certo.";
+  return `Este item tem: ${contas.map((c) => `${TIPOS_DA_PREVIA[c.tipo] ?? c.tipo} · ${c.nome}`).join(", ")}.`;
+}
+
 /** Fatura do banco cujo total não bate com a soma das compras dela (total do banco menos a soma); o mês é o do vencimento. */
 export function textoDaFatura(f: { vencimento: string; diferencaCentavos: number }): FraseComValor {
   return {

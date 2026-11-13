@@ -13,6 +13,28 @@ internal sealed class LancamentosDbContext(DbContextOptions<LancamentosDbContext
 
     public DbSet<Categoria> Categorias => Set<Categoria>();
     public DbSet<Transacao> Transacoes => Set<Transacao>();
+    public DbSet<RegraDeCategoria> Regras => Set<RegraDeCategoria>();
+    public DbSet<MapaDeCategoriaExterna> Mapa => Set<MapaDeCategoriaExterna>();
+}
+
+internal sealed class RegraDeCategoriaConfig : IEntityTypeConfiguration<RegraDeCategoria>
+{
+    public void Configure(EntityTypeBuilder<RegraDeCategoria> b)
+    {
+        b.ToTable("regras_de_categoria");
+        b.HasKey(x => x.Id);
+    }
+}
+
+internal sealed class MapaDeCategoriaExternaConfig : IEntityTypeConfiguration<MapaDeCategoriaExterna>
+{
+    public void Configure(EntityTypeBuilder<MapaDeCategoriaExterna> b)
+    {
+        b.ToTable("mapa_categoria_externa");
+        b.HasKey(x => x.Id);
+        b.Property(x => x.CategoriaExterna).HasMaxLength(8);
+        b.Property(x => x.NomeExterno).HasMaxLength(60);
+    }
 }
 
 internal sealed class CategoriaConfig : IEntityTypeConfiguration<Categoria>

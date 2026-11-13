@@ -43,6 +43,22 @@ internal static class EndpointsDeConexoes
         .WithSummary("Grupos de investimento do casal com o valor no banco e a diferença para o sistema na última sincronização (D21). " +
                      "Nada é lançado: o rendimento entra no sistema na próxima etapa.");
 
+        grupo.MapPost("/previa", async Task<Results<Ok<PreviaDoItemDto>, ValidationProblem, ProblemHttpResult, NotFound>> (
+            PedidoDePreviaDto pedido, ServicoDeConexoes servico, CancellationToken ct) =>
+            await servico.PreviaAsync(pedido, ct) switch
+            {
+                ResultadoDeConexoes.Previa p => TypedResults.Ok(p.Dto),
+                ResultadoDeConexoes.Invalido i => TypedResults.ValidationProblem(i.Erros.ToDictionary()),
+                ResultadoDeConexoes.Recusado r => TypedResults.Problem(title: r.Titulo, statusCode: r.Status),
+                ResultadoDeConexoes.NaoEncontrado => TypedResults.NotFound(),
+                var outro => throw new UnreachableException(outro.GetType().Name),
+            })
+        .WithName("PreviaDoItem")
+        .WithSummary("Confere o item no banco antes de salvar e devolve os nomes das contas dele (tipo e nome, sem número nem saldo). " +
+                     "Nada é gravado. Mesmas recusas do cadastro: slot em uso (409), item repetido (409), item recusado pelo banco (400).")
+        .ProducesProblem(StatusCodes.Status400BadRequest)
+        .ProducesProblem(StatusCodes.Status409Conflict);
+
         grupo.MapPost("/", async Task<Results<Created<ConexaoDto>, ValidationProblem, ProblemHttpResult, NotFound>> (
             NovaConexaoDto pedido, ServicoDeConexoes servico, CancellationToken ct) =>
             await servico.CriarAsync(pedido, ct) switch

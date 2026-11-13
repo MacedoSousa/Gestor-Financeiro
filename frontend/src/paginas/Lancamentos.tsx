@@ -4,6 +4,7 @@ import { useEu } from "../api/autenticacao";
 import { useContas } from "../api/contas";
 import { n } from "../api/formulario";
 import { hojeIso, useCategorias, useExtrato, type FiltroDoExtrato, type Lancamento } from "../api/lancamentos";
+import { useARevisar } from "../api/revisao";
 import { formatarReais } from "../lib/dinheiro";
 import { contasParaLancar, edicaoEmContaLigada } from "../lib/lancamentos";
 import { nomeDoMes, somarMeses } from "../lib/mes";
@@ -56,6 +57,8 @@ export function Lancamentos() {
   const eu = useEu();
   const contas = useContas();
   const categorias = useCategorias();
+  const aRevisar = useARevisar();
+  const haARevisar = (aRevisar.data?.length ?? 0) > 0;
   const [mes, setMes] = useState(() => hojeIso().slice(0, 7));
   const [titular, setTitular] = useState<Titular>();
   const [origem, setOrigem] = useState<"MANUAL" | "OPEN_FINANCE">();
@@ -115,6 +118,12 @@ export function Lancamentos() {
           </button>
         </div>
       </header>
+
+      {haARevisar && (
+        <p className="faixa-aviso">
+          Há lançamentos do banco a revisar: eles só entram no orçamento depois. <Link to="/lancamentos/revisar">Revisar importados</Link>
+        </p>
+      )}
 
       <div className="duas-colunas">
         <section className="cartao-tabela" aria-label="Extrato">

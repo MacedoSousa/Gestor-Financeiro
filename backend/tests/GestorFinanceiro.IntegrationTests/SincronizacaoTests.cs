@@ -526,6 +526,43 @@ public class SincronizacaoTests(PostgresFixture pg)
                 Assert.DoesNotContain(p, linha, StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>D21: o casal B não vê o grupo de investimento do casal A (filtro Casal nos vínculos e nas contas).</summary>
+    [Fact]
+    public async Task Grupos_de_investimento_de_outro_casal_nao_aparecem()
+    {
+        await using var c = await IniciarAsync();
+        var (item, itemPluggy, grupo) = await NascerComGrupoAsync(c);
+        c.Pluggy.AtualizarInvestimento(itemPluggy, new InvestimentoPluggy("cdb-sintetico-1", "FIXED_INCOME", "CDB", "CDB 110%", 2_010_000));
+        await SincronizarOkAsync(c, item);
+
+        // Outro casal, com um grupo e uma aplicação já conferida, gravados direto no banco.
+        var outroCasal = Guid.NewGuid();
+        var conexao = Guid.NewGuid();
+        var outroItem = Guid.NewGuid();
+        var grupoAlheio = Guid.NewGuid();
+        await EscalarAsync<int>(c.Banco, $"INSERT INTO identidade.casais (id, nome_familia) VALUES ('{outroCasal}', 'Outra Família') RETURNING 1");
+        await EscalarAsync<int>(c.Banco,
+            $"INSERT INTO integracoes.conexoes (id, casal_id, usuario_id, slot) VALUES ('{conexao}', '{outroCasal}', '{Guid.NewGuid()}', 1) RETURNING 1");
+        await EscalarAsync<int>(c.Banco, "INSERT INTO integracoes.items (id, casal_id, conexao_id, item_id_cifrado, item_id_hmac, banco, estado) " +
+                                         $"VALUES ('{outroItem}', '{outroCasal}', '{conexao}', '\\x01', '\\x02', 'Itaú', 'ATIVO') RETURNING 1");
+        await EscalarAsync<int>(c.Banco,
+            "INSERT INTO contas.contas (id, casal_id, tipo, apelido, saldo_inicial_centavos, saldo_inicial_em, ligada_em) " +
+            $"VALUES ('{grupoAlheio}', '{outroCasal}', 'INVESTIMENTO', 'Reserva alheia', 100000, '2026-11-01', now()) RETURNING 1");
+        await EscalarAsync<int>(c.Banco,
+            "INSERT INTO integracoes.vinculos (id, casal_id, item_id, tipo, id_externo, conta_id, valor_banco_centavos, situacao_banco, diferenca_centavos) " +
+            $"VALUES ('{Guid.NewGuid()}', '{outroCasal}', '{outroItem}', 'INVESTIMENTO', 'cdb-alheio', '{grupoAlheio}', 777700, 'ATIVA', 677700) RETURNING 1");
+
+        foreach (var cliente in new[] { c.Ana, c.Bruno })
+        {
+            var corpo = await (await cliente.GetAsync("/api/v1/integracoes/grupos-de-investimento")).Content.ReadAsStringAsync();
+            var grupos = JsonDocument.Parse(corpo).RootElement.EnumerateArray().Select(g => g.GetProperty("contaId").GetGuid()).ToList();
+            Assert.Equal([grupo], grupos);
+            Assert.DoesNotContain("777700", corpo, StringComparison.Ordinal);
+            var conexoes = await (await cliente.GetAsync("/api/v1/integracoes/conexoes")).Content.ReadAsStringAsync();
+            Assert.DoesNotContain(grupoAlheio.ToString(), conexoes, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
     /// <summary>A rota dos grupos exige sessão, como todo /api/v1.</summary>
     [Fact]
     public async Task Grupos_de_investimento_exigem_sessao()

@@ -39,3 +39,17 @@ public sealed record NovoItemDto([property: Required] string? ItemId, [property:
 
 /// <summary>Corpo de PUT /api/v1/integracoes/items/{id}/banco: o banco de um item cadastrado antes do código (D18).</summary>
 public sealed record BancoDoItemDto([property: Required] string? CodigoBanco, string? Banco);
+
+/// <summary>
+/// Corpo de POST /api/v1/integracoes/conexoes/previa: confere no banco o item antes de salvar. Conexão nova: o slot escolhido;
+/// banco novo numa conexão que já existe: o id dela (o slot é o dela).
+/// </summary>
+public sealed record PedidoDePreviaDto(int? Slot, Guid? ConexaoId, string? ItemId);
+
+/// <summary>Uma conta do item, como o banco a chama, para a pessoa conferir se o id é do banco certo.</summary>
+/// <param name="Tipo">CORRENTE, POUPANCA ou CARTAO.</param>
+/// <param name="Nome">O nome que o banco dá à conta (sem número, saldo ou titular).</param>
+public sealed record ContaDaPreviaDto(string Tipo, string Nome);
+
+/// <summary>O que o item tem no banco. Nada é gravado: a conexão só nasce no "Salvar".</summary>
+public sealed record PreviaDoItemDto(IReadOnlyList<ContaDaPreviaDto> Contas);

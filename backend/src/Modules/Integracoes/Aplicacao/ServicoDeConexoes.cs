@@ -21,6 +21,7 @@ internal abstract record ResultadoDeConexoes
     public sealed record Invalido(IReadOnlyDictionary<string, string[]> Erros) : ResultadoDeConexoes;
     public sealed record Recusado(string Titulo, int Status) : ResultadoDeConexoes;
     public sealed record NaoEncontrado : ResultadoDeConexoes;
+    public sealed record Previa(PreviaDoItemDto Dto) : ResultadoDeConexoes;
 }
 
 /// <summary>
@@ -101,6 +102,59 @@ internal sealed partial class ServicoDeConexoes(
             var apelidos = (await usuarios.ListarDoCasalAsync(casal, ct)).ToDictionary(u => u.UsuarioId, u => u.Apelido);
             return new ResultadoDeConexoes.Criada(Dto(conexao, apelidos, true, [novo]));
         }, ct);
+    }
+
+    /// <summary>
+    /// Prévia do item antes de salvar (pedido da pessoa, E5): com as mesmas checagens do cadastro (slot do cônjuge, item
+    /// repetido, item que o banco não aceita), lista os nomes das contas do item. Nada é gravado. Na conexão que já
+    /// existe, só o titular, com o slot dela.
+    /// </summary>
+    public async Task<ResultadoDeConexoes> PreviaAsync(PedidoDePreviaDto pedido, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(pedido);
+        if (atual.CasalId is null || atual.UsuarioId is not { } usuario) return new ResultadoDeConexoes.NaoEncontrado();
+
+        var erros = new Dictionary<string, string[]>();
+        var id = pedido.ItemId?.Trim() ?? "";
+        if (id.Length == 0) erros["itemId"] = ["Cole o id do item, copiado do Meu Pluggy."];
+        else if (id.Length > Item.ItemIdMaximo) erros["itemId"] = [$"O id do item tem no máximo {Item.ItemIdMaximo} caracteres."];
+        if (pedido.ConexaoId is null && (pedido.Slot is not { } s || !Conexao.SlotValido(s))) erros["slot"] = ["Escolha o slot 1 ou o slot 2."];
+        if (erros.Count > 0) return new ResultadoDeConexoes.Invalido(erros);
+
+        int slot;
+        if (pedido.ConexaoId is { } conexaoId)
+        {
+            var (conexao, recusa) = await DoTitularAsync(conexaoId, ct);
+            if (recusa is not null) return recusa;
+            slot = conexao!.Slot;
+        }
+        else
+        {
+            slot = pedido.Slot!.Value;
+            if (await ConflitoDeConexaoAsync(usuario, slot, ct) is { } conflito) return conflito;
+        }
+
+        if (segredos.Ler(slot) is not { } chaves) return new ResultadoDeConexoes.Recusado(TituloSlotSemChaves, 400);
+        if (await ItemJaCadastradoAsync(id, ct)) return new ResultadoDeConexoes.Recusado(TituloItemRepetido, 409);
+        var (_, recusaDoBanco) = await ValidarNoBancoAsync(chaves, id, ct);
+        if (recusaDoBanco is not null) return recusaDoBanco;
+
+        try
+        {
+            var contas = await pluggy.ListarContasAsync(chaves, Item.NormalizarItemId(id), ct);
+            return new ResultadoDeConexoes.Previa(new PreviaDoItemDto(
+                contas.Select(c => new ContaDaPreviaDto(Vinculo.TipoDaConta(c), c.Nome)).ToList()));
+        }
+        catch (ErroDaPluggy e)
+        {
+            ItemRecusado(log, chaves.Slot, e.Status, e.Codigo ?? "-");
+            return new ResultadoDeConexoes.Recusado(TituloRecusado(chaves.Slot), 400);
+        }
+        catch (Exception e) when (e is HttpRequestException || (e is TaskCanceledException && !ct.IsCancellationRequested))
+        {
+            PluggyFora(log, chaves.Slot, e.GetType().Name);
+            return new ResultadoDeConexoes.Recusado(TituloPluggyFora, 503);
+        }
     }
 
     /// <summary>Mais um banco na própria conexão, validado com as chaves do slot dela.</summary>

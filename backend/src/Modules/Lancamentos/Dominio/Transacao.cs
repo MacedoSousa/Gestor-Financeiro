@@ -80,6 +80,9 @@ internal sealed class Transacao : Entidade, ICasalScoped
     /// <summary>billId da Pluggy, só para conferência: a fatura do sistema é a do calendário (D2).</summary>
     public string? FaturaIdExterno { get; private set; }
 
+    /// <summary>Nome da categoria da Pluggy, junto do código (etapa 5, botão "sempre que o banco disser").</summary>
+    public string? CategoriaExternaNome { get; private set; }
+
     /// <summary>Sincronizações completas seguidas que vieram sem esta linha do banco (D19).</summary>
     public short Ausencias { get; private set; }
 
@@ -127,7 +130,8 @@ internal sealed class Transacao : Entidade, ICasalScoped
     /// Parcela só quando o banco manda as duas partes e mais de uma parcela (D13: soltas, sem o limite de 24).
     /// </summary>
     public static Transacao Importar(Guid casalId, Guid contaId, DateOnly data, long valorComSinal, string? descricao, string idExterno,
-        bool aConfirmar, int? parcela, int? parcelas, string? categoriaExterna, string? faturaIdExterno, DateOnly? faturaVencimento, ICofre cofre)
+        bool aConfirmar, int? parcela, int? parcelas, string? categoriaExterna, string? faturaIdExterno, DateOnly? faturaVencimento, ICofre cofre,
+        string? nomeDaCategoriaExterna = null)
     {
         if (valorComSinal == 0) throw new ArgumentException("Valor zero não se importa.", nameof(valorComSinal));
         var (n, total) = ParcelaDoBanco(parcela, parcelas);
@@ -137,6 +141,7 @@ internal sealed class Transacao : Entidade, ICasalScoped
         t.Confirmacao = aConfirmar ? ConfirmacaoDaTransacao.AConfirmar : ConfirmacaoDaTransacao.Confirmada;
         t.CategoriaExterna = CodigoExterno(categoriaExterna, 20, nameof(categoriaExterna));
         t.FaturaIdExterno = CodigoExterno(faturaIdExterno, 100, nameof(faturaIdExterno));
+        t.CategoriaExternaNome = t.CategoriaExterna is null ? null : NomeExterno(nomeDaCategoriaExterna);
         t.DescricaoBancoCifrada = cofre.Cifrar(DescricaoDoBanco(descricao), Cofre.Aad(Tabela, ColunaDescricaoDoBanco, t.Id));
         return t;
     }
@@ -147,7 +152,7 @@ internal sealed class Transacao : Entidade, ICasalScoped
     /// da etapa 6) não muda de natureza. Devolve se algo mudou (nada muda = nada é regravado nem auditado).
     /// </summary>
     public bool AtualizarDoBanco(DateOnly data, long valorComSinal, string? descricao, bool aConfirmar, int? parcela, int? parcelas,
-        string? categoriaExterna, string? faturaIdExterno, DateOnly? faturaVencimento, ICofre cofre)
+        string? categoriaExterna, string? faturaIdExterno, DateOnly? faturaVencimento, ICofre cofre, string? nomeDaCategoriaExterna = null)
     {
         if (Origem != OrigemDaTransacao.OpenFinance) throw new InvalidOperationException("Só linha do banco se atualiza pelo banco.");
         if (valorComSinal == 0) throw new ArgumentException("Valor zero não se importa.", nameof(valorComSinal));
@@ -155,13 +160,14 @@ internal sealed class Transacao : Entidade, ICasalScoped
         var confirmacao = aConfirmar ? ConfirmacaoDaTransacao.AConfirmar : ConfirmacaoDaTransacao.Confirmada;
         var natureza = Natureza == NaturezaDaTransacao.Transferencia ? Natureza : NaturezaPeloSinal(valorComSinal);
         var categoria = CodigoExterno(categoriaExterna, 20, nameof(categoriaExterna));
+        var nomeExterno = categoria is null ? null : NomeExterno(nomeDaCategoriaExterna);
         var fatura = CodigoExterno(faturaIdExterno, 100, nameof(faturaIdExterno));
         var doBanco = DescricaoDoBanco(descricao);
         var bancoMudou = doBanco != LerDescricaoDoBanco(cofre);
         var descricaoMudou = Revisao == RevisaoDaTransacao.ARevisar && doBanco != LerDescricao(cofre);
 
         var mudou = Data != data || ValorCentavos != valorComSinal || Natureza != natureza || Confirmacao != confirmacao
-                    || Parcela != n || Parcelas != total || CategoriaExterna != categoria || FaturaIdExterno != fatura
+                    || Parcela != n || Parcelas != total || CategoriaExterna != categoria || CategoriaExternaNome != nomeExterno || FaturaIdExterno != fatura
                     || FaturaVencimento != faturaVencimento || descricaoMudou || bancoMudou;
         if (!mudou) return false;
 
@@ -173,6 +179,7 @@ internal sealed class Transacao : Entidade, ICasalScoped
         Parcela = (short?)n;
         Parcelas = (short?)total;
         CategoriaExterna = categoria;
+        CategoriaExternaNome = nomeExterno;
         FaturaIdExterno = fatura;
         FaturaVencimento = faturaVencimento;
         if (descricaoMudou) DescricaoCifrada = cofre.Cifrar(doBanco, Cofre.Aad(Tabela, ColunaDescricao, Id));
@@ -188,6 +195,8 @@ internal sealed class Transacao : Entidade, ICasalScoped
     {
         ArgumentNullException.ThrowIfNull(pendente);
         if (pendente.Revisao != RevisaoDaTransacao.Revisada) return;
+        // D23: a definitiva que veio como pagamento de fatura, mesma titularidade ou investimento espera a etapa 6, a revisar.
+        if (Contracts.CategoriasDoBanco.ReconhecidoNaProximaEtapa(CategoriaExterna)) return;
         Revisao = RevisaoDaTransacao.Revisada;
         CategoriaId = pendente.CategoriaId;
         DescricaoCifrada = cofre.Cifrar(pendente.LerDescricao(cofre), Cofre.Aad(Tabela, ColunaDescricao, Id));
@@ -236,6 +245,27 @@ internal sealed class Transacao : Entidade, ICasalScoped
         ApagadaPor = null;
         Ausencias = 0;
     }
+
+    /// <summary>
+    /// Regra ou mapa (etapa 5): preenche a categoria de uma linha do banco "a revisar" e sem categoria. Continua "a revisar"
+    /// (fora do orçamento, D14); nunca mexe no que o casal revisou.
+    /// </summary>
+    public void SugerirCategoria(Guid categoriaId)
+    {
+        if (Revisao != RevisaoDaTransacao.ARevisar || CategoriaId is not null) throw new InvalidOperationException("Só linha a revisar sem categoria recebe sugestão.");
+        CategoriaId = categoriaId;
+    }
+
+    /// <summary>Revisão em lote (Tarefa 5.2): o casal escolhe a categoria e a linha passa a ser dele (REVISADA).</summary>
+    public void Revisar(Guid categoriaId)
+    {
+        if (Revisao != RevisaoDaTransacao.ARevisar) throw new InvalidOperationException("Só linha a revisar é revisada em lote.");
+        CategoriaId = categoriaId;
+        Revisao = RevisaoDaTransacao.Revisada;
+    }
+
+    private static string? NomeExterno(string? nome) =>
+        string.IsNullOrWhiteSpace(nome) ? null : nome.Trim() is var t && t.Length <= 60 ? t : t[..60];
 
     private static NaturezaDaTransacao NaturezaPeloSinal(long valor) =>
         valor < 0 ? NaturezaDaTransacao.Despesa : NaturezaDaTransacao.Receita;

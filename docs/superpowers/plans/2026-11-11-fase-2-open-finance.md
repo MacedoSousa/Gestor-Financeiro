@@ -736,6 +736,13 @@ Task<Guid?> CriarParManualAsync(Guid transacaoImportadaId, Guid contaManualId, C
 - Resolução `IR_IOF_TAXA` → despesa origem `SISTEMA`, chave `ajuste-investimento:<conta>:<dia>`, na categoria escolhida, criada ou atualizada pela chave; o item fica `RESOLVIDO`.
 - Resolução `DEIXAR_PARA_DEPOIS` → nenhum lançamento; o item continua `ABERTO` em "A conferir".
 
+- Ordens D21 e D22 do CEO (13/11):
+  - o primeiro valor de uma aplicação que estava sem valor ajusta o saldo inicial do grupo e nunca vira rendimento (D21);
+  - ler o saldo do grupo depois de lançar o rendimento (D21);
+  - grupo só reúne aplicações do mesmo banco (D21);
+  - lançar rendimento usa a mesma trava de conta da correção da D22;
+  - diferença negativa num grupo não refeito pode ser sobra da D22, não rendimento.
+
 - [ ] **Passo 1:** testes que falham:
   - `Diferenca_positiva_vira_rendimento`;
   - `Segunda_sincronizacao_do_dia_atualiza_o_mesmo_rendimento`;
@@ -752,6 +759,10 @@ Task<Guid?> CriarParManualAsync(Guid transacaoImportadaId, Guid contaManualId, C
 **Pronto quando:** verde, e o QA resolveu uma transferência, um pagamento de fatura e uma diferença negativa no navegador.
 
 ---
+
+### Depois da E6 (CEO, D23)
+
+- Nomes das categorias do banco: a Pluggy os manda em inglês ("Groceries", "Credit card payment"), e a tela "Revisar importados" mostra assim. Decidir se traduz (e onde fica a tradução) depois que a E6 reconhecer pagamento de fatura, transferência e investimento.
 
 ## Etapa 7 · Job diário, "Atualizar agora", falhas, consentimento e Painel (PR 7)
 
@@ -790,6 +801,8 @@ Task<Guid?> CriarParManualAsync(Guid transacaoImportadaId, Guid contaManualId, C
 
   Nada é apagado.
 - Consentimento: faltando 15 dias ou menos → `CONSENTIMENTO_VENCENDO`, com o aviso nomeando o cônjuge. Vencido → `CONSENTIMENTO_VENCIDO`, e a sincronização para.
+
+- Limite de chamadas (CEO, D23): "Conferir no banco" (`POST /integracoes/conexoes/previa`, duas chamadas à Pluggy cada) e o cadastro de item entram no mesmo limite por sessão do "Atualizar agora".
 
 - [ ] **Passo 1:** testes que falham:
   - `Agenda_dispara_as_04_30_de_Sao_Paulo_uma_vez_por_dia`, com `RelogioFixo`;

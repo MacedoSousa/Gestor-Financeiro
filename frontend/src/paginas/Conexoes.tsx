@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   useId,
   useRef,
@@ -11,6 +12,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { ErroDeApi } from "../api/autenticacao";
 import { n } from "../api/formulario";
 import {
+  previaDoItem,
   useAcoesDeConexoes,
   useConexoes,
   type Banco,
@@ -32,6 +34,7 @@ import {
   separarConexoes,
   textoDaDiferenca,
   textoDoGrupoNoBanco,
+  textoDaPrevia,
   textoDaFatura,
   textoDaSincronizacao,
   textoDoConsentimento,
@@ -76,7 +79,10 @@ function useTentativa() {
     }
   }
 
-  return { erro, tentativa, ocupado, tentar };
+  /** Um alerta velho não fica junto de um campo que mudou (o erro era do id ou do slot de antes). */
+  const limpar = useCallback(() => setErro(undefined), []);
+
+  return { erro, tentativa, ocupado, tentar, limpar };
 }
 
 /** Depois de validar no navegador: o foco vai ao primeiro campo com erro (rádio do slot, id do item, banco ou código). */
@@ -338,12 +344,17 @@ function NovaConexao({
   aoConcluir: (aviso: string) => void;
 }) {
   const acoes = useAcoesDeConexoes();
-  const { erro, tentativa, ocupado, tentar } = useTentativa();
+  const { erro, tentativa, ocupado, tentar, limpar } = useTentativa();
   const form = useRef<HTMLFormElement>(null);
   const [slot, setSlot] = useState<number | null>(null);
   const [itemId, setItemId] = useState("");
   const [banco, setBanco] = useState<EscolhaDeBanco>(ESCOLHA_DE_BANCO_VAZIA);
   const [erros, setErros] = useState<ErrosDoCadastro>({});
+  // Prévia (pedido da pessoa, E5): confere no banco as contas do item antes de salvar; mudar slot ou id pede de novo.
+  const [previa, setPrevia] = useState<{ chave: string; texto: string } | null>(null);
+  const chaveDaPrevia = `${slot ?? ""}|${itemId.trim()}`;
+  const conferido = previa?.chave === chaveDaPrevia;
+  useEffect(limpar, [chaveDaPrevia, limpar]);
   const nenhumSlot = slots.every(
     (s) =>
       avisoDoSlot({
@@ -355,10 +366,18 @@ function NovaConexao({
 
   async function enviar(e: FormEvent) {
     e.preventDefault();
+    // O botão não se desabilita na consulta (o foco ficaria perdido entre "Conferir" e "Salvar"): o envio repetido é ignorado.
+    if (ocupado) return;
     const encontrados = validarCadastro({ slot, itemId, banco });
     setErros(encontrados);
     if (Object.keys(encontrados).length > 0 || slot === null) {
       focarPrimeiroErro(form);
+      return;
+    }
+    if (!conferido) {
+      let texto = "";
+      if (await tentar(async () => void (texto = textoDaPrevia((await previaDoItem({ slot }, itemId)).contas))))
+        setPrevia({ chave: chaveDaPrevia, texto });
       return;
     }
     const nome = nomeDoBancoEscolhido(banco, bancos);
@@ -409,16 +428,30 @@ function NovaConexao({
         aoTrocarEscolha={() => setErros(limparErrosDoBanco)}
       />
       <Alerta mensagem={erro} tentativa={tentativa} />
+      <PreviaDoItem texto={conferido ? previa.texto : undefined} />
       <div>
         <button
           type="submit"
           className="botao-primario"
-          disabled={ocupado || nenhumSlot}
+          disabled={nenhumSlot}
+          aria-busy={ocupado || undefined}
         >
-          {ocupado ? "Consultando o banco…" : "Conectar"}
+          {ocupado ? "Consultando o banco…" : conferido ? "Salvar" : "Conferir no banco"}
         </button>
       </div>
     </form>
+  );
+}
+
+/**
+ * O que o item tem no banco, antes de salvar (pedido da pessoa, E5). Fica sempre no DOM, como status: o leitor de tela
+ * anuncia quando o texto chega. Nada foi gravado ainda.
+ */
+function PreviaDoItem({ texto }: { texto?: string }) {
+  return (
+    <p role="status" className={texto ? "aviso-form" : "sr-only"}>
+      {texto && `${texto} É o banco certo? Salve; senão, corrija o id.`}
+    </p>
   );
 }
 
@@ -435,11 +468,14 @@ function NovoBanco({
   aoCancelar: () => void;
 }) {
   const acoes = useAcoesDeConexoes();
-  const { erro, tentativa, ocupado, tentar } = useTentativa();
+  const { erro, tentativa, ocupado, tentar, limpar } = useTentativa();
   const form = useRef<HTMLFormElement>(null);
   const [itemId, setItemId] = useState("");
   const [banco, setBanco] = useState<EscolhaDeBanco>(ESCOLHA_DE_BANCO_VAZIA);
   const [erros, setErros] = useState<ErrosDoCadastro>({});
+  const [previa, setPrevia] = useState<{ chave: string; texto: string } | null>(null);
+  const conferido = previa?.chave === itemId.trim();
+  useEffect(limpar, [itemId, limpar]);
 
   useEffect(() => {
     form.current?.querySelector<HTMLInputElement>("input")?.focus();
@@ -447,10 +483,18 @@ function NovoBanco({
 
   async function enviar(e: FormEvent) {
     e.preventDefault();
+    // O botão não se desabilita na consulta (o foco ficaria perdido entre "Conferir" e "Salvar"): o envio repetido é ignorado.
+    if (ocupado) return;
     const encontrados = validarCadastro({ itemId, banco });
     setErros(encontrados);
     if (Object.keys(encontrados).length > 0) {
       focarPrimeiroErro(form);
+      return;
+    }
+    if (!conferido) {
+      let texto = "";
+      if (await tentar(async () => void (texto = textoDaPrevia((await previaDoItem({ conexaoId: conexao.id }, itemId)).contas))))
+        setPrevia({ chave: itemId.trim(), texto });
       return;
     }
     const nome = nomeDoBancoEscolhido(banco, bancos);
@@ -496,9 +540,10 @@ function NovoBanco({
         aoTrocarEscolha={() => setErros(limparErrosDoBanco)}
       />
       <Alerta mensagem={erro} tentativa={tentativa} />
+      <PreviaDoItem texto={conferido ? previa.texto : undefined} />
       <div className="acoes-linha">
-        <button type="submit" className="botao-primario" disabled={ocupado}>
-          {ocupado ? "Consultando o banco…" : "Acrescentar"}
+        <button type="submit" className="botao-primario" aria-busy={ocupado || undefined}>
+          {ocupado ? "Consultando o banco…" : conferido ? "Salvar" : "Conferir no banco"}
         </button>
         <button
           type="button"

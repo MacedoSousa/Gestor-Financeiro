@@ -37,6 +37,32 @@ internal static class EndpointsDeLancamentos
         .WithName("ObterLancamento")
         .WithSummary("Um lançamento do casal.");
 
+        grupo.MapGet("/a-revisar", async Task<Results<Ok<IReadOnlyList<GrupoARevisarDto>>, NotFound>> (Revisao revisao, CancellationToken ct) =>
+            await revisao.ListarAsync(ct) is { } grupos ? TypedResults.Ok(grupos) : TypedResults.NotFound())
+        .WithName("ListarARevisar")
+        .WithSummary("Lançamentos do banco a revisar, agrupados pela descrição do banco e pela natureza, com a categoria sugerida (regra ou mapa).");
+
+        grupo.MapPost("/revisao", async Task<Results<NoContent, ValidationProblem, ProblemHttpResult, NotFound>> (
+            PedidoDeRevisaoDto pedido, Revisao revisao, CancellationToken ct) =>
+            Traduzir(await revisao.RevisarAsync(pedido, ct)))
+        .WithName("RevisarEmLote")
+        .WithSummary("Revisa o lote inteiro ou nada: marca REVISADA com a categoria. SEMPRE cria ou atualiza a regra pela descrição do banco; " +
+                     "SEMPRE_DO_BANCO grava o mapa pela categoria do banco. Id que não é do casal dá 404; lançamento já revisado no lote dá 409.")
+        .ProducesProblem(StatusCodes.Status400BadRequest)
+        .ProducesProblem(StatusCodes.Status409Conflict);
+
+        grupo.MapGet("/categorias-externas", async Task<Results<Ok<IReadOnlyList<CategoriaExternaDto>>, NotFound>> (Revisao revisao, CancellationToken ct) =>
+            await revisao.MapaAsync(ct) is { } mapa ? TypedResults.Ok(mapa) : TypedResults.NotFound())
+        .WithName("ListarCategoriasExternas")
+        .WithSummary("O mapa \"sempre que o banco disser <categoria>\": categoria do banco para categoria do casal.");
+
+        grupo.MapPut("/categorias-externas/{id:guid}", async Task<Results<NoContent, ValidationProblem, ProblemHttpResult, NotFound>> (
+            Guid id, MudancaDeCategoriaExternaDto pedido, Revisao revisao, CancellationToken ct) =>
+            Traduzir(await revisao.ApontarMapaAsync(id, pedido, ct)))
+        .WithName("EditarCategoriaExterna")
+        .WithSummary("Troca a categoria do casal de uma entrada do mapa.")
+        .ProducesProblem(StatusCodes.Status400BadRequest);
+
         grupo.MapPost("/", async Task<Results<Created<LancamentoDto>, Ok<LancamentoDto>, ValidationProblem, ProblemHttpResult, NotFound>> (
             NovoLancamentoDto pedido, ServicoDeLancamentos servico, HttpResponse resposta, CancellationToken ct) =>
         {
