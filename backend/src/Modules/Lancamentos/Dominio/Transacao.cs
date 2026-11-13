@@ -43,6 +43,7 @@ internal sealed class Transacao : Entidade, ICasalScoped
     internal const string Tabela = "lancamentos.transacoes";
     internal const string ColunaDescricao = "descricao_cifrada";
     internal const string ColunaContraparte = "contraparte_cifrada";
+    internal const string ColunaDescricaoDoBanco = "descricao_banco_cifrada";
 
     public Guid CasalId { get; private set; }
     public Guid ContaId { get; private set; }
@@ -52,6 +53,9 @@ internal sealed class Transacao : Entidade, ICasalScoped
     public NaturezaDaTransacao Natureza { get; private set; }
     public byte[] DescricaoCifrada { get; private set; } = [];
     public byte[]? ContraparteCifrada { get; private set; }
+
+    /// <summary>A descrição como o banco mandou (só OPEN_FINANCE); a <see cref="DescricaoCifrada"/> passa a ser do casal na revisão.</summary>
+    public byte[]? DescricaoBancoCifrada { get; private set; }
     public OrigemDaTransacao Origem { get; private set; }
     public string IdExterno { get; private set; } = string.Empty;
     public Guid? AutorUsuarioId { get; private set; }
@@ -102,6 +106,99 @@ internal sealed class Transacao : Entidade, ICasalScoped
             origem, idExterno, autorUsuarioId, faturaVencimento, grupoId, null, null, cofre);
     }
 
+    internal const string SemDescricao = "(sem descrição)";
+
+    /// <summary>
+    /// Linha do banco (Fase 2, Tarefa 4.3): origem OPEN_FINANCE, "a revisar" e sem categoria (D15); natureza pelo sinal.
+    /// Parcela só quando o banco manda as duas partes e mais de uma parcela (D13: soltas, sem o limite de 24).
+    /// </summary>
+    public static Transacao Importar(Guid casalId, Guid contaId, DateOnly data, long valorComSinal, string? descricao, string idExterno,
+        bool aConfirmar, int? parcela, int? parcelas, string? categoriaExterna, string? faturaIdExterno, DateOnly? faturaVencimento, ICofre cofre)
+    {
+        if (valorComSinal == 0) throw new ArgumentException("Valor zero não se importa.", nameof(valorComSinal));
+        var (n, total) = ParcelaDoBanco(parcela, parcelas);
+        var t = Montar(casalId, contaId, null, data, new Dinheiro(valorComSinal), NaturezaPeloSinal(valorComSinal), DescricaoDoBanco(descricao),
+            null, OrigemDaTransacao.OpenFinance, idExterno, null, faturaVencimento, null, n, total, cofre);
+        t.Revisao = RevisaoDaTransacao.ARevisar;
+        t.Confirmacao = aConfirmar ? ConfirmacaoDaTransacao.AConfirmar : ConfirmacaoDaTransacao.Confirmada;
+        t.CategoriaExterna = CodigoExterno(categoriaExterna, 20, nameof(categoriaExterna));
+        t.FaturaIdExterno = CodigoExterno(faturaIdExterno, 100, nameof(faturaIdExterno));
+        t.DescricaoBancoCifrada = cofre.Cifrar(DescricaoDoBanco(descricao), Cofre.Aad(Tabela, ColunaDescricaoDoBanco, t.Id));
+        return t;
+    }
+
+    /// <summary>
+    /// O banco mandou a mesma chave de novo: data, valor, confirmação, parcela, fatura e os códigos do banco acompanham; a
+    /// descrição só enquanto "a revisar" (depois é do casal, decisão 5); a categoria nunca muda aqui. Transferência (par
+    /// da etapa 6) não muda de natureza. Devolve se algo mudou (nada muda = nada é regravado nem auditado).
+    /// </summary>
+    public bool AtualizarDoBanco(DateOnly data, long valorComSinal, string? descricao, bool aConfirmar, int? parcela, int? parcelas,
+        string? categoriaExterna, string? faturaIdExterno, DateOnly? faturaVencimento, ICofre cofre)
+    {
+        if (Origem != OrigemDaTransacao.OpenFinance) throw new InvalidOperationException("Só linha do banco se atualiza pelo banco.");
+        if (valorComSinal == 0) throw new ArgumentException("Valor zero não se importa.", nameof(valorComSinal));
+        var (n, total) = ParcelaDoBanco(parcela, parcelas);
+        var confirmacao = aConfirmar ? ConfirmacaoDaTransacao.AConfirmar : ConfirmacaoDaTransacao.Confirmada;
+        var natureza = Natureza == NaturezaDaTransacao.Transferencia ? Natureza : NaturezaPeloSinal(valorComSinal);
+        var categoria = CodigoExterno(categoriaExterna, 20, nameof(categoriaExterna));
+        var fatura = CodigoExterno(faturaIdExterno, 100, nameof(faturaIdExterno));
+        var doBanco = DescricaoDoBanco(descricao);
+        var bancoMudou = doBanco != LerDescricaoDoBanco(cofre);
+        var descricaoMudou = Revisao == RevisaoDaTransacao.ARevisar && doBanco != LerDescricao(cofre);
+
+        var mudou = Data != data || ValorCentavos != valorComSinal || Natureza != natureza || Confirmacao != confirmacao
+                    || Parcela != n || Parcelas != total || CategoriaExterna != categoria || FaturaIdExterno != fatura
+                    || FaturaVencimento != faturaVencimento || descricaoMudou || bancoMudou;
+        if (!mudou) return false;
+
+        // Receita com categoria de despesa é estorno (permitido); a categoria do casal fica como está.
+        Data = data;
+        ValorCentavos = valorComSinal;
+        Natureza = natureza;
+        Confirmacao = confirmacao;
+        Parcela = (short?)n;
+        Parcelas = (short?)total;
+        CategoriaExterna = categoria;
+        FaturaIdExterno = fatura;
+        FaturaVencimento = faturaVencimento;
+        if (descricaoMudou) DescricaoCifrada = cofre.Cifrar(doBanco, Cofre.Aad(Tabela, ColunaDescricao, Id));
+        if (bancoMudou) DescricaoBancoCifrada = cofre.Cifrar(doBanco, Cofre.Aad(Tabela, ColunaDescricaoDoBanco, Id));
+        return true;
+    }
+
+    /// <summary>
+    /// A pendente sumiu e esta é a definitiva dela: herda a revisão. Se o casal já tinha revisado a pendente, a categoria e
+    /// a descrição dele passam para cá (decisão 5); a definitiva continua com data, valor e chave do banco.
+    /// </summary>
+    public void HerdarRevisao(Transacao pendente, ICofre cofre)
+    {
+        ArgumentNullException.ThrowIfNull(pendente);
+        if (pendente.Revisao != RevisaoDaTransacao.Revisada) return;
+        Revisao = RevisaoDaTransacao.Revisada;
+        CategoriaId = pendente.CategoriaId;
+        DescricaoCifrada = cofre.Cifrar(pendente.LerDescricao(cofre), Cofre.Aad(Tabela, ColunaDescricao, Id));
+    }
+
+    private static NaturezaDaTransacao NaturezaPeloSinal(long valor) =>
+        valor < 0 ? NaturezaDaTransacao.Despesa : NaturezaDaTransacao.Receita;
+
+    private static string DescricaoDoBanco(string? descricao) =>
+        string.IsNullOrWhiteSpace(descricao) ? SemDescricao : descricao.Trim();
+
+    private static (int? Parcela, int? Parcelas) ParcelaDoBanco(int? parcela, int? parcelas)
+    {
+        if (parcela is not { } n || parcelas is not { } total || total <= 1) return (null, null);
+        if (n < 1 || n > total || total > short.MaxValue) throw new ArgumentException("Parcela do banco incoerente.", nameof(parcela));
+        return (n, total);
+    }
+
+    private static string? CodigoExterno(string? codigo, int maximo, string campo)
+    {
+        if (string.IsNullOrWhiteSpace(codigo)) return null;
+        var aparado = codigo.Trim();
+        return aparado.Length <= maximo ? aparado : throw new ArgumentException("Código do banco longo demais.", campo);
+    }
+
     /// <summary>
     /// Edita despesa ou receita (transferência muda pelos dois lados, em outro fluxo). Recebe o valor positivo;
     /// o sinal vem da natureza. Conta, origem, chave e parcela não mudam.
@@ -140,6 +237,11 @@ internal sealed class Transacao : Entidade, ICasalScoped
     }
 
     public string LerDescricao(ICofre cofre) => cofre.Decifrar(DescricaoCifrada, Cofre.Aad(Tabela, ColunaDescricao, Id));
+
+    /// <summary>O texto do banco; nas linhas importadas antes da V0016 (não há) ou fora do OPEN_FINANCE, a própria descrição.</summary>
+    public string LerDescricaoDoBanco(ICofre cofre) => DescricaoBancoCifrada is null
+        ? LerDescricao(cofre)
+        : cofre.Decifrar(DescricaoBancoCifrada, Cofre.Aad(Tabela, ColunaDescricaoDoBanco, Id));
 
     public string? LerContraparte(ICofre cofre) =>
         ContraparteCifrada is null ? null : cofre.Decifrar(ContraparteCifrada, Cofre.Aad(Tabela, ColunaContraparte, Id));

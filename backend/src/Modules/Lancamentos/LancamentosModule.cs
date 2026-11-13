@@ -36,6 +36,7 @@ public static class LancamentosModule
         services.AddScoped<ServicoDeLancamentos>();
         services.AddScoped<ServicoDeTransferencias>();
         services.AddScoped<ServicoDeConciliacao>();
+        services.AddScoped<IImportacaoDeLancamentos, Importacao>();
         return services;
     }
 
