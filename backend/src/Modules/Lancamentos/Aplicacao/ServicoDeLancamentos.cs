@@ -127,7 +127,8 @@ internal sealed class ServicoDeLancamentos(LancamentosDbContext db, IUsuarioAtua
         await TravaDeConta.TomarAsync(db, [alvo.ContaId], ct);
         // Relida sob a trava: uma importação ou um lote em curso já terminou (código do banco e revisão atuais).
         await db.Entry(alvo).ReloadAsync(ct);
-        if (alvo.IsDeleted) return new ResultadoDeLancamento.NaoEncontrado();
+        // Apagada em paralelo: com ou sem o filtro SoftDelete no reload, vira 404 (nunca "feito" sem gravar).
+        if (alvo.IsDeleted || db.Entry(alvo).State == EntityState.Detached) return new ResultadoDeLancamento.NaoEncontrado();
         if (p.Natureza == "TRANSFERENCIA") return Invalido("natureza", "Despesa ou receita não vira transferência.");
         if (p.CategoriaId is not { } categoriaId) return Invalido("categoriaId", "Informe a categoria.");
         var natureza = LerNatureza(p.Natureza);
