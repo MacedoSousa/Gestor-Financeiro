@@ -57,6 +57,8 @@ internal sealed class ServicoDeTransferencias(LancamentosDbContext db, IUsuarioA
         var origem = await contas.ObterAsync(p.ContaOrigemId, ct);
         var destino = await contas.ObterAsync(p.ContaDestinoId, ct);
         if (origem is null || destino is null) return Falhou(new ResultadoDeLancamento.NaoEncontrado());
+        if (origem.Ligada || destino.Ligada)
+            return Falhou(new ResultadoDeLancamento.Recusado(ServicoDeLancamentos.TituloContaLigada, 409));
         if (origem.Arquivada || destino.Arquivada)
             return Falhou(new ResultadoDeLancamento.Recusado(ServicoDeLancamentos.TituloContaArquivada, 400));
 

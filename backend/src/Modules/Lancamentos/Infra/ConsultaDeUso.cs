@@ -5,7 +5,10 @@ using Microsoft.EntityFrameworkCore;
 
 namespace GestorFinanceiro.Modules.Lancamentos.Infra;
 
-/// <summary>Uso do mês para o orçamento. Tudo é SUM no banco, sob os filtros SoftDelete e Casal do contexto.</summary>
+/// <summary>
+/// Uso do mês para o orçamento. Tudo é SUM no banco, sob os filtros SoftDelete e Casal do contexto. Só o que o casal já
+/// revisou: "a revisar" fica fora do uso, da receita e dos aportes; "a confirmar" (pendente no banco) conta (D14).
+/// </summary>
 internal sealed class ConsultaDeUso(LancamentosDbContext db, IConsultaDeContas contas) : IConsultaDeUso
 {
     public async Task<IReadOnlyList<UsoDaCategoria>> UsoPorCategoriaAsync(DateOnly mes, CancellationToken ct = default)
@@ -13,7 +16,7 @@ internal sealed class ConsultaDeUso(LancamentosDbContext db, IConsultaDeContas c
         var fim = Fim(mes);
         return await (from t in db.Transacoes.AsNoTracking()
                       join c in db.Categorias on t.CategoriaId equals c.Id
-                      where c.Tipo == TipoDeCategoria.Despesa && t.Data >= mes && t.Data < fim
+                      where c.Tipo == TipoDeCategoria.Despesa && t.Data >= mes && t.Data < fim && t.Revisao == RevisaoDaTransacao.Revisada
                       group t by c.Id into g
                       select new UsoDaCategoria(g.Key, -g.Sum(t => t.ValorCentavos)))
             .ToListAsync(ct);
@@ -25,7 +28,7 @@ internal sealed class ConsultaDeUso(LancamentosDbContext db, IConsultaDeContas c
         var guardadas = await GuardadasAsync(ct);
         return await (from t in db.Transacoes.AsNoTracking()
                       join c in db.Categorias on t.CategoriaId equals c.Id
-                      where c.Tipo == TipoDeCategoria.Receita && t.Natureza == NaturezaDaTransacao.Receita
+                      where c.Tipo == TipoDeCategoria.Receita && t.Natureza == NaturezaDaTransacao.Receita && t.Revisao == RevisaoDaTransacao.Revisada
                             && t.Data >= mes && t.Data < fim && !guardadas.Contains(t.ContaId)
                       select (long?)t.ValorCentavos)
             .SumAsync(ct) ?? 0;
@@ -39,7 +42,7 @@ internal sealed class ConsultaDeUso(LancamentosDbContext db, IConsultaDeContas c
 
         var transacoes = db.Transacoes.AsNoTracking();
         return await transacoes
-            .Where(t => t.Natureza == NaturezaDaTransacao.Transferencia && t.ValorCentavos > 0
+            .Where(t => t.Natureza == NaturezaDaTransacao.Transferencia && t.ValorCentavos > 0 && t.Revisao == RevisaoDaTransacao.Revisada
                         && guardadas.Contains(t.ContaId) && t.Data >= mes && t.Data < fim
                         && transacoes.Any(o => o.GrupoId == t.GrupoId && o.ValorCentavos < 0 && !guardadas.Contains(o.ContaId)))
             .GroupBy(t => t.ContaId)

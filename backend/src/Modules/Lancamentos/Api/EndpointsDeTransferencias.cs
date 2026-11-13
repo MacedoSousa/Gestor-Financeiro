@@ -32,7 +32,7 @@ internal static class EndpointsDeTransferencias
         })
         .WithName("CriarTransferencia")
         .WithSummary("Transfere entre duas contas do casal (pagar a fatura = destino no cartão). Grava as duas pernas juntas; " +
-                     "repetir a mesma chave devolve 200 com a transferência já criada. Origem igual ao destino ou conta arquivada dá 400. " +
+                     "repetir a mesma chave devolve 200 com a transferência já criada. Origem igual ao destino ou conta arquivada dá 400; conta ligada ao banco dá 409. " +
                      "Editar ou apagar uma perna, pelas rotas de lançamentos, age nas duas.")
         .ProducesProblem(StatusCodes.Status400BadRequest)
         .ProducesProblem(StatusCodes.Status409Conflict);

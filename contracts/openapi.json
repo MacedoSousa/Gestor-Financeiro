@@ -4487,6 +4487,14 @@
               "string"
             ],
             "format": "date"
+          },
+          "revisao": {
+            "type": "string",
+            "default": "REVISADA"
+          },
+          "confirmacao": {
+            "type": "string",
+            "default": "CONFIRMADA"
           }
         }
       },

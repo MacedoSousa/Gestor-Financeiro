@@ -33,6 +33,7 @@ internal sealed class ServicoDeLancamentos(LancamentosDbContext db, IUsuarioAtua
     internal const string TituloEstornoComPapel = "Rendimentos e devoluções de investimento ou de dívida entram como receita comum, não como estorno.";
     internal const string TituloChaveUsada = "Chave de idempotência já usada.";
     internal const string TituloFaturaFechada = "Fatura fechada: só descrição e categoria podem mudar.";
+    internal const string TituloContaLigada = "Esta conta vem do banco. Os lançamentos chegam sozinhos.";
     private const string IndiceDaChave = "ux_transacoes_origem_id_externo";
     private const int TamanhoMaximoDoTexto = 140;
 
@@ -65,6 +66,7 @@ internal sealed class ServicoDeLancamentos(LancamentosDbContext db, IUsuarioAtua
         await TravaDeConta.TomarAsync(db, [p.ContaId], ct);
         var conta = await contas.ObterAsync(p.ContaId, ct);
         if (conta is null) return new ResultadoDeLancamento.NaoEncontrado();
+        if (conta.Ligada) return new ResultadoDeLancamento.Recusado(TituloContaLigada, 409);
         if (conta.Arquivada) return new ResultadoDeLancamento.Recusado(TituloContaArquivada, 400);
         if (p.Parcelas > 1 && conta.Tipo != "CARTAO")
             return Invalido("parcelas", "Parcelas só em cartão de crédito.");
@@ -126,11 +128,16 @@ internal sealed class ServicoDeLancamentos(LancamentosDbContext db, IUsuarioAtua
         if (p.Natureza == "TRANSFERENCIA") return Invalido("natureza", "Despesa ou receita não vira transferência.");
         if (p.CategoriaId is not { } categoriaId) return Invalido("categoriaId", "Informe a categoria.");
         var natureza = LerNatureza(p.Natureza);
+        var conta = await contas.ObterAsync(alvo.ContaId, ct);
+        // Conta ligada (opção B): valor, data, natureza e contraparte são do banco; só descrição e categoria mudam.
+        if (conta is { Ligada: true } && (p.Data != alvo.Data || natureza != alvo.Natureza
+                || (natureza == NaturezaDaTransacao.Despesa ? -p.ValorCentavos : p.ValorCentavos) != alvo.ValorCentavos
+                || Texto(p.Contraparte) != Texto(alvo.LerContraparte(cofre))))
+            return new ResultadoDeLancamento.Recusado(TituloContaLigada, 409);
         if (alvo.Parcela is not null && natureza != NaturezaDaTransacao.Despesa)
             return Invalido("natureza", "Só despesa pode ser parcelada.");
         if (await ValidarCategoriaAsync(categoriaId, natureza, alvo.CategoriaId, ct) is { } recusa) return recusa;
 
-        var conta = await contas.ObterAsync(alvo.ContaId, ct);
         var hoje = Brasilia.Hoje(relogio);
         var lista = await AlvosAsync(alvo, proximas, ct);
         var valorComSinal = natureza == NaturezaDaTransacao.Despesa ? -p.ValorCentavos : p.ValorCentavos;
@@ -179,6 +186,9 @@ internal sealed class ServicoDeLancamentos(LancamentosDbContext db, IUsuarioAtua
 
         var pernas = alvo.GrupoId is { } grupo ? await db.Transacoes.Where(t => t.GrupoId == grupo).ToListAsync(ct) : [alvo];
         await TravaDeConta.TomarAsync(db, pernas.Select(t => t.ContaId), ct);
+        foreach (var perna in pernas)
+            if ((await contas.ObterAsync(perna.ContaId, ct)) is { Ligada: true } && (p.Data != perna.Data || p.ValorCentavos != Math.Abs(perna.ValorCentavos)))
+                return new ResultadoDeLancamento.Recusado(TituloContaLigada, 409);
         foreach (var t in pernas) t.EditarTransferencia(new Dinheiro(p.ValorCentavos), p.Data, p.Descricao, cofre);
 
         await db.SaveChangesAsync(ct);
@@ -209,6 +219,8 @@ internal sealed class ServicoDeLancamentos(LancamentosDbContext db, IUsuarioAtua
         foreach (var contaId in lista.Select(t => t.ContaId).Distinct()) contasPorId[contaId] = await contas.ObterAsync(contaId, ct);
         bool Fechada(Transacao t) => FaturaFechada(contasPorId[t.ContaId], t.FaturaVencimento, hoje);
 
+        // Conta ligada: o que some é o banco que diz (Tarefa 4.3).
+        if (contasPorId.Values.Any(c => c is { Ligada: true })) return new ResultadoDeLancamento.Recusado(TituloContaLigada, 409);
         if (Fechada(alvo) || (transferencia && lista.Any(Fechada)))
             return new ResultadoDeLancamento.Recusado(TituloFaturaFechada, 409);
 
@@ -281,6 +293,8 @@ internal sealed class ServicoDeLancamentos(LancamentosDbContext db, IUsuarioAtua
             erros["contraparte"] = [$"A contraparte deve ter até {TamanhoMaximoDoTexto} caracteres."];
         return erros;
     }
+
+    private static string? Texto(string? texto) => string.IsNullOrWhiteSpace(texto) ? null : texto.Trim();
 
     /// <summary>true = "proximos", false = "este" (padrão), nulo = inválido.</summary>
     private static bool? LerEscopo(string? escopo) => escopo switch

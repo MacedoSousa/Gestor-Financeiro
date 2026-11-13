@@ -60,7 +60,9 @@ public sealed record ContaDoLancamentoDto(Guid Id, string Apelido, string Tipo);
 /// <summary>Um lançamento como o extrato mostra.</summary>
 /// <param name="Categoria">Nula em transferência (ou se a categoria não existe mais).</param>
 /// <param name="Quem">Apelido do titular da conta, ou "Conjunta".</param>
-/// <param name="Origem">MANUAL, OPEN_FINANCE ou WHATSAPP.</param>
+/// <param name="Origem">MANUAL, OPEN_FINANCE, WHATSAPP ou SISTEMA.</param>
+/// <param name="Revisao">A_REVISAR (veio do banco e o casal ainda não conferiu; fora do orçamento) ou REVISADA.</param>
+/// <param name="Confirmacao">A_CONFIRMAR (pendente no banco) ou CONFIRMADA.</param>
 /// <param name="Natureza">DESPESA, RECEITA ou TRANSFERENCIA.</param>
 /// <param name="ValorCentavos">Com sinal: negativo é saída.</param>
 public sealed record LancamentoDto(
@@ -77,7 +79,9 @@ public sealed record LancamentoDto(
     int? Parcela,
     int? Parcelas,
     Guid? GrupoId,
-    DateOnly? FaturaVencimento)
+    DateOnly? FaturaVencimento,
+    string Revisao = "REVISADA",
+    string Confirmacao = "CONFIRMADA")
 {
     public override string ToString() => $"LancamentoDto {{ Id = {Id} }}";
 }

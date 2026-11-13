@@ -1272,6 +1272,10 @@ export interface components {
             grupoId: null | string;
             /** Format: date */
             faturaVencimento: null | string;
+            /** @default REVISADA */
+            revisao: string;
+            /** @default CONFIRMADA */
+            confirmacao: string;
         };
         MembroDto: {
             /** Format: uuid */

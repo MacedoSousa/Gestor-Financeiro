@@ -30,6 +30,7 @@ internal sealed class ServicoDeConciliacao(LancamentosDbContext db, IUsuarioAtua
     internal const string Confere = "CONFERE";
     internal const string Menor = "MENOR";
     internal const string TituloTipoDeConta = "Só contas de poupança ou investimento são conciliadas aqui.";
+    internal const string TituloContaLigada = "Esta conta vem do banco. O saldo é conferido sozinho.";
     internal const string TituloTelaDesatualizada = "O saldo mudou desde que a tela foi aberta. Confira de novo.";
     internal const string Descricao = "Rendimentos (conciliação)";
     internal const long LimiteDoSaldo = 100_000_000_000;
@@ -85,6 +86,7 @@ internal sealed class ServicoDeConciliacao(LancamentosDbContext db, IUsuarioAtua
     {
         var conta = await contas.ObterAsync(contaId, ct);
         if (conta is null) return (null!, new ResultadoDaConciliacao.NaoEncontrada());
+        if (conta.Ligada) return (conta, new ResultadoDaConciliacao.Recusada(TituloContaLigada, 409)); // D11: é automática
         if (conta.Tipo is not ("POUPANCA" or "INVESTIMENTO")) return (conta, new ResultadoDaConciliacao.Recusada(TituloTipoDeConta, 400));
         if (conta.Arquivada) return (conta, new ResultadoDaConciliacao.Recusada(ServicoDeLancamentos.TituloContaArquivada, 400));
         return (conta, null);

@@ -53,7 +53,7 @@ internal static class EndpointsDeLancamentos
         })
         .WithName("CriarLancamento")
         .WithSummary("Cria despesa ou receita (parcelada só em cartão). Repetir a mesma chave devolve 200 com o lançamento já criado. " +
-                     "Conta ou categoria arquivada dá 400.")
+                     "Conta ou categoria arquivada dá 400; conta ligada ao banco dá 409 (os lançamentos chegam sozinhos).")
         .ProducesProblem(StatusCodes.Status400BadRequest)
         .ProducesProblem(StatusCodes.Status409Conflict);
 
@@ -62,7 +62,8 @@ internal static class EndpointsDeLancamentos
             Traduzir(await servico.EditarAsync(id, escopo, pedido, ct)))
         .WithName("EditarLancamento")
         .WithSummary("Edita um lançamento. escopo: este (padrão) ou proximos (esta parcela e as seguintes). " +
-                     "Em fatura fechada só descrição, contraparte e categoria mudam; mudar valor ou data ali, ou levar algo para fatura fechada, dá 409.")
+                     "Em fatura fechada só descrição, contraparte e categoria mudam; mudar valor ou data ali, ou levar algo para fatura fechada, dá 409. " +
+                     "Em conta ligada ao banco só descrição e categoria mudam (senão 409), e editar marca o lançamento como revisado.")
         .ProducesProblem(StatusCodes.Status400BadRequest)
         .ProducesProblem(StatusCodes.Status409Conflict);
 
@@ -71,7 +72,7 @@ internal static class EndpointsDeLancamentos
             Traduzir(await servico.ApagarAsync(id, escopo, ct)))
         .WithName("ApagarLancamento")
         .WithSummary("Apaga (soft delete). escopo: este (padrão) ou proximos (esta parcela e as seguintes, pulando faturas fechadas). " +
-                     "Apagar lançamento de fatura fechada dá 409.")
+                     "Apagar lançamento de fatura fechada ou de conta ligada ao banco dá 409.")
         .ProducesProblem(StatusCodes.Status409Conflict);
 
         return api;
