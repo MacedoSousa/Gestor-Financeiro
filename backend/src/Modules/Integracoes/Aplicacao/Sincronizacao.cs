@@ -192,8 +192,9 @@ internal sealed partial class Sincronizacao(
     }
 
     /// <summary>
-    /// Na trava do casal (a mesma do nascimento): (1) conta ligada não arquivada que nenhum vínculo do casal aponta volta a
-    /// ser manual (D18, E3 nota H: duas abas confirmando juntas); (2) aplicação do banco sem vínculo neste item vira vínculo
+    /// Na trava do casal (a mesma do nascimento): (1) conta ligada não arquivada que nenhum vínculo do casal aponta deixa de
+    /// ser ligada (D18, E3 nota H: duas abas confirmando juntas): sem lançamentos, é arquivada; com, volta a ser manual (D19,
+    /// item 3c); (2) aplicação do banco sem vínculo neste item vira vínculo
     /// sem conta, aguardando grupo em Conexões.
     /// </summary>
     private async Task ReconciliarAsync(AcessoAoItem a, LeituraDoBanco leitura, CancellationToken ct)
@@ -204,8 +205,8 @@ internal sealed partial class Sincronizacao(
 
         var apontadas = (await db.Vinculos.Where(v => v.ContaId != null).Select(v => v.ContaId!.Value).ToListAsync(ct)).ToHashSet();
         foreach (var orfa in (await contas.ListarAsync(ct)).Where(c => c.Ligada && !c.Arquivada && !apontadas.Contains(c.Id)))
-            if (await contasLigadas.DesligarAsync(orfa.Id, ct))
-                ContaOrfaDesligada(log, orfa.Id);
+            if (await contasLigadas.DesligarAsync(orfa.Id, ct) is var feito and not ResultadoDoDesligar.NaoEraLigada)
+                ContaOrfaDesligada(log, orfa.Id, feito);
 
         var aplicacoes = (await db.Vinculos.Where(v => v.ItemId == a.Item.Id && v.Tipo == TipoDeVinculo.Investimento)
             .Select(v => v.IdExterno).ToListAsync(ct)).ToHashSet(StringComparer.Ordinal);
@@ -246,6 +247,6 @@ internal sealed partial class Sincronizacao(
     [LoggerMessage(Level = LogLevel.Warning, Message = "Sincronização: a conta do vínculo {Vinculo} falhou (slot {Slot}, status {Status}, {Tipo}).")]
     private static partial void ContaFalhou(ILogger logger, int slot, Guid vinculo, int status, string tipo);
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "Sincronização: conta ligada {Conta} sem vínculo voltou a ser manual (D18).")]
-    private static partial void ContaOrfaDesligada(ILogger logger, Guid conta);
+    [LoggerMessage(Level = LogLevel.Information, Message = "Sincronização: conta ligada {Conta} sem vínculo foi desligada ({Resultado}; D18, D19).")]
+    private static partial void ContaOrfaDesligada(ILogger logger, Guid conta, ResultadoDoDesligar resultado);
 }

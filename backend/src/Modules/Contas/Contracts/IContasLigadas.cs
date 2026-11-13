@@ -27,6 +27,19 @@ public abstract record ResultadoDaContaLigada
     public sealed record IdEmUso : ResultadoDaContaLigada;
 }
 
+/// <summary>O que a reconciliação de conta órfã fez (D19, item 3c).</summary>
+public enum ResultadoDoDesligar
+{
+    /// <summary>Não existe no casal ou já não era ligada: nada mudou.</summary>
+    NaoEraLigada,
+
+    /// <summary>Tinha lançamentos: voltou a ser manual.</summary>
+    Manual,
+
+    /// <summary>Sem lançamentos: desligada e arquivada.</summary>
+    Arquivada,
+}
+
 /// <summary>
 /// Escrita de contas ligadas, para o Integracoes (D17). Cada chamada é uma transação do Contas, no casal da sessão (ou
 /// do job), e é idempotente: a retomada depois de uma falha não duplica nada.
@@ -47,9 +60,10 @@ public interface IContasLigadas
     Task DefinirSaldoInicialAsync(Guid contaId, long centavos, DateOnly em, CancellationToken ct);
 
     /// <summary>
-    /// Reconciliação de conta ligada órfã (D18, E3 nota H): a conta deixa de vir do banco e volta a ser manual (pode ser
-    /// editada, recebe lançamentos à mão e pode ser apagada se não tiver uso). Quem chama garante que nenhum vínculo a
-    /// aponta. Falso se ela não existe no casal ou já não era ligada.
+    /// Reconciliação de conta ligada órfã (D18, E3 nota H; D19 item 3c): a conta deixa de vir do banco. Sem nenhum lançamento,
+    /// é também arquivada (era a duplicata de uma confirmação em duas abas); com lançamentos, volta a ser manual (pode ser
+    /// editada, recebe lançamentos à mão e o casal decide o que fazer com eles). Quem chama garante que nenhum vínculo a
+    /// aponta. Sob a trava da conta (a mesma da importação e do apagar conta).
     /// </summary>
-    Task<bool> DesligarAsync(Guid contaId, CancellationToken ct);
+    Task<ResultadoDoDesligar> DesligarAsync(Guid contaId, CancellationToken ct);
 }

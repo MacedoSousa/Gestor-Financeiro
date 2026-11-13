@@ -402,8 +402,9 @@ public class SincronizacaoTests(PostgresFixture pg)
     }
 
     /// <summary>
-    /// D18 (E3, nota H): duas abas confirmando juntas podem deixar uma conta ligada que nenhum vínculo aponta. A sincronização
-    /// a desliga (volta a ser manual, pode ser apagada); a conta ligada de verdade e a arquivada ficam como estão.
+    /// D18 (E3, nota H) e D19 (item 3c): duas abas confirmando juntas podem deixar uma conta ligada que nenhum vínculo aponta.
+    /// A sincronização a reconcilia: sem lançamentos, é arquivada; com lançamentos digitados, volta a ser manual (o casal
+    /// decide o que fazer com eles). A conta ligada de verdade e a ligada já arquivada ficam como estão.
     /// </summary>
     [Fact]
     public async Task Conta_ligada_orfa_e_reconciliada()
@@ -411,21 +412,45 @@ public class SincronizacaoTests(PostgresFixture pg)
         await using var c = await IniciarAsync();
         var (item, _) = await NascerAsync(c, Corrente);
         var casal = await EscalarAsync<Guid>(c.Banco, $"SELECT casal_id FROM integracoes.items WHERE id = '{item}'");
-        var orfa = Guid.CreateVersion7();
+        var vazia = Guid.CreateVersion7();
         var arquivada = Guid.CreateVersion7();
-        foreach (var (id, apelido, arq) in new[] { (orfa, "Itaú Corrente · Ana (2)", false), (arquivada, "Antiga do banco", true) })
+        foreach (var (id, apelido, arq) in new[] { (vazia, "Itaú Corrente · Ana (2)", false), (arquivada, "Antiga do banco", true) })
             await EscalarAsync<int>(c.Banco,
                 "INSERT INTO contas.contas (id, casal_id, tipo, apelido, saldo_inicial_centavos, saldo_inicial_em, arquivada, ligada_em) " +
                 $"VALUES ('{id}', '{casal}', 'CORRENTE', '{apelido}', 0, '2026-01-01', {arq}, now()) RETURNING 1");
+        // Com lançamento digitado: manual com um lançamento, depois ligada (LIGAR pela metade) sem vínculo.
+        var r = await c.Ana.PostAsJsonAsync("/api/v1/contas", new
+        {
+            tipo = "CORRENTE", apelido = "Carteira da Ana", saldoInicialCentavos = 0L, saldoInicialEm = "2026-01-01",
+        });
+        Assert.Equal(HttpStatusCode.Created, r.StatusCode);
+        var comLancamento = Guid.Parse(r.Headers.Location!.ToString().Split('/').Last());
+        var categorias = await JsonAsync(await c.Ana.GetAsync("/api/v1/categorias"));
+        var mercado = categorias.EnumerateArray().First(x => x.GetProperty("nome").GetString() == "Mercado").GetProperty("id").GetGuid();
+        await EsperarAsync(c.Ana.PostAsJsonAsync("/api/v1/lancamentos", new
+        {
+            chaveIdempotente = Guid.NewGuid(), contaId = comLancamento, natureza = "DESPESA", valorCentavos = 2_500L, data = "2026-11-04",
+            descricao = "Padaria", categoriaId = mercado,
+        }), HttpStatusCode.Created);
+        await EscalarAsync<int>(c.Banco, $"UPDATE contas.contas SET ligada_em = now() WHERE id = '{comLancamento}' RETURNING 1");
 
         await SincronizarOkAsync(c, item);
 
-        Assert.True(await EscalarAsync<bool>(c.Banco, $"SELECT ligada_em IS NULL AND NOT is_deleted FROM contas.contas WHERE id = '{orfa}'"));
-        Assert.True(await EscalarAsync<bool>(c.Banco, $"SELECT ligada_em IS NOT NULL FROM contas.contas WHERE id = '{arquivada}'"));
-        Assert.True(await EscalarAsync<bool>(c.Banco, $"SELECT ligada_em IS NOT NULL FROM contas.contas WHERE id = '{await ContaAsync(c, Corrente.Id)}'"));
-        // Agora é manual: pode ser apagada.
-        await EsperarAsync(c.Ana.DeleteAsync($"/api/v1/contas/{orfa}"), HttpStatusCode.NoContent);
+        Assert.Equal("false|true|false", await EstadoDaContaAsync(c, vazia));
+        Assert.Equal("false|false|false", await EstadoDaContaAsync(c, comLancamento));
+        Assert.Equal("true|true|false", await EstadoDaContaAsync(c, arquivada));
+        Assert.Equal("true|false|false", await EstadoDaContaAsync(c, await ContaAsync(c, Corrente.Id)));
+        // Volta a ser manual: recebe lançamento à mão de novo.
+        await EsperarAsync(c.Ana.PostAsJsonAsync("/api/v1/lancamentos", new
+        {
+            chaveIdempotente = Guid.NewGuid(), contaId = comLancamento, natureza = "DESPESA", valorCentavos = 1_000L, data = "2026-11-04",
+            descricao = "Feira", categoriaId = mercado,
+        }), HttpStatusCode.Created);
     }
+
+    /// <summary>"ligada|arquivada|apagada" da conta.</summary>
+    private static Task<string> EstadoDaContaAsync(Ctx c, Guid conta) => EscalarAsync<string>(c.Banco,
+        $"SELECT (ligada_em IS NOT NULL) || '|' || arquivada || '|' || is_deleted FROM contas.contas WHERE id = '{conta}'");
 
     [Fact]
     public async Task Conta_nao_importada_nao_sincroniza()
