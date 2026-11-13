@@ -2,6 +2,8 @@
 # PreToolUse (Bash): impede comando que cite caminho de segredo (keystore, .env, ~/.android,
 # ~/.gradle/gradle.properties...), também por glob, e gradlew/gradle fora da lista positiva
 # de tarefas e opções (GRADLE_TAREFAS_LIBERADAS e GRADLE_OPCOES_LIBERADAS em regras.sh).
+# Também barra a publicação do app (ADR-016): tag app-v*, gh release create/upload/edit,
+# gh workflow run e gh api em deployment, dispatch, Environment, ruleset ou proteção.
 # Recebe o JSON da ferramenta no stdin. Exit 2 = bloqueia e devolve a mensagem ao Claude.
 # As regras moram em scripts/guardas/regras.sh (as mesmas do pre-commit e do CI).
 set -uo pipefail

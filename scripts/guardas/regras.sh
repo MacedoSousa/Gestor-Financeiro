@@ -108,6 +108,39 @@ checar_trecho_gradle() {
   return "$falhou"
 }
 
+# Assinatura do app (ADR-016): num trecho com git ou gh (em qualquer posição), o agente não cria nem
+# empurra tag app-v*, não publica Release, não dispara workflow e não mexe em aprovação de deployment,
+# Environment, ruleset ou proteção. Quem faz isso é a pessoa. Listar e ver continuam livres.
+checar_trecho_publicacao() {
+  local -a p
+  local palavra ferramenta="" tem_app_v=0 lista=0 motivo=""
+  read -ra p <<< "$(printf '%s' "$1" | sem_aspas)"
+  for palavra in "${p[@]}"; do
+    case "${palavra##*/}" in git|gh) [ -z "$ferramenta" ] && ferramenta="${palavra##*/}" ;; esac
+    case "$palavra" in *app-v*) tem_app_v=1 ;; -l|--list) lista=1 ;; esac
+  done
+  [ -n "$ferramenta" ] || return 0
+  local trecho=" ${p[*]} "
+  if [ "$ferramenta" = git ]; then
+    if [[ "$trecho" == *" tag "* && "$tem_app_v" -eq 1 && "$lista" -eq 0 ]]; then
+      motivo="criar tag app-v*"
+    elif [[ "$trecho" == *" push "* ]] && { [ "$tem_app_v" -eq 1 ] || [[ "$trecho" =~ \ --(tags|follow-tags|mirror)\  ]]; }; then
+      motivo="empurrar tag (app-v*, --tags, --follow-tags ou --mirror)"
+    fi
+  else
+    if [[ "$trecho" =~ \ release\ (create|upload|edit)\  ]]; then
+      motivo="gh release ${BASH_REMATCH[1]}"
+    elif [[ "$trecho" == *" workflow run "* ]]; then
+      motivo="gh workflow run"
+    elif [[ "$trecho" == *" api "* ]] && { [ "$tem_app_v" -eq 1 ] || [[ "$trecho" =~ pending_deployments|/dispatches|/environments|/rulesets|/protection ]]; }; then
+      motivo="gh api em tag app-v*, deployment, dispatch, Environment, ruleset ou proteção"
+    fi
+  fi
+  [ -z "$motivo" ] && return 0
+  echo "Bloqueado: $motivo é tarefa da pessoa, não de agente (assinatura do app, ADR-016)." >&2
+  return 1
+}
+
 # Comando que o agente vai rodar pelo Bash (hook PreToolUse). Falha se citar caminho de segredo
 # (também por glob, \ ou cd para ~/.gradle) ou se um trecho com gradle sair da lista positiva.
 # Mensagem de commit e corpo de PR vão por arquivo (git commit -F, gh pr ... --body-file).
@@ -130,6 +163,7 @@ checar_comando_bash() {
   done
   while IFS= read -r trecho; do
     checar_trecho_gradle "$trecho" || falhou=1
+    checar_trecho_publicacao "$trecho" || falhou=1
   done < <(trechos_do_comando "$comando")
   return "$falhou"
 }
