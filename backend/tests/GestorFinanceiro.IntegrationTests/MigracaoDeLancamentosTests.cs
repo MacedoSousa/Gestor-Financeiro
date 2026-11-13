@@ -29,9 +29,18 @@ public class MigracaoDeLancamentosTests(PostgresFixture pg)
         return (db, casal);
     }
 
-    private static string Transacao(Guid id, Guid casal, string natureza, long valor, string externo = "k1", string origem = "MANUAL", string? categoria = null, string parcelas = "NULL, NULL") =>
-        $"INSERT INTO lancamentos.transacoes (id, casal_id, conta_id, categoria_id, data, valor_centavos, natureza, descricao_cifrada, origem, id_externo, parcela, parcelas) " +
-        $"VALUES ('{id}', '{casal}', '{Guid.NewGuid()}', {(categoria is null ? "NULL" : $"'{categoria}'")}, '2026-11-01', {valor}, '{natureza}', '\\x01', '{origem}', '{externo}', {parcelas})";
+    // Sem categoria, despesa e receita só entram "a revisar" (V0015, D15); a transferência continua sem categoria.
+    private static string Transacao(Guid id, Guid casal, string natureza, long valor, string externo = "k1", string origem = "MANUAL", string? categoria = null,
+        string parcelas = "NULL, NULL", string? revisao = null) =>
+        $"INSERT INTO lancamentos.transacoes (id, casal_id, conta_id, categoria_id, data, valor_centavos, natureza, descricao_cifrada, origem, id_externo, parcela, parcelas, revisao) " +
+        $"VALUES ('{id}', '{casal}', '{Guid.NewGuid()}', {(categoria is null ? "NULL" : $"'{categoria}'")}, '2026-11-01', {valor}, '{natureza}', '\\x01', '{origem}', '{externo}', {parcelas}, " +
+        $"'{revisao ?? (categoria is null && natureza != "TRANSFERENCIA" ? "A_REVISAR" : "REVISADA")}')";
+
+    /// <summary>Como o <see cref="Transacao"/>, mas sem as colunas da V0015: o formato dos lançamentos de antes dela.</summary>
+    private static string TransacaoAntiga(Guid casal, Guid conta, string natureza, long valor, string externo, string? categoria,
+        string parcelas = "NULL, NULL", string grupo = "NULL") =>
+        $"INSERT INTO lancamentos.transacoes (id, casal_id, conta_id, categoria_id, data, valor_centavos, natureza, descricao_cifrada, origem, id_externo, parcela, parcelas, grupo_id) " +
+        $"VALUES ('{Guid.NewGuid()}', '{casal}', '{conta}', {(categoria is null ? "NULL" : $"'{categoria}'")}, '2026-11-01', {valor}, '{natureza}', '\\x01', 'MANUAL', '{externo}', {parcelas}, {grupo})";
 
     private static string SqlDoUpdateDaV0006()
     {
@@ -263,5 +272,113 @@ public class MigracaoDeLancamentosTests(PostgresFixture pg)
             "SELECT count(*) FROM information_schema.columns WHERE table_schema = 'lancamentos' AND table_name = 'transacoes' AND (column_name LIKE 'descricao%' OR column_name LIKE 'contraparte%') AND column_name NOT LIKE '%\\_cifrada'"));
         Assert.Equal(2, await EscalarAsync(banco.ConexaoSuperusuario,
             "SELECT count(*) FROM information_schema.columns WHERE table_schema = 'lancamentos' AND table_name = 'transacoes' AND column_name IN ('descricao_cifrada','contraparte_cifrada')"));
+    }
+    // ------------------------------------------------------------------ V0015: estados de revisão e confirmação (Fase 2, Tarefa 4.2)
+
+    [Fact]
+    public async Task Lancamentos_de_hoje_passam_na_migracao()
+    {
+        var banco = await pg.NovoBancoAteAsync("V0014");
+        var (db, casal) = await PrepararAsync(banco);
+        await using (db)
+        {
+            var despesa = Guid.NewGuid();
+            var receita = Guid.NewGuid();
+            await ExecutarAsync(db, $"INSERT INTO lancamentos.categorias (id, casal_id, nome, tipo) VALUES ('{despesa}', '{casal}', 'Mercado', 'DESPESA')");
+            await ExecutarAsync(db, $"INSERT INTO lancamentos.categorias (id, casal_id, nome, tipo) VALUES ('{receita}', '{casal}', 'Salário', 'RECEITA')");
+            var corrente = Guid.NewGuid();
+            var cartao = Guid.NewGuid();
+            var grupo = Guid.NewGuid();
+            var compra = Guid.NewGuid();
+            await ExecutarAsync(db, TransacaoAntiga(casal, corrente, "DESPESA", -5_000, "d1", despesa.ToString()));
+            await ExecutarAsync(db, TransacaoAntiga(casal, corrente, "RECEITA", 900_000, "r1", receita.ToString()));
+            await ExecutarAsync(db, TransacaoAntiga(casal, corrente, "TRANSFERENCIA", -10_000, "t1:origem", null, grupo: $"'{grupo}'"));
+            await ExecutarAsync(db, TransacaoAntiga(casal, cartao, "TRANSFERENCIA", 10_000, "t1:destino", null, grupo: $"'{grupo}'"));
+            foreach (var n in new[] { 1, 2, 3 })
+                await ExecutarAsync(db, TransacaoAntiga(casal, cartao, "DESPESA", -1_000, $"p1:{n}", despesa.ToString(), $"{n}, 24", $"'{compra}'"));
+        }
+
+        await PostgresFixture.MigrarTudoAsync(banco);
+
+        await using var depois = new NpgsqlConnection(banco.ConexaoApp);
+        await depois.OpenAsync();
+        Assert.Equal(7, await ContarAsync(depois, $"SELECT count(*) FROM lancamentos.transacoes WHERE casal_id = '{casal}'"));
+        Assert.Equal(7, await ContarAsync(depois,
+            $"SELECT count(*) FROM lancamentos.transacoes WHERE revisao = 'REVISADA' AND confirmacao = 'CONFIRMADA' AND categoria_externa IS NULL AND fatura_id_externo IS NULL"));
+    }
+
+    [Fact]
+    public async Task Despesa_sem_categoria_so_a_revisar()
+    {
+        var banco = await pg.NovoBancoAsync();
+        var (db, casal) = await PrepararAsync(banco);
+        await using var _ = db;
+
+        var ex = await Assert.ThrowsAsync<PostgresException>(() =>
+            ExecutarAsync(db, Transacao(Guid.NewGuid(), casal, "DESPESA", -100, externo: "revisada", revisao: "REVISADA")));
+        Assert.Equal("23514", ex.SqlState);
+        Assert.Equal("ck_transacoes_categoria_ou_a_revisar", ex.ConstraintName);
+
+        await ExecutarAsync(db, Transacao(Guid.NewGuid(), casal, "DESPESA", -100, externo: "a-revisar", origem: "OPEN_FINANCE", revisao: "A_REVISAR"));
+        Assert.Equal(1, await ContarAsync(db, "SELECT count(*) FROM lancamentos.transacoes WHERE revisao = 'A_REVISAR' AND categoria_id IS NULL"));
+    }
+
+    [Fact]
+    public async Task Transferencia_revisada_sem_categoria_passa()
+    {
+        var banco = await pg.NovoBancoAsync();
+        var (db, casal) = await PrepararAsync(banco);
+        await using var _ = db;
+
+        await ExecutarAsync(db, Transacao(Guid.NewGuid(), casal, "TRANSFERENCIA", -100, externo: "t:origem", revisao: "REVISADA"));
+
+        Assert.Equal(1, await ContarAsync(db, "SELECT count(*) FROM lancamentos.transacoes WHERE natureza = 'TRANSFERENCIA' AND revisao = 'REVISADA'"));
+    }
+
+    [Fact]
+    public async Task Parcela_36_de_banco_passa_e_manual_nao()
+    {
+        var banco = await pg.NovoBancoAsync();
+        var (db, casal) = await PrepararAsync(banco);
+        await using var _ = db;
+
+        await ExecutarAsync(db, Transacao(Guid.NewGuid(), casal, "DESPESA", -100, externo: "banco", origem: "OPEN_FINANCE", parcelas: "36, 36"));
+        var ex = await Assert.ThrowsAsync<PostgresException>(() =>
+            ExecutarAsync(db, Transacao(Guid.NewGuid(), casal, "DESPESA", -100, externo: "manual", origem: "MANUAL", parcelas: "36, 36")));
+        Assert.Equal("23514", ex.SqlState);
+        Assert.Equal("ck_transacoes_parcelas", ex.ConstraintName);
+        // A coerência continua valendo para o banco também.
+        var incoerente = await Assert.ThrowsAsync<PostgresException>(() =>
+            ExecutarAsync(db, Transacao(Guid.NewGuid(), casal, "DESPESA", -100, externo: "banco-2", origem: "OPEN_FINANCE", parcelas: "37, 36")));
+        Assert.Equal("ck_transacoes_parcelas", incoerente.ConstraintName);
+    }
+
+    [Fact]
+    public async Task Origem_SISTEMA_aceita()
+    {
+        var banco = await pg.NovoBancoAsync();
+        var (db, casal) = await PrepararAsync(banco);
+        await using var _ = db;
+
+        await ExecutarAsync(db, Transacao(Guid.NewGuid(), casal, "RECEITA", 100, externo: "rendimento:x:2026-11-01", origem: "SISTEMA"));
+        var ex = await Assert.ThrowsAsync<PostgresException>(() =>
+            ExecutarAsync(db, Transacao(Guid.NewGuid(), casal, "RECEITA", 100, externo: "y", origem: "OUTRA")));
+        Assert.Equal("23514", ex.SqlState);
+    }
+
+    [Theory]
+    [InlineData("revisao", "QUALQUER")]
+    [InlineData("confirmacao", "QUALQUER")]
+    public async Task Estado_desconhecido_da_23514(string coluna, string valor)
+    {
+        var banco = await pg.NovoBancoAsync();
+        var (db, casal) = await PrepararAsync(banco);
+        await using var _ = db;
+        var id = Guid.NewGuid();
+        await ExecutarAsync(db, Transacao(id, casal, "TRANSFERENCIA", -100, externo: "t:origem"));
+
+        var ex = await Assert.ThrowsAsync<PostgresException>(() =>
+            ExecutarAsync(db, $"UPDATE lancamentos.transacoes SET {coluna} = '{valor}' WHERE id = '{id}'"));
+        Assert.Equal("23514", ex.SqlState);
     }
 }

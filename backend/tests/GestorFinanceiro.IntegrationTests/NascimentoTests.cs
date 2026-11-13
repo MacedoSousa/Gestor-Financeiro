@@ -447,6 +447,8 @@ public class NascimentoTests(PostgresFixture pg)
 
         public Task DefinirSaldoInicialAsync(Guid contaId, long centavos, DateOnly em, CancellationToken ct) =>
             real.DefinirSaldoInicialAsync(contaId, centavos, em, ct);
+
+        public Task<ResultadoDoDesligar> DesligarAsync(Guid contaId, CancellationToken ct) => real.DesligarAsync(contaId, ct);
     }
 
     [Fact]
@@ -786,6 +788,8 @@ public class NascimentoTests(PostgresFixture pg)
 
         public Task DefinirSaldoInicialAsync(Guid contaId, long centavos, DateOnly em, CancellationToken ct) =>
             real.DefinirSaldoInicialAsync(contaId, centavos, em, ct);
+
+        public Task<ResultadoDoDesligar> DesligarAsync(Guid contaId, CancellationToken ct) => real.DesligarAsync(contaId, ct);
     }
 
     private static async Task<Guid> CorrenteManualAsync(Ctx c, string apelido = "Minha corrente")
@@ -1048,6 +1052,8 @@ public class NascimentoTests(PostgresFixture pg)
 
         public Task DefinirSaldoInicialAsync(Guid contaId, long centavos, DateOnly em, CancellationToken ct) =>
             real.DefinirSaldoInicialAsync(contaId, centavos, em, ct);
+
+        public Task<ResultadoDoDesligar> DesligarAsync(Guid contaId, CancellationToken ct) => real.DesligarAsync(contaId, ct);
     }
 
     [Fact]

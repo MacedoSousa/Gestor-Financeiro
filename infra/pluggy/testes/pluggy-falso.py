@@ -85,12 +85,24 @@ class Pluggy(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(dados)
 
+    def _corpo(self):
+        """Corpo com Content-Length ou em chunked (o HttpClient da API manda o /auth em chunked)."""
+        if self.headers.get("Transfer-Encoding", "").lower() == "chunked":
+            partes = []
+            while True:
+                tamanho = int(self.rfile.readline().strip().split(b";")[0], 16)
+                if tamanho == 0:
+                    self.rfile.readline()
+                    return b"".join(partes)
+                partes.append(self.rfile.read(tamanho))
+                self.rfile.readline()
+        return self.rfile.read(int(self.headers.get("Content-Length", 0)))
+
     def do_POST(self):
         self._registrar()
         if self.path != "/auth":
             return self._json(404, {"message": "não existe"})
-        tamanho = int(self.headers.get("Content-Length", 0))
-        pedido = json.loads(self.rfile.read(tamanho) or b"{}")
+        pedido = json.loads(self._corpo() or b"{}")
         if pedido.get("clientId") != CLIENT_ID or pedido.get("clientSecret") != CLIENT_SECRET:
             return self._json(401, {"message": "credenciais inválidas", "code": 401})
         return self._json(200, {"apiKey": API_KEY})
@@ -116,6 +128,8 @@ class Pluggy(BaseHTTPRequestHandler):
             return self._json(200, {"results": todas[:2], "next": proximo})
         if url.path == "/bills":
             return self._json(200, {"results": FATURAS.get(q.get("accountId"), [])})
+        if url.path == "/investments" and q.get("itemId") == ITEM:
+            return self._json(200, {"results": [], "total": 0})
         if url.path == "/transactions":
             return self._json(410, {"message": "gone"})
         return self._json(404, {"message": "não existe"})

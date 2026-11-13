@@ -5,6 +5,8 @@ import { ErroDeApi, useEu } from "../../api/autenticacao";
 import { useContas, rotuloDoTipo } from "../../api/contas";
 import { usePainelDeMetas } from "../../api/metas";
 import { ErroDeApelido, useAcoesDeNascimento, useDescoberta, type ContaNaoImportada, type Descoberta } from "../../api/nascimento";
+import type { ResultadoDaSincronizacao } from "../../api/conexoes";
+import { textoDaSincronizacao } from "../../lib/conexoes";
 import { formatarReais } from "../../lib/dinheiro";
 import {
   APELIDO_MAXIMO,
@@ -281,6 +283,10 @@ function Carregando() {
 }
 
 /** A confirmação em si: estado do formulário nasce da descoberta e é refeito quando ela muda (depois de confirmar). */
+/** O que a primeira sincronização trouxe; se ela falhou agora, onde tentar de novo. */
+const depoisDeNascer = (r: ResultadoDaSincronizacao | null) =>
+  r ? textoDaSincronizacao(r) : "O histórico não veio agora; em Conexões, use Sincronizar agora.";
+
 function Confirmacao({ itemId, descoberta, aoAvisar }: { itemId: string; descoberta: Descoberta; aoAvisar: (texto: string) => void }) {
   const eu = useEu();
   const contas = useContas();
@@ -314,8 +320,8 @@ function Confirmacao({ itemId, descoberta, aoAvisar }: { itemId: string; descobe
     if (Object.keys(encontrados).length > 0) return;
     setOcupado(true);
     try {
-      await acoes.confirmar(montarPedido(linhas, aplicacoes, metaPorGrupo));
-      aoAvisar("Pronto. As contas confirmadas aparecem em Contas com o selo do banco; o histórico chega na primeira sincronização.");
+      const sincronizacao = await acoes.confirmar(montarPedido(linhas, aplicacoes, metaPorGrupo));
+      aoAvisar(`Pronto. As contas confirmadas aparecem em Contas com o selo do banco. ${depoisDeNascer(sincronizacao)}`);
     } catch (erro) {
       // O 409 aponta a posição da conta no pedido, que é a ordem de `linhas` (montarPedido não reordena).
       const alvo = erro instanceof ErroDeApelido && erro.linha !== null ? linhas[erro.linha] : undefined;
@@ -332,7 +338,7 @@ function Confirmacao({ itemId, descoberta, aoAvisar }: { itemId: string; descobe
     servidor.limpar();
     const cartao = linha.tipo === "CARTAO";
     try {
-      await acoes.incluir(conta.vinculoId, {
+      const sincronizacao = await acoes.incluir(conta.vinculoId, {
         acao: "CRIAR",
         contaExistenteId: null,
         apelido: linha.apelido.trim(),
@@ -340,7 +346,7 @@ function Confirmacao({ itemId, descoberta, aoAvisar }: { itemId: string; descobe
         diaFechamento: cartao ? Number(linha.diaFechamento) : null,
         diaVencimento: cartao ? Number(linha.diaVencimento) : null,
       });
-      aoAvisar(`${linha.apelido.trim()} foi incluída e aparece em Contas.`);
+      aoAvisar(`${linha.apelido.trim()} foi incluída e aparece em Contas. ${depoisDeNascer(sincronizacao)}`);
       return true;
     } catch (erro) {
       servidor.falhar(erro instanceof ErroDeApelido ? new ErroDeApi(409, `Já existe uma conta com esse nome. Sugestão: ${erro.sugestao}.`) : erro);

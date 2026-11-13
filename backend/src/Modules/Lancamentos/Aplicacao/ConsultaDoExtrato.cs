@@ -43,10 +43,11 @@ internal sealed class ConsultaDoExtrato(LancamentosDbContext db, IUsuarioAtual a
             "MANUAL" => OrigemDaTransacao.Manual,
             "OPEN_FINANCE" => OrigemDaTransacao.OpenFinance,
             "WHATSAPP" => OrigemDaTransacao.Whatsapp,
+            "SISTEMA" => OrigemDaTransacao.Sistema,
             _ => null,
         };
         if (filtro.Origem is not null && origem is null)
-            erros["origem"] = ["Origem inválida: use MANUAL, OPEN_FINANCE ou WHATSAPP."];
+            erros["origem"] = ["Origem inválida: use MANUAL, OPEN_FINANCE, WHATSAPP ou SISTEMA."];
         if (filtro.Q is { Length: > TamanhoMaximoDaBusca })
             erros["q"] = [$"A busca deve ter até {TamanhoMaximoDaBusca} caracteres."];
         if (erros.Count > 0) return (null, erros);
@@ -129,7 +130,9 @@ internal sealed class ConsultaDoExtrato(LancamentosDbContext db, IUsuarioAtual a
                 t.Id, t.Data, t.LerDescricao(cofre), t.LerContraparte(cofre), categoria,
                 new ContaDoLancamentoDto(t.ContaId, conta?.Apelido ?? "Conta removida", conta?.Tipo ?? string.Empty),
                 quem, TextoDaOrigem(t.Origem), t.Natureza.ToString().ToUpperInvariant(), t.ValorCentavos,
-                t.Parcela, t.Parcelas, t.GrupoId, t.FaturaVencimento);
+                t.Parcela, t.Parcelas, t.GrupoId, t.FaturaVencimento,
+                t.Revisao == RevisaoDaTransacao.ARevisar ? "A_REVISAR" : "REVISADA",
+                t.Confirmacao == ConfirmacaoDaTransacao.AConfirmar ? "A_CONFIRMAR" : "CONFIRMADA");
         }).ToList();
     }
 

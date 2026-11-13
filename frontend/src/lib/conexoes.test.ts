@@ -8,7 +8,11 @@ import {
   pedidoDoBanco,
   rotuloDoSlot,
   separarConexoes,
+  textoDaDiferenca,
+  textoDaFatura,
+  textoDaSincronizacao,
   textoDoConsentimento,
+  textoDoHistorico,
   validarBanco,
   validarCadastro,
 } from "./conexoes";
@@ -181,5 +185,41 @@ describe("separarConexoes", () => {
 
   it("nenhuma conexão", () => {
     expect(separarConexoes([])).toEqual({ sua: null, outra: null });
+  });
+});
+
+describe("textos da sincronização (Tarefa 4.5)", () => {
+  it("histórico desde DD/MM, sem fuso; nulo antes da primeira sincronização", () => {
+    expect(textoDoHistorico("2026-03-15")).toBe("Histórico desde 15/03");
+    expect(textoDoHistorico(null)).toBeNull();
+  });
+
+  it("diferença de saldo diz quem tem mais; o valor vem à parte, para a fonte de número (testador, notas 6 e 7)", () => {
+    expect(textoDaDiferenca(1_000)).toEqual({ antes: "O banco mostra ", valor: "R$\u00a010,00", depois: " a mais que o sistema" });
+    expect(textoDaDiferenca(-250_050)).toEqual({ antes: "O banco mostra ", valor: "R$\u00a02.500,50", depois: " a menos que o sistema" });
+    expect(textoDaDiferenca(null)).toBeNull();
+  });
+
+  it("fatura do banco diferente: mês por extenso do vencimento", () => {
+    expect(textoDaFatura({ vencimento: "2026-04-10", diferencaCentavos: 10_000 })).toEqual({
+      antes: "Fatura de abril: o banco soma ",
+      valor: "R$\u00a0100,00",
+      depois: " a mais que as compras dela",
+    });
+  });
+
+  it("resumo da sincronização fala de contas e lançamentos, e avisa a falha", () => {
+    expect(textoDaSincronizacao({ contasSincronizadas: 2, contasComFalha: 0, lancamentosNovos: 37, lancamentosAtualizados: 1 })).toBe(
+      "Sincronizado: 2 contas, 37 lançamentos novos.",
+    );
+    expect(textoDaSincronizacao({ contasSincronizadas: 2, contasComFalha: 0, lancamentosNovos: 0, lancamentosAtualizados: 0 }, "Itaú")).toBe(
+      "Itaú sincronizado: 2 contas, nenhum lançamento novo.",
+    );
+    expect(textoDaSincronizacao({ contasSincronizadas: 1, contasComFalha: 1, lancamentosNovos: 1, lancamentosAtualizados: 0 })).toBe(
+      "Sincronizado: 1 conta, 1 lançamento novo. 1 conta não veio do banco agora; a próxima sincronização tenta de novo.",
+    );
+    expect(textoDaSincronizacao({ contasSincronizadas: 0, contasComFalha: 0, lancamentosNovos: 0, lancamentosAtualizados: 0 })).toBe(
+      "Nada para sincronizar: nenhuma conta ativa deste banco.",
+    );
   });
 });

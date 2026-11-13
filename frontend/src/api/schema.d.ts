@@ -64,7 +64,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Concilia o saldo de hoje de uma poupança ou investimento com o do banco. Diferença positiva vira receita em Rendimentos (LANCADO); igual dá CONFERE e menor dá MENOR, sem lançar. Saldo exibido diferente do de hoje dá 409. */
+        /** Concilia o saldo de hoje de uma poupança ou investimento com o do banco. Diferença positiva vira receita em Rendimentos (LANCADO); igual dá CONFERE e menor dá MENOR, sem lançar. Saldo exibido diferente do de hoje dá 409. Conta ligada ao banco dá 409 (o saldo é conferido sozinho). */
         post: operations["ConciliarConta"];
         delete?: never;
         options?: never;
@@ -564,7 +564,7 @@ export interface paths {
         /** Extrato do mês (AAAA-MM; padrão: o mês de hoje em Brasília), por data decrescente. titular: conjunta, eu ou conjuge. q busca na descrição e na contraparte, sem acento e sem caixa. */
         get: operations["ListarLancamentos"];
         put?: never;
-        /** Cria despesa ou receita (parcelada só em cartão). Repetir a mesma chave devolve 200 com o lançamento já criado. Conta ou categoria arquivada dá 400. */
+        /** Cria despesa ou receita (parcelada só em cartão). Repetir a mesma chave devolve 200 com o lançamento já criado. Conta ou categoria arquivada dá 400; conta ligada ao banco dá 409 (os lançamentos chegam sozinhos). */
         post: operations["CriarLancamento"];
         delete?: never;
         options?: never;
@@ -581,10 +581,10 @@ export interface paths {
         };
         /** Um lançamento do casal. */
         get: operations["ObterLancamento"];
-        /** Edita um lançamento. escopo: este (padrão) ou proximos (esta parcela e as seguintes). Em fatura fechada só descrição, contraparte e categoria mudam; mudar valor ou data ali, ou levar algo para fatura fechada, dá 409. */
+        /** Edita um lançamento. escopo: este (padrão) ou proximos (esta parcela e as seguintes). Em fatura fechada só descrição, contraparte e categoria mudam; mudar valor ou data ali, ou levar algo para fatura fechada, dá 409. Em conta ligada ao banco só descrição e categoria mudam (senão 409), e editar marca o lançamento como revisado. */
         put: operations["EditarLancamento"];
         post?: never;
-        /** Apaga (soft delete). escopo: este (padrão) ou proximos (esta parcela e as seguintes, pulando faturas fechadas). Apagar lançamento de fatura fechada dá 409. */
+        /** Apaga (soft delete). escopo: este (padrão) ou proximos (esta parcela e as seguintes, pulando faturas fechadas). Apagar lançamento de fatura fechada ou de conta ligada ao banco dá 409. */
         delete: operations["ApagarLancamento"];
         options?: never;
         head?: never;
@@ -600,7 +600,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Transfere entre duas contas do casal (pagar a fatura = destino no cartão). Grava as duas pernas juntas; repetir a mesma chave devolve 200 com a transferência já criada. Origem igual ao destino ou conta arquivada dá 400. Editar ou apagar uma perna, pelas rotas de lançamentos, age nas duas. */
+        /** Transfere entre duas contas do casal (pagar a fatura = destino no cartão). Grava as duas pernas juntas; repetir a mesma chave devolve 200 com a transferência já criada. Origem igual ao destino ou conta arquivada dá 400; conta ligada ao banco dá 409. Editar ou apagar uma perna, pelas rotas de lançamentos, age nas duas. */
         post: operations["CriarTransferencia"];
         delete?: never;
         options?: never;
@@ -868,6 +868,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/integracoes/items/{id}/sincronizacao": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Importa agora as contas e os cartões nascidos deste banco: na primeira vez, o histórico desde 2026-01-01 e o saldo inicial; depois, os últimos 10 dias. Conta arquivada ou "não importar" fica de fora; a falha numa conta não desfaz as outras (contasComFalha). Só o titular (senão 403); banco recusou dá 502, Pluggy fora do ar dá 503. */
+        post: operations["SincronizarItem"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1061,6 +1078,18 @@ export interface components {
             metaId: null | string;
             metaNome: null | string;
         };
+        ContaDoItemDto: {
+            /** Format: uuid */
+            contaId: string;
+            apelido: string;
+            tipo: string;
+            arquivada: boolean;
+            /** Format: date */
+            historicoDesde: null | string;
+            /** Format: int64 */
+            diferencaCentavos: null | number | string;
+            faturasDivergentes: components["schemas"]["FaturaDivergenteDto"][];
+        };
         ContaDoLancamentoDto: {
             /** Format: uuid */
             id: string;
@@ -1202,6 +1231,12 @@ export interface components {
             dividas: components["schemas"]["FatiaDto"];
             tetoDeGastos: components["schemas"]["FatiaDto"];
         };
+        FaturaDivergenteDto: {
+            /** Format: date */
+            vencimento: string;
+            /** Format: int64 */
+            diferencaCentavos: number | string;
+        };
         FaturaDto: {
             /** Format: date */
             vencimento: string;
@@ -1249,6 +1284,9 @@ export interface components {
             consentimentoVenceEm: null | string;
             /** Format: date-time */
             ultimaSincronizacaoEm: null | string;
+            /** Format: date-time */
+            ultimaTentativaEm: null | string;
+            contas: components["schemas"]["ContaDoItemDto"][];
         };
         LancamentoDto: {
             /** Format: uuid */
@@ -1272,6 +1310,10 @@ export interface components {
             grupoId: null | string;
             /** Format: date */
             faturaVencimento: null | string;
+            /** @default REVISADA */
+            revisao: string;
+            /** @default CONFIRMADA */
+            confirmacao: string;
         };
         MembroDto: {
             /** Format: uuid */
@@ -1602,6 +1644,16 @@ export interface components {
             residentKey: string;
             requireResidentKey: boolean;
             userVerification: string;
+        };
+        SincronizacaoDto: {
+            /** Format: int32 */
+            contasSincronizadas: number | string;
+            /** Format: int32 */
+            contasComFalha: number | string;
+            /** Format: int32 */
+            lancamentosNovos: number | string;
+            /** Format: int32 */
+            lancamentosAtualizados: number | string;
         };
         SlotDto: {
             /** Format: int32 */
@@ -4182,6 +4234,71 @@ export interface operations {
             };
             /** @description Conflict */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    SincronizarItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SincronizacaoDto"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Bad Gateway */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -33,6 +33,7 @@ internal sealed class ServicoDeLancamentos(LancamentosDbContext db, IUsuarioAtua
     internal const string TituloEstornoComPapel = "Rendimentos e devoluções de investimento ou de dívida entram como receita comum, não como estorno.";
     internal const string TituloChaveUsada = "Chave de idempotência já usada.";
     internal const string TituloFaturaFechada = "Fatura fechada: só descrição e categoria podem mudar.";
+    internal const string TituloContaLigada = "Esta conta vem do banco. Os lançamentos chegam sozinhos.";
     private const string IndiceDaChave = "ux_transacoes_origem_id_externo";
     private const int TamanhoMaximoDoTexto = 140;
 
@@ -65,6 +66,7 @@ internal sealed class ServicoDeLancamentos(LancamentosDbContext db, IUsuarioAtua
         await TravaDeConta.TomarAsync(db, [p.ContaId], ct);
         var conta = await contas.ObterAsync(p.ContaId, ct);
         if (conta is null) return new ResultadoDeLancamento.NaoEncontrado();
+        if (conta.Ligada) return new ResultadoDeLancamento.Recusado(TituloContaLigada, 409);
         if (conta.Arquivada) return new ResultadoDeLancamento.Recusado(TituloContaArquivada, 400);
         if (p.Parcelas > 1 && conta.Tipo != "CARTAO")
             return Invalido("parcelas", "Parcelas só em cartão de crédito.");
@@ -126,15 +128,22 @@ internal sealed class ServicoDeLancamentos(LancamentosDbContext db, IUsuarioAtua
         if (p.Natureza == "TRANSFERENCIA") return Invalido("natureza", "Despesa ou receita não vira transferência.");
         if (p.CategoriaId is not { } categoriaId) return Invalido("categoriaId", "Informe a categoria.");
         var natureza = LerNatureza(p.Natureza);
+        var conta = await contas.ObterAsync(alvo.ContaId, ct);
         if (alvo.Parcela is not null && natureza != NaturezaDaTransacao.Despesa)
             return Invalido("natureza", "Só despesa pode ser parcelada.");
         if (await ValidarCategoriaAsync(categoriaId, natureza, alvo.CategoriaId, ct) is { } recusa) return recusa;
 
-        var conta = await contas.ObterAsync(alvo.ContaId, ct);
         var hoje = Brasilia.Hoje(relogio);
         var lista = await AlvosAsync(alvo, proximas, ct);
         var valorComSinal = natureza == NaturezaDaTransacao.Despesa ? -p.ValorCentavos : p.ValorCentavos;
         var dataMudou = p.Data != alvo.Data;
+
+        // Conta ligada (opção B): valor, data, natureza e contraparte não mudam à mão, nem na linha que o casal digitou antes de
+        // ligar (mudar o valor dela seria lançar à mão numa conta do banco; revisão da E4, rodada 2). Confere cada linha que o
+        // escopo alcança: "esta e as próximas" levaria o valor da escolhida às outras (rodada 3). Descrição e categoria, sim.
+        if (conta is { Ligada: true } && (dataMudou || lista.Any(t => t.Natureza != natureza || t.ValorCentavos != valorComSinal
+                || Texto(p.Contraparte) != Texto(t.LerContraparte(cofre)))))
+            return new ResultadoDeLancamento.Recusado(TituloContaLigada, 409);
 
         // Primeiro decide tudo; só grava se nenhuma parcela esbarrar numa fatura fechada.
         var planos = new List<(Transacao T, DateOnly Data, DateOnly? Fatura, long Valor, NaturezaDaTransacao Natureza)>(lista.Count);
@@ -179,6 +188,9 @@ internal sealed class ServicoDeLancamentos(LancamentosDbContext db, IUsuarioAtua
 
         var pernas = alvo.GrupoId is { } grupo ? await db.Transacoes.Where(t => t.GrupoId == grupo).ToListAsync(ct) : [alvo];
         await TravaDeConta.TomarAsync(db, pernas.Select(t => t.ContaId), ct);
+        foreach (var perna in pernas)
+            if ((await contas.ObterAsync(perna.ContaId, ct)) is { Ligada: true } && (p.Data != perna.Data || p.ValorCentavos != Math.Abs(perna.ValorCentavos)))
+                return new ResultadoDeLancamento.Recusado(TituloContaLigada, 409);
         foreach (var t in pernas) t.EditarTransferencia(new Dinheiro(p.ValorCentavos), p.Data, p.Descricao, cofre);
 
         await db.SaveChangesAsync(ct);
@@ -209,10 +221,16 @@ internal sealed class ServicoDeLancamentos(LancamentosDbContext db, IUsuarioAtua
         foreach (var contaId in lista.Select(t => t.ContaId).Distinct()) contasPorId[contaId] = await contas.ObterAsync(contaId, ct);
         bool Fechada(Transacao t) => FaturaFechada(contasPorId[t.ContaId], t.FaturaVencimento, hoje);
 
+        // Conta ligada: o que veio do banco some quando o banco diz (Tarefa 4.3); o que o casal digitou antes de ligar, ele apaga.
+        if (lista.Any(t => DoBanco(t) && contasPorId[t.ContaId] is { Ligada: true }))
+            return new ResultadoDeLancamento.Recusado(TituloContaLigada, 409);
         if (Fechada(alvo) || (transferencia && lista.Any(Fechada)))
             return new ResultadoDeLancamento.Recusado(TituloFaturaFechada, 409);
 
-        db.Transacoes.RemoveRange(lista.Where(t => t == alvo || !Fechada(t))); // SoftDeleteInterceptor converte em is_deleted = true.
+        var apagadas = lista.Where(t => t == alvo || !Fechada(t)).ToList();
+        // Apagada pelo casal nunca volta pelo banco (D19).
+        foreach (var t in apagadas) t.MarcarApagamento(MotivoDoApagamento.Casal);
+        db.Transacoes.RemoveRange(apagadas); // SoftDeleteInterceptor converte em is_deleted = true.
         await db.SaveChangesAsync(ct);
         return new ResultadoDeLancamento.Feito();
     }
@@ -281,6 +299,11 @@ internal sealed class ServicoDeLancamentos(LancamentosDbContext db, IUsuarioAtua
             erros["contraparte"] = [$"A contraparte deve ter até {TamanhoMaximoDoTexto} caracteres."];
         return erros;
     }
+
+    /// <summary>Veio do banco ou foi criada pelo sistema (D12): em conta ligada, só some quando o banco diz.</summary>
+    private static bool DoBanco(Transacao t) => t.Origem is OrigemDaTransacao.OpenFinance or OrigemDaTransacao.Sistema;
+
+    private static string? Texto(string? texto) => string.IsNullOrWhiteSpace(texto) ? null : texto.Trim();
 
     /// <summary>true = "proximos", false = "este" (padrão), nulo = inválido.</summary>
     private static bool? LerEscopo(string? escopo) => escopo switch

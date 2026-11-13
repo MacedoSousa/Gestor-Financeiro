@@ -1497,3 +1497,25 @@ select.entrada {
   margin-left: 4px;
   font-weight: 400;
 }
+
+/* Conexões: contas que vêm de cada banco, com o histórico e as diferenças com o banco (Fase 2, etapa 4). */
+.contas-do-banco {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+
+/* Extrato: pendente no banco (A_CONFIRMAR). Âmbar suave, sem competir com o destaque verde-água. */
+.selo-a-confirmar {
+  margin-left: 8px;
+  background: var(--alerta-fundo);
+  color: var(--alerta);
+}
+
+.sem-quebra {
+  white-space: nowrap;
+}

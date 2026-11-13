@@ -61,6 +61,24 @@ internal static class EndpointsDeNascimento
         .ProducesProblem(StatusCodes.Status403Forbidden)
         .ProducesProblem(StatusCodes.Status409Conflict);
 
+        grupo.MapPost("/items/{id:guid}/sincronizacao", async Task<Results<Ok<SincronizacaoDto>, ProblemHttpResult, NotFound>> (
+            Guid id, Sincronizacao sincronizacao, CancellationToken ct) =>
+            await sincronizacao.SincronizarAsync(id, ct) switch
+            {
+                ResultadoDaSincronizacao.Feita f => TypedResults.Ok(f.Dto),
+                ResultadoDaSincronizacao.Recusada { Motivo: ResultadoDeNascimento.Recusado r } => Problema(r),
+                ResultadoDaSincronizacao.Recusada { Motivo: ResultadoDeNascimento.NaoEncontrado } => TypedResults.NotFound(),
+                var outro => throw new UnreachableException(outro.GetType().Name),
+            })
+        .WithName("SincronizarItem")
+        .WithSummary("Importa agora as contas e os cartões nascidos deste banco: na primeira vez, o histórico desde 2026-01-01 e o " +
+                     "saldo inicial; depois, os últimos 10 dias. Conta arquivada ou \"não importar\" fica de fora; a falha numa conta " +
+                     "não desfaz as outras (contasComFalha). Só o titular (senão 403); banco recusou dá 502, Pluggy fora do ar dá 503.")
+        .ProducesProblem(StatusCodes.Status403Forbidden)
+        .ProducesProblem(StatusCodes.Status409Conflict)
+        .ProducesProblem(StatusCodes.Status502BadGateway)
+        .ProducesProblem(StatusCodes.Status503ServiceUnavailable);
+
         return api;
     }
 

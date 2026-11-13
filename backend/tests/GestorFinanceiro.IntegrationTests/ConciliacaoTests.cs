@@ -83,8 +83,8 @@ public class ConciliacaoTests(PostgresFixture pg)
 
     private static Task InserirDespesaAsync(BancoDeTeste banco, Guid casal, Guid conta, string data, long valor) =>
         ExecutarAsync(banco,
-            "INSERT INTO lancamentos.transacoes (id, casal_id, conta_id, data, valor_centavos, natureza, descricao_cifrada, origem, id_externo) " +
-            $"VALUES ('{Guid.NewGuid()}', '{casal}', '{conta}', '{data}', {-valor}, 'DESPESA', '\\x01', 'MANUAL', '{Guid.NewGuid()}')");
+            "INSERT INTO lancamentos.transacoes (id, casal_id, conta_id, data, valor_centavos, natureza, descricao_cifrada, origem, id_externo, revisao) " +
+            $"VALUES ('{Guid.NewGuid()}', '{casal}', '{conta}', '{data}', {-valor}, 'DESPESA', '\\x01', 'MANUAL', '{Guid.NewGuid()}', 'A_REVISAR')");
 
     [Fact]
     public async Task Diferenca_positiva_lanca_rendimentos()

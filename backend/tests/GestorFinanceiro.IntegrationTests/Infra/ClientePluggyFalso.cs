@@ -15,6 +15,21 @@ internal sealed class ClientePluggyFalso : IClientePluggy
     private readonly ConcurrentDictionary<string, List<ContaPluggy>> _contas = new();
     private readonly ConcurrentDictionary<string, List<FaturaPluggy>> _faturas = new();
     private readonly ConcurrentDictionary<string, List<InvestimentoPluggy>> _investimentos = new();
+    private readonly ConcurrentDictionary<string, List<TransacaoPluggy>> _transacoes = new();
+
+    /// <summary>Cada leitura de transações: a conta e o "desde" pedido.</summary>
+    public ConcurrentQueue<(string ContaId, DateOnly Desde)> LeiturasDeTransacoes { get; } = new();
+
+    /// <summary>Espera dentro de cada leitura de transações, para os testes de concorrência.</summary>
+    public TimeSpan AtrasoNasTransacoes { get; set; }
+
+    private int _leiturasJuntas;
+
+    /// <summary>Quantas leituras de transações chegaram a estar em andamento ao mesmo tempo.</summary>
+    public int MaximoDeLeiturasJuntas { get; private set; }
+
+    /// <summary>Contas cuja leitura de transações falha (como um 500 da Pluggy só naquela conta).</summary>
+    public ConcurrentDictionary<string, bool> ContasComFalha { get; } = new();
 
     public ConcurrentQueue<(int Slot, string ClientId, string ItemId)> Consultas { get; } = new();
 
@@ -26,6 +41,19 @@ internal sealed class ClientePluggyFalso : IClientePluggy
 
     /// <summary>Conta (ou cartão) do item; o item precisa estar cadastrado antes.</summary>
     public void CadastrarConta(string itemId, ContaPluggy conta) => _contas.GetOrAdd(itemId, _ => []).Add(conta);
+
+    /// <summary>Troca o saldo (ou outro dado) de uma conta já cadastrada, pelo id.</summary>
+    public void AtualizarConta(string itemId, ContaPluggy conta)
+    {
+        var lista = _contas[itemId];
+        lock (lista) lista[lista.FindIndex(c => c.Id == conta.Id)] = conta;
+    }
+
+    /// <summary>Transação da conta, como a Pluggy manda (valor no sinal da Pluggy; data já no dia de São Paulo).</summary>
+    public void CadastrarTransacao(string contaId, TransacaoPluggy transacao) => _transacoes.GetOrAdd(contaId, _ => []).Add(transacao);
+
+    /// <summary>O banco apagou a transação.</summary>
+    public void RemoverTransacao(string contaId, string id) => _transacoes[contaId].RemoveAll(t => t.Id == id);
 
     public void CadastrarFatura(string contaId, FaturaPluggy fatura) => _faturas.GetOrAdd(contaId, _ => []).Add(fatura);
 
@@ -44,8 +72,28 @@ internal sealed class ClientePluggyFalso : IClientePluggy
         return Task.FromResult<IReadOnlyList<ContaPluggy>>(_contas.TryGetValue(itemId, out var l) ? [.. l] : []);
     }
 
-    public IAsyncEnumerable<TransacaoPluggy> ListarTransacoesAsync(CredenciaisPluggy c, string contaId, DateOnly desde, CancellationToken ct) =>
-        throw new NotSupportedException();
+    public async IAsyncEnumerable<TransacaoPluggy> ListarTransacoesAsync(CredenciaisPluggy c, string contaId, DateOnly desde,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
+    {
+        await Task.Yield();
+        if (Falha is not null) throw Falha;
+        if (!_items.Any(i => i.Value.ClientId == c.ClientId && _contas.TryGetValue(i.Key, out var l) && l.Any(x => x.Id == contaId)))
+            throw new ErroDaPluggy(404, "ACCOUNT_NOT_FOUND", null);
+        LeiturasDeTransacoes.Enqueue((contaId, desde));
+        var juntas = Interlocked.Increment(ref _leiturasJuntas);
+        lock (LeiturasDeTransacoes) MaximoDeLeiturasJuntas = Math.Max(MaximoDeLeiturasJuntas, juntas);
+        try
+        {
+            if (AtrasoNasTransacoes > TimeSpan.Zero) await Task.Delay(AtrasoNasTransacoes, ct);
+            if (ContasComFalha.ContainsKey(contaId)) throw new ErroDaPluggy(500, "INTERNAL_ERROR", null);
+            foreach (var t in _transacoes.TryGetValue(contaId, out var l2) ? l2.ToList() : [])
+                if (t.Data >= desde) yield return t;
+        }
+        finally
+        {
+            Interlocked.Decrement(ref _leiturasJuntas);
+        }
+    }
 
     public Task<IReadOnlyList<FaturaPluggy>> ListarFaturasAsync(CredenciaisPluggy c, string contaId, CancellationToken ct)
     {

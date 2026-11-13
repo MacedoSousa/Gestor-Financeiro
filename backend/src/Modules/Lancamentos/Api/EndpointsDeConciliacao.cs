@@ -32,7 +32,7 @@ internal static class EndpointsDeConciliacao
         .WithTags("Lancamentos")
         .WithName("ConciliarConta")
         .WithSummary("Concilia o saldo de hoje de uma poupança ou investimento com o do banco. Diferença positiva vira receita " +
-                     "em Rendimentos (LANCADO); igual dá CONFERE e menor dá MENOR, sem lançar. Saldo exibido diferente do de hoje dá 409.")
+                     "em Rendimentos (LANCADO); igual dá CONFERE e menor dá MENOR, sem lançar. Saldo exibido diferente do de hoje dá 409. Conta ligada ao banco dá 409 (o saldo é conferido sozinho).")
         .ProducesProblem(StatusCodes.Status400BadRequest)
         .ProducesProblem(StatusCodes.Status409Conflict);
 

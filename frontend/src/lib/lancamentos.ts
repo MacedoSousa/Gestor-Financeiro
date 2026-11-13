@@ -32,3 +32,33 @@ export function ehEstorno(l: Lancamento, categorias: Categoria[]): boolean {
   const id = l.categoria.id;
   return categorias.find((c) => c.id === id)?.tipo === "DESPESA";
 }
+
+/**
+ * Como o editor trata um lançamento de conta ligada ao banco (opção B), a mesma regra da API:
+ * - `travada`: valor, data, tipo e contraparte não mudam à mão em conta ligada, seja a linha do banco ou digitada antes de
+ *   ligar; só descrição e categoria;
+ * - `apagavel`: o que veio do banco (OPEN_FINANCE) ou do sistema (SISTEMA) some quando o banco diz; o que o casal digitou
+ *   antes de ligar ele apaga, para limpar o que o banco trouxe em dobro.
+ * Sem a lista de contas, trata como manual (a API continua sendo a regra).
+ */
+export function edicaoEmContaLigada(
+  l: Pick<Lancamento, "conta" | "origem">,
+  contas: readonly Pick<Conta, "id" | "ligada">[] | undefined,
+): { travada: boolean; apagavel: boolean } {
+  const ligada = contas?.find((c) => c.id === l.conta.id)?.ligada === true;
+  const doBanco = l.origem === "OPEN_FINANCE" || l.origem === "SISTEMA";
+  return { travada: ligada, apagavel: !(ligada && doBanco) };
+}
+
+/** Contas que aceitam lançamento à mão: nem arquivadas nem ligadas ao banco (opção B; a API recusa com 409). */
+export function contasParaLancar<T extends Pick<Conta, "arquivada" | "ligada">>(contas: readonly T[]): T[] {
+  return contas.filter((c) => !c.arquivada && !c.ligada);
+}
+
+/**
+ * Importado ainda sem categoria (D15): o editor não marca nenhuma de antemão. Salvar sem escolher revisaria o lançamento
+ * com uma categoria que a pessoa não escolheu, e ele passaria a contar no orçamento.
+ */
+export function exigeEscolhaDeCategoria(l: Pick<Lancamento, "revisao" | "categoria">): boolean {
+  return l.revisao === "A_REVISAR" && !l.categoria;
+}

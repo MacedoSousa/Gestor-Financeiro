@@ -1,10 +1,14 @@
 using System.Globalization;
 using System.Text;
+using System.Text.Json;
 using GestorFinanceiro.Modules.Integracoes.Pluggy;
 using GestorFinanceiro.SharedKernel.Dominio;
 using GestorFinanceiro.SharedKernel.Seguranca;
 
 namespace GestorFinanceiro.Modules.Integracoes.Dominio;
+
+/// <summary>Uma fatura do banco que não bate com a soma das transações dela (coluna <c>faturas_divergentes</c>).</summary>
+internal sealed record FaturaDivergente(DateOnly Vencimento, long DiferencaCentavos, int Seguidas);
 
 /// <summary>Tipos de vínculo (coluna <c>tipo</c>).</summary>
 internal static class TipoDeVinculo
@@ -80,6 +84,57 @@ internal sealed class Vinculo : Entidade, ICasalScoped
         ContaId = nova;
         if (nova is not null) NaoImportarEm = null;
     }
+
+    /// <summary>Diferenças (de saldo ou de fatura) só aparecem na tela depois de 2 sincronizações seguidas (spec).</summary>
+    public const int SeguidasParaMostrar = 2;
+
+    /// <summary>
+    /// Importação concluída até <paramref name="hoje"/>. O início do histórico é gravado uma vez (a primeira importação) e
+    /// não muda depois.
+    /// </summary>
+    public void RegistrarImportacao(DateOnly historicoDesde, DateOnly hoje)
+    {
+        HistoricoDesde ??= historicoDesde;
+        ImportadoAte = hoje;
+    }
+
+    /// <summary>Conferência de saldo (só CONTA): diferença zero zera a contagem; outra soma uma sincronização seguida.</summary>
+    public void ConferirSaldo(long diferencaCentavos)
+    {
+        if (diferencaCentavos == 0)
+        {
+            DiferencaCentavos = null;
+            DiferencasSeguidas = 0;
+            return;
+        }
+        DiferencaCentavos = diferencaCentavos;
+        DiferencasSeguidas = (short)Math.Min(DiferencasSeguidas + 1, short.MaxValue);
+    }
+
+    /// <summary>A diferença de saldo, só depois de 2 sincronizações seguidas com diferença.</summary>
+    public long? DiferencaVisivel => DiferencasSeguidas >= SeguidasParaMostrar ? DiferencaCentavos : null;
+
+    /// <summary>
+    /// Conferência das faturas do cartão (decisão 12): guarda, por fatura do banco (billId, id opaco, D7), a diferença e
+    /// quantas sincronizações seguidas ela aparece. Fatura que bateu (ou saiu da lista) some.
+    /// </summary>
+    public void ConferirFaturas(IReadOnlyList<DiferencaDeFatura> diferencas)
+    {
+        ArgumentNullException.ThrowIfNull(diferencas);
+        var antes = LerFaturas();
+        var agora = diferencas.ToDictionary(d => d.FaturaId, d => new FaturaDivergente(d.Vencimento, d.DiferencaCentavos,
+            (antes.TryGetValue(d.FaturaId, out var a) ? a.Seguidas : 0) + 1), StringComparer.Ordinal);
+        FaturasDivergentes = agora.Count == 0 ? null : JsonSerializer.Serialize(agora);
+    }
+
+    /// <summary>As faturas com diferença em 2 sincronizações seguidas ou mais, por vencimento.</summary>
+    public IReadOnlyList<FaturaDivergente> FaturasVisiveis =>
+        LerFaturas().Values.Where(f => f.Seguidas >= SeguidasParaMostrar).OrderBy(f => f.Vencimento).ToList();
+
+    private Dictionary<string, FaturaDivergente> LerFaturas() =>
+        FaturasDivergentes is null
+            ? new Dictionary<string, FaturaDivergente>(StringComparer.Ordinal)
+            : JsonSerializer.Deserialize<Dictionary<string, FaturaDivergente>>(FaturasDivergentes)!;
 
     /// <summary>CONTA para conta bancária, CARTAO para cartão de crédito.</summary>
     public static string TipoDe(ContaPluggy conta) =>

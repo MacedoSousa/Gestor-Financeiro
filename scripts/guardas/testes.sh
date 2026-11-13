@@ -39,9 +39,11 @@ espera_sucesso "keystore .bks é segredo"          eh_caminho_de_segredo a/x.bks
 espera_sucesso "chave .pepk é segredo"            eh_caminho_de_segredo a/output.pepk
 espera_sucesso "keystore.properties é segredo"    eh_caminho_de_segredo android/keystore.properties
 espera_sucesso "keystore.properties na raiz"      eh_caminho_de_segredo keystore.properties
-espera_sucesso "~/.android é segredo"             eh_caminho_de_segredo "~/.android"
+# shellcheck disable=SC2088 # til literal de propósito: é o texto que a guarda recebe
+espera_sucesso "~/.android é segredo"          eh_caminho_de_segredo "~/.android"
 espera_sucesso "arquivo do ~/.android é segredo"  eh_caminho_de_segredo /home/x/.android/adbkey
-espera_sucesso "~/.gradle/gradle.properties"      eh_caminho_de_segredo "~/.gradle/gradle.properties"
+# shellcheck disable=SC2088 # idem
+espera_sucesso "~/.gradle/gradle.properties"    eh_caminho_de_segredo "~/.gradle/gradle.properties"
 espera_sucesso "gradle.properties do usuário"     eh_caminho_de_segredo /home/x/.gradle/gradle.properties
 espera_sucesso "JSON de service account"          eh_caminho_de_segredo infra/play-service-account.json
 espera_sucesso "JSON de conta de serviço"         eh_caminho_de_segredo a/conta-de-servico-play.json

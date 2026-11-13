@@ -61,8 +61,9 @@ public class CategoriasTests(PostgresFixture pg)
 
     private static async Task InserirLancamentoAsync(BancoDeTeste banco, Guid casal, Guid conta, Guid? categoria) =>
         await ExecutarAsync(banco,
-            $"INSERT INTO lancamentos.transacoes (id, casal_id, conta_id, categoria_id, data, valor_centavos, natureza, descricao_cifrada, origem, id_externo) " +
-            $"VALUES ('{Guid.NewGuid()}', '{casal}', '{conta}', {(categoria is null ? "NULL" : $"'{categoria}'")}, '2026-11-01', -1000, 'DESPESA', '\\x01', 'MANUAL', '{Guid.NewGuid()}')");
+            $"INSERT INTO lancamentos.transacoes (id, casal_id, conta_id, categoria_id, data, valor_centavos, natureza, descricao_cifrada, origem, id_externo, revisao) " +
+            $"VALUES ('{Guid.NewGuid()}', '{casal}', '{conta}', {(categoria is null ? "NULL" : $"'{categoria}'")}, '2026-11-01', -1000, 'DESPESA', '\\x01', 'MANUAL', '{Guid.NewGuid()}', " +
+            $"'{(categoria is null ? "A_REVISAR" : "REVISADA")}')");
 
     [Fact]
     public async Task Categorias_padrao_nascem_com_papel()

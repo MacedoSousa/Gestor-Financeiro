@@ -1,9 +1,24 @@
-import { useEffect, useId, useRef, useState, type FormEvent, type RefObject } from "react";
+import {
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type FormEvent,
+  type RefObject,
+} from "react";
 import { Link } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { ErroDeApi } from "../api/autenticacao";
 import { n } from "../api/formulario";
-import { useAcoesDeConexoes, useConexoes, type Banco, type Conexao, type ItemDaConexao, type Slot } from "../api/conexoes";
+import {
+  useAcoesDeConexoes,
+  useConexoes,
+  type Banco,
+  type Conexao,
+  type ContaDoItem,
+  type ItemDaConexao,
+  type Slot,
+} from "../api/conexoes";
 import {
   avisoDoSlot,
   BANCO_MAXIMO,
@@ -15,7 +30,12 @@ import {
   OUTRO_BANCO,
   pedidoDoBanco,
   separarConexoes,
+  textoDaDiferenca,
+  textoDaFatura,
+  textoDaSincronizacao,
   textoDoConsentimento,
+  textoDoHistorico,
+  type FraseComValor,
   validarBanco,
   validarCadastro,
   type ErrosDoBanco,
@@ -24,7 +44,8 @@ import {
 } from "../lib/conexoes";
 import { Alerta, Campo, CampoSelecao } from "./Campo";
 
-const NOTA_DO_ITEM = "No Meu Pluggy, abra o banco conectado e copie o id do item. Ele fica guardado cifrado e não aparece de novo.";
+const NOTA_DO_ITEM =
+  "No Meu Pluggy, abra o banco conectado e copie o id do item. Ele fica guardado cifrado e não aparece de novo.";
 
 /** Ação com mensagem de erro do servidor; 401 invalida a sessão (o Layout leva a /entrar). */
 function useTentativa() {
@@ -40,8 +61,13 @@ function useTentativa() {
       await acao();
       return true;
     } catch (e) {
-      if (e instanceof ErroDeApi && e.status === 401) void consultas.invalidateQueries({ queryKey: ["eu"] });
-      setErro(e instanceof ErroDeApi ? e.message : "Não foi possível concluir. Tente de novo.");
+      if (e instanceof ErroDeApi && e.status === 401)
+        void consultas.invalidateQueries({ queryKey: ["eu"] });
+      setErro(
+        e instanceof ErroDeApi
+          ? e.message
+          : "Não foi possível concluir. Tente de novo.",
+      );
       setTentativa((t) => t + 1);
       return false;
     } finally {
@@ -84,7 +110,10 @@ function EscolhaDoBanco({
   const outro = valor.escolha === OUTRO_BANCO;
   const opcoes = [
     { valor: "", rotulo: "Escolha o banco" },
-    ...bancos.map((b) => ({ valor: b.codigo, rotulo: `${b.nome} (${b.codigo})` })),
+    ...bancos.map((b) => ({
+      valor: b.codigo,
+      rotulo: `${b.nome} (${b.codigo})`,
+    })),
     { valor: OUTRO_BANCO, rotulo: "Outro" },
   ];
   return (
@@ -133,36 +162,124 @@ function ChavesNoSlot({ slot }: { slot: number }) {
   );
 }
 
-function EstadoDoBanco({ item, semBanco }: { item: ItemDaConexao; semBanco: string }) {
+function EstadoDoBanco({
+  item,
+  semBanco,
+}: {
+  item: ItemDaConexao;
+  semBanco: string;
+}) {
   const aparencia = estadoDoItem(item.estado, item.motivo);
-  const consentimento = textoDoConsentimento(item.consentimentoVenceEm, item.estado);
-  const classeDoPonto = aparencia.tom === "normal" ? "ponto" : `ponto ${aparencia.tom}`;
+  const consentimento = textoDoConsentimento(
+    item.consentimentoVenceEm,
+    item.estado,
+  );
+  const classeDoPonto =
+    aparencia.tom === "normal" ? "ponto" : `ponto ${aparencia.tom}`;
   return (
     <div className="item-texto">
       <span style={{ fontWeight: 500 }}>{item.banco}</span>
       <span className="status">
         <span className={classeDoPonto} aria-hidden="true" />
         {aparencia.rotulo}
-        {consentimento ? <span className="texto-suave"> · {consentimento}</span> : null}
+        {consentimento ? (
+          <span className="texto-suave"> · {consentimento}</span>
+        ) : null}
       </span>
-      {aparencia.explicacao && <span className="cartao-nota">{aparencia.explicacao}</span>}
+      {aparencia.explicacao && (
+        <span className="cartao-nota">{aparencia.explicacao}</span>
+      )}
       {!item.codigoBanco && <span className="cartao-nota">{semBanco}</span>}
+      <ContasDoBanco contas={item.contas} />
     </div>
   );
 }
 
+/** Aviso de diferença com o banco: só o valor na fonte de número. */
+function Frase({ frase }: { frase: FraseComValor }) {
+  return (
+    <span className="cartao-nota tom-alerta" style={{ display: "block" }}>
+      {frase.antes}
+      <span className="num">{frase.valor}</span>
+      {frase.depois}
+    </span>
+  );
+}
+
+/**
+ * Contas e cartões que vêm do banco, com o início do histórico e as diferenças com o banco que já persistiram 2
+ * sincronizações (Tarefa 4.5). Nada é ajustado sozinho: a diferença só avisa.
+ */
+function ContasDoBanco({ contas }: { contas: readonly ContaDoItem[] }) {
+  if (contas.length === 0) return null;
+  return (
+    <ul className="contas-do-banco" aria-label="Contas que vêm deste banco">
+      {contas.map((c) => {
+        const historico = textoDoHistorico(c.historicoDesde);
+        const diferenca = textoDaDiferenca(
+          c.diferencaCentavos == null ? null : n(c.diferencaCentavos),
+        );
+        const faturas = c.faturasDivergentes.map((f) => ({
+          chave: f.vencimento,
+          frase: textoDaFatura({
+            vencimento: f.vencimento,
+            diferencaCentavos: n(f.diferencaCentavos),
+          }),
+        }));
+        return (
+          <li key={c.contaId}>
+            <span>{c.apelido}</span>
+            {c.arquivada && (
+              <span className="texto-suave"> · arquivada, não sincroniza</span>
+            )}
+            <span className="texto-suave">
+              {" "}
+              · {historico ?? "aguardando a primeira sincronização"}
+            </span>
+            {diferenca && <Frase frase={diferenca} />}
+            {faturas.map((f) => (
+              <Frase key={f.chave} frase={f.frase} />
+            ))}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
 /** Escolha explícita do slot (D20, D23): nada vem marcado; slot em uso ou sem chaves fica desabilitado, com o motivo. */
-function EscolhaDoSlot({ slots, valor, aoMudar, erro }: { slots: Slot[]; valor: number | null; aoMudar: (s: number) => void; erro?: string }) {
+function EscolhaDoSlot({
+  slots,
+  valor,
+  aoMudar,
+  erro,
+}: {
+  slots: Slot[];
+  valor: number | null;
+  aoMudar: (s: number) => void;
+  erro?: string;
+}) {
   const id = useId();
   return (
-    <fieldset className="escolha" aria-invalid={erro ? true : undefined} aria-describedby={erro ? `${id}-nota ${id}-erro` : `${id}-nota`}>
-      <legend className="campo-rotulo">Em qual slot estão as suas chaves?</legend>
+    <fieldset
+      className="escolha"
+      aria-invalid={erro ? true : undefined}
+      aria-describedby={erro ? `${id}-nota ${id}-erro` : `${id}-nota`}
+    >
+      <legend className="campo-rotulo">
+        Em qual slot estão as suas chaves?
+      </legend>
       <span id={`${id}-nota`} className="cartao-nota">
-        Cada cônjuge grava as próprias chaves do Meu Pluggy num slot do servidor. Escolha o seu.
+        Cada cônjuge grava as próprias chaves do Meu Pluggy num slot do
+        servidor. Escolha o seu.
       </span>
       {slots.map((s) => {
         const numero = n(s.slot);
-        const aviso = avisoDoSlot({ slot: numero, configurado: s.configurado, emUso: s.emUso });
+        const aviso = avisoDoSlot({
+          slot: numero,
+          configurado: s.configurado,
+          emUso: s.emUso,
+        });
         return (
           <div key={numero}>
             <label className="campo-check opcao-slot">
@@ -176,12 +293,16 @@ function EscolhaDoSlot({ slots, valor, aoMudar, erro }: { slots: Slot[]; valor: 
                 onChange={() => aoMudar(numero)}
               />
               <span>
-                Estas chaves estão nos arquivos <span className="num">pluggy_{numero}_*</span>
+                Estas chaves estão nos arquivos{" "}
+                <span className="num">pluggy_{numero}_*</span>
                 <span className="sr-only"> (slot {numero})</span>
               </span>
             </label>
             {aviso && (
-              <span id={`${id}-aviso-${numero}`} className="cartao-nota aviso-do-slot">
+              <span
+                id={`${id}-aviso-${numero}`}
+                className="cartao-nota aviso-do-slot"
+              >
                 {aviso}
               </span>
             )}
@@ -198,7 +319,15 @@ function EscolhaDoSlot({ slots, valor, aoMudar, erro }: { slots: Slot[]; valor: 
 }
 
 /** Cadastro da própria conexão com o primeiro banco. O servidor consulta o banco antes de gravar. */
-function NovaConexao({ slots, bancos, aoConcluir }: { slots: Slot[]; bancos: readonly Banco[]; aoConcluir: (aviso: string) => void }) {
+function NovaConexao({
+  slots,
+  bancos,
+  aoConcluir,
+}: {
+  slots: Slot[];
+  bancos: readonly Banco[];
+  aoConcluir: (aviso: string) => void;
+}) {
   const acoes = useAcoesDeConexoes();
   const { erro, tentativa, ocupado, tentar } = useTentativa();
   const form = useRef<HTMLFormElement>(null);
@@ -206,7 +335,14 @@ function NovaConexao({ slots, bancos, aoConcluir }: { slots: Slot[]; bancos: rea
   const [itemId, setItemId] = useState("");
   const [banco, setBanco] = useState<EscolhaDeBanco>(ESCOLHA_DE_BANCO_VAZIA);
   const [erros, setErros] = useState<ErrosDoCadastro>({});
-  const nenhumSlot = slots.every((s) => avisoDoSlot({ slot: n(s.slot), configurado: s.configurado, emUso: s.emUso }) !== null);
+  const nenhumSlot = slots.every(
+    (s) =>
+      avisoDoSlot({
+        slot: n(s.slot),
+        configurado: s.configurado,
+        emUso: s.emUso,
+      }) !== null,
+  );
 
   async function enviar(e: FormEvent) {
     e.preventDefault();
@@ -217,19 +353,35 @@ function NovaConexao({ slots, bancos, aoConcluir }: { slots: Slot[]; bancos: rea
       return;
     }
     const nome = nomeDoBancoEscolhido(banco, bancos);
-    if (await tentar(async () => void (await acoes.conectar(slot, itemId, pedidoDoBanco(banco)))))
+    if (
+      await tentar(
+        async () =>
+          void (await acoes.conectar(slot, itemId, pedidoDoBanco(banco))),
+      )
+    )
       aoConcluir(`Conexão criada. ${nome} foi aceito pelo banco.`);
   }
 
   return (
-    <form ref={form} className="bloco-form" noValidate onSubmit={(e) => void enviar(e)} aria-labelledby="titulo-sua-conexao">
+    <form
+      ref={form}
+      className="bloco-form"
+      noValidate
+      onSubmit={(e) => void enviar(e)}
+      aria-labelledby="titulo-sua-conexao"
+    >
       {nenhumSlot && (
         <p className="faixa-aviso">
-          Nenhum slot está livre com as chaves gravadas. Quem administra o servidor grava as chaves pelo terminal (passo 7 do
-          gerar-segredos.sh).
+          Nenhum slot está livre com as chaves gravadas. Quem administra o
+          servidor grava as chaves pelo terminal (passo 7 do gerar-segredos.sh).
         </p>
       )}
-      <EscolhaDoSlot slots={slots} valor={slot} aoMudar={setSlot} erro={erros.slot} />
+      <EscolhaDoSlot
+        slots={slots}
+        valor={slot}
+        aoMudar={setSlot}
+        erro={erros.slot}
+      />
       <Campo
         rotulo="Id do item no Meu Pluggy"
         valor={itemId}
@@ -240,10 +392,20 @@ function NovaConexao({ slots, bancos, aoConcluir }: { slots: Slot[]; bancos: rea
         maxLength={ITEM_ID_MAXIMO}
         classeEntrada="num"
       />
-      <EscolhaDoBanco bancos={bancos} valor={banco} aoMudar={setBanco} erros={erros} aoTrocarEscolha={() => setErros(limparErrosDoBanco)} />
+      <EscolhaDoBanco
+        bancos={bancos}
+        valor={banco}
+        aoMudar={setBanco}
+        erros={erros}
+        aoTrocarEscolha={() => setErros(limparErrosDoBanco)}
+      />
       <Alerta mensagem={erro} tentativa={tentativa} />
       <div>
-        <button type="submit" className="botao-primario" disabled={ocupado || nenhumSlot}>
+        <button
+          type="submit"
+          className="botao-primario"
+          disabled={ocupado || nenhumSlot}
+        >
           {ocupado ? "Consultando o banco…" : "Conectar"}
         </button>
       </div>
@@ -283,7 +445,16 @@ function NovoBanco({
       return;
     }
     const nome = nomeDoBancoEscolhido(banco, bancos);
-    if (await tentar(async () => void (await acoes.acrescentarBanco(conexao.id, itemId, pedidoDoBanco(banco)))))
+    if (
+      await tentar(
+        async () =>
+          void (await acoes.acrescentarBanco(
+            conexao.id,
+            itemId,
+            pedidoDoBanco(banco),
+          )),
+      )
+    )
       aoConcluir(`${nome} entrou na sua conexão.`);
   }
 
@@ -308,13 +479,24 @@ function NovoBanco({
         maxLength={ITEM_ID_MAXIMO}
         classeEntrada="num"
       />
-      <EscolhaDoBanco bancos={bancos} valor={banco} aoMudar={setBanco} erros={erros} aoTrocarEscolha={() => setErros(limparErrosDoBanco)} />
+      <EscolhaDoBanco
+        bancos={bancos}
+        valor={banco}
+        aoMudar={setBanco}
+        erros={erros}
+        aoTrocarEscolha={() => setErros(limparErrosDoBanco)}
+      />
       <Alerta mensagem={erro} tentativa={tentativa} />
       <div className="acoes-linha">
         <button type="submit" className="botao-primario" disabled={ocupado}>
           {ocupado ? "Consultando o banco…" : "Acrescentar"}
         </button>
-        <button type="button" className="botao-secundario" disabled={ocupado} onClick={aoCancelar}>
+        <button
+          type="button"
+          className="botao-secundario"
+          disabled={ocupado}
+          onClick={aoCancelar}
+        >
           Cancelar
         </button>
       </div>
@@ -353,8 +535,15 @@ function EscolherBanco({
       return;
     }
     const nome = nomeDoBancoEscolhido(banco, bancos);
-    if (await tentar(async () => void (await acoes.escolherBanco(item.id, pedidoDoBanco(banco)))))
-      aoConcluir(`Banco escolhido: ${nome}. As contas dele já podem ser vistas.`);
+    if (
+      await tentar(
+        async () =>
+          void (await acoes.escolherBanco(item.id, pedidoDoBanco(banco))),
+      )
+    )
+      aoConcluir(
+        `Banco escolhido: ${nome}. As contas dele já podem ser vistas.`,
+      );
   }
 
   return (
@@ -369,16 +558,27 @@ function EscolherBanco({
       aria-label={`Escolher o banco de ${item.banco}`}
     >
       <p className="confirmacao-texto">
-        Qual é o banco de “{item.banco}”? O código separa contas de bancos diferentes com a mesma agência e conta. Escolhido uma
-        vez, não muda.
+        Qual é o banco de “{item.banco}”? O código separa contas de bancos
+        diferentes com a mesma agência e conta. Escolhido uma vez, não muda.
       </p>
-      <EscolhaDoBanco bancos={bancos} valor={banco} aoMudar={setBanco} erros={erros} aoTrocarEscolha={() => setErros(limparErrosDoBanco)} />
+      <EscolhaDoBanco
+        bancos={bancos}
+        valor={banco}
+        aoMudar={setBanco}
+        erros={erros}
+        aoTrocarEscolha={() => setErros(limparErrosDoBanco)}
+      />
       <Alerta mensagem={erro} tentativa={tentativa} />
       <div className="acoes-linha">
         <button type="submit" className="botao-primario" disabled={ocupado}>
           {ocupado ? "Guardando…" : "Guardar o banco"}
         </button>
-        <button type="button" className="botao-secundario" disabled={ocupado} onClick={aoCancelar}>
+        <button
+          type="button"
+          className="botao-secundario"
+          disabled={ocupado}
+          onClick={aoCancelar}
+        >
           Cancelar
         </button>
       </div>
@@ -386,7 +586,8 @@ function EscolherBanco({
   );
 }
 
-type Confirmando = { tipo: "banco"; item: ItemDaConexao } | { tipo: "conexao" } | null;
+type Confirmando =
+  { tipo: "banco"; item: ItemDaConexao } | { tipo: "conexao" } | null;
 
 /**
  * A conexão de quem está na sessão: bancos, acrescentar, tirar e apagar (só o titular; D21). A confirmação recebe o foco
@@ -419,68 +620,123 @@ function SuaConexao({
     aoVoltar();
   }
 
+  // Erro próprio, perto da lista: não cai na caixa de "Tirar" nem fica mudo (testador da E4, achado 1).
+  const [erroDaSincronizacao, setErroDaSincronizacao] = useState<string>();
+  const [tentativaDaSincronizacao, setTentativaDaSincronizacao] = useState(0);
+  const [sincronizando, setSincronizando] = useState<string | null>(null);
+
+  async function sincronizar(item: ItemDaConexao) {
+    setErroDaSincronizacao(undefined);
+    setSincronizando(item.id);
+    try {
+      aoAvisar(
+        textoDaSincronizacao(await acoes.sincronizar(item.id), item.banco),
+      );
+    } catch (e) {
+      setErroDaSincronizacao(
+        e instanceof ErroDeApi
+          ? e.message
+          : "Não foi possível sincronizar agora. Tente de novo mais tarde.",
+      );
+      setTentativaDaSincronizacao((t) => t + 1);
+    } finally {
+      setSincronizando(null);
+    }
+  }
+
   async function confirmar() {
     const alvo = confirmando;
     if (!alvo) return;
     const ok = await tentar(async () => {
-      if (alvo.tipo === "banco") await acoes.tirarBanco(conexao.id, alvo.item.id);
+      if (alvo.tipo === "banco")
+        await acoes.tirarBanco(conexao.id, alvo.item.id);
       else await acoes.apagarConexao(conexao.id);
     });
     if (!ok) return;
     setConfirmando(null);
-    aoAvisar(alvo.tipo === "banco" ? `${alvo.item.banco} saiu da sua conexão.` : "Sua conexão foi apagada. O slot ficou livre.");
+    aoAvisar(
+      alvo.tipo === "banco"
+        ? `${alvo.item.banco} saiu da sua conexão.`
+        : "Sua conexão foi apagada. O slot ficou livre.",
+    );
   }
 
   return (
     <>
       <p className="cartao-nota" style={{ margin: 0 }}>
         Chaves no <ChavesNoSlot slot={n(conexao.slot)} />
-        {conexao.slotConfigurado ? "" : " · os arquivos estão vazios no servidor"}
+        {conexao.slotConfigurado
+          ? ""
+          : " · os arquivos estão vazios no servidor"}
       </p>
       {conexao.items.length === 0 ? (
-        <p className="cartao-nota">Nenhum banco nesta conexão. Acrescente um para começar.</p>
+        <p className="cartao-nota">
+          Nenhum banco nesta conexão. Acrescente um para começar.
+        </p>
       ) : (
-        <ul className="lista-itens">
-          {conexao.items.map((item) => (
-            <li key={item.id} className="item-linha">
-              <EstadoDoBanco item={item} semBanco="Escolha o banco para ver as contas dele." />
-              <div className="acoes-linha">
-                {item.codigoBanco ? (
-                  <Link
-                    to={`/conexoes/items/${item.id}/nascimento`}
-                    className="botao-secundario link-botao"
-                    aria-label={`Contas do banco: ${item.banco}`}
-                  >
-                    Contas do banco
-                  </Link>
-                ) : (
+        <>
+          <Alerta
+            mensagem={erroDaSincronizacao}
+            tentativa={tentativaDaSincronizacao}
+          />
+          <ul className="lista-itens">
+            {conexao.items.map((item) => (
+              <li key={item.id} className="item-linha">
+                <EstadoDoBanco
+                  item={item}
+                  semBanco="Escolha o banco para ver as contas dele."
+                />
+                <div className="acoes-linha">
+                  {item.codigoBanco && item.contas.length > 0 && (
+                    <button
+                      type="button"
+                      className="botao-secundario"
+                      disabled={ocupado || sincronizando !== null}
+                      aria-label={`Sincronizar agora: ${item.banco}`}
+                      onClick={() => void sincronizar(item)}
+                    >
+                      {sincronizando === item.id
+                        ? "Sincronizando…"
+                        : "Sincronizar agora"}
+                    </button>
+                  )}
+                  {item.codigoBanco ? (
+                    <Link
+                      to={`/conexoes/items/${item.id}/nascimento`}
+                      className="botao-secundario link-botao"
+                      aria-label={`Contas do banco: ${item.banco}`}
+                    >
+                      Contas do banco
+                    </Link>
+                  ) : (
+                    <button
+                      type="button"
+                      className="botao-secundario"
+                      disabled={ocupado || escolhendo !== null}
+                      aria-label={`Escolher o banco: ${item.banco}`}
+                      onClick={() => {
+                        setAcrescentando(false);
+                        setConfirmando(null);
+                        setEscolhendo(item);
+                      }}
+                    >
+                      Escolher o banco
+                    </button>
+                  )}
                   <button
                     type="button"
                     className="botao-secundario"
-                    disabled={ocupado || escolhendo !== null}
-                    aria-label={`Escolher o banco: ${item.banco}`}
-                    onClick={() => {
-                      setAcrescentando(false);
-                      setConfirmando(null);
-                      setEscolhendo(item);
-                    }}
+                    disabled={ocupado}
+                    aria-label={`Tirar ${item.banco} da conexão`}
+                    onClick={() => setConfirmando({ tipo: "banco", item })}
                   >
-                    Escolher o banco
+                    Tirar
                   </button>
-                )}
-                <button
-                  type="button"
-                  className="botao-secundario"
-                  disabled={ocupado}
-                  aria-label={`Tirar ${item.banco} da conexão`}
-                  onClick={() => setConfirmando({ tipo: "banco", item })}
-                >
-                  Tirar
-                </button>
-              </div>
-            </li>
-          ))}
-        </ul>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </>
       )}
 
       {confirmando && (
@@ -501,10 +757,22 @@ function SuaConexao({
           </p>
           <Alerta mensagem={erro} tentativa={tentativa} />
           <div className="acoes-linha">
-            <button type="button" className="botao-perigo" disabled={ocupado} onClick={() => void confirmar()}>
-              {confirmando.tipo === "banco" ? "Tirar o banco" : "Apagar a conexão"}
+            <button
+              type="button"
+              className="botao-perigo"
+              disabled={ocupado}
+              onClick={() => void confirmar()}
+            >
+              {confirmando.tipo === "banco"
+                ? "Tirar o banco"
+                : "Apagar a conexão"}
             </button>
-            <button type="button" className="botao-secundario" disabled={ocupado} onClick={cancelar}>
+            <button
+              type="button"
+              className="botao-secundario"
+              disabled={ocupado}
+              onClick={cancelar}
+            >
               Cancelar
             </button>
           </div>
@@ -543,10 +811,20 @@ function SuaConexao({
       ) : (
         !confirmando && (
           <div className="acoes-linha">
-            <button type="button" className="botao-secundario" disabled={ocupado} onClick={() => setAcrescentando(true)}>
+            <button
+              type="button"
+              className="botao-secundario"
+              disabled={ocupado}
+              onClick={() => setAcrescentando(true)}
+            >
               Acrescentar outro banco
             </button>
-            <button type="button" className="botao-perigo" disabled={ocupado} onClick={() => setConfirmando({ tipo: "conexao" })}>
+            <button
+              type="button"
+              className="botao-perigo"
+              disabled={ocupado}
+              onClick={() => setConfirmando({ tipo: "conexao" })}
+            >
               Apagar minha conexão
             </button>
           </div>
@@ -558,11 +836,17 @@ function SuaConexao({
 
 /** A conexão do outro cônjuge: só leitura (D21). */
 function ConexaoDoConjuge({ conexao }: { conexao: Conexao | null }) {
-  if (!conexao) return <p className="cartao-nota">Ainda sem conexão. Cada um cadastra a própria, nesta mesma tela.</p>;
+  if (!conexao)
+    return (
+      <p className="cartao-nota">
+        Ainda sem conexão. Cada um cadastra a própria, nesta mesma tela.
+      </p>
+    );
   return (
     <>
       <p className="cartao-nota" style={{ margin: 0 }}>
-        Só {conexao.apelido} altera esta conexão. Chaves no <ChavesNoSlot slot={n(conexao.slot)} />.
+        Só {conexao.apelido} altera esta conexão. Chaves no{" "}
+        <ChavesNoSlot slot={n(conexao.slot)} />.
       </p>
       {conexao.items.length === 0 ? (
         <p className="cartao-nota">Nenhum banco nesta conexão.</p>
@@ -570,7 +854,10 @@ function ConexaoDoConjuge({ conexao }: { conexao: Conexao | null }) {
         <ul className="lista-itens">
           {conexao.items.map((item) => (
             <li key={item.id} className="item-linha">
-              <EstadoDoBanco item={item} semBanco={`Falta ${conexao.apelido} escolher o banco.`} />
+              <EstadoDoBanco
+                item={item}
+                semBanco={`Falta ${conexao.apelido} escolher o banco.`}
+              />
             </li>
           ))}
         </ul>
@@ -611,7 +898,10 @@ export function Conexoes() {
     <>
       <header style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         <h1 className="titulo">Conexões</h1>
-        <span className="subtitulo">Open Finance pelo Meu Pluggy, só leitura. Cada um conecta os próprios bancos; o outro acompanha.</span>
+        <span className="subtitulo">
+          Open Finance pelo Meu Pluggy, só leitura. Cada um conecta os próprios
+          bancos; o outro acompanha.
+        </span>
       </header>
 
       <p role="status" className={aviso ? "aviso-form" : "sr-only"}>
@@ -619,7 +909,11 @@ export function Conexoes() {
       </p>
 
       {conexoes.isPending && (
-        <section className="cartao" aria-busy="true" aria-label="Carregando as conexões">
+        <section
+          className="cartao"
+          aria-busy="true"
+          aria-label="Carregando as conexões"
+        >
           <Carregando />
         </section>
       )}
@@ -627,7 +921,11 @@ export function Conexoes() {
       {conexoes.isError && (
         <section className="cartao erro-secao" role="alert">
           <span>{conexoes.error.message}</span>
-          <button type="button" className="botao-secundario" onClick={() => void conexoes.refetch()}>
+          <button
+            type="button"
+            className="botao-secundario"
+            onClick={() => void conexoes.refetch()}
+          >
             Tentar de novo
           </button>
         </section>
@@ -636,18 +934,37 @@ export function Conexoes() {
       {conexoes.data && (
         <>
           <section className="cartao" aria-labelledby="titulo-sua-conexao">
-            <h2 id="titulo-sua-conexao" ref={titulo} tabIndex={-1} className="cartao-rotulo" style={{ margin: 0 }}>
+            <h2
+              id="titulo-sua-conexao"
+              ref={titulo}
+              tabIndex={-1}
+              className="cartao-rotulo"
+              style={{ margin: 0 }}
+            >
               Sua conexão
             </h2>
             {sua ? (
-              <SuaConexao conexao={sua} bancos={conexoes.data.bancos} aoAvisar={avisar} aoVoltar={voltar} />
+              <SuaConexao
+                conexao={sua}
+                bancos={conexoes.data.bancos}
+                aoAvisar={avisar}
+                aoVoltar={voltar}
+              />
             ) : (
-              <NovaConexao slots={conexoes.data.slots} bancos={conexoes.data.bancos} aoConcluir={avisar} />
+              <NovaConexao
+                slots={conexoes.data.slots}
+                bancos={conexoes.data.bancos}
+                aoConcluir={avisar}
+              />
             )}
           </section>
 
           <section className="cartao" aria-labelledby="titulo-conexao-conjuge">
-            <h2 id="titulo-conexao-conjuge" className="cartao-rotulo" style={{ margin: 0 }}>
+            <h2
+              id="titulo-conexao-conjuge"
+              className="cartao-rotulo"
+              style={{ margin: 0 }}
+            >
               {outra ? `Conexão de ${outra.apelido}` : "Conexão do cônjuge"}
             </h2>
             <ConexaoDoConjuge conexao={outra} />

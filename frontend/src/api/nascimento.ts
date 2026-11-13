@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ErroDeApi } from "./autenticacao";
 import { api } from "./cliente";
+import { sincronizarItem, type ResultadoDaSincronizacao } from "./conexoes";
 import { chamarFormulario } from "./formulario";
 import type { components } from "./schema";
 
@@ -58,7 +59,11 @@ export function useDescoberta(itemId: string) {
   });
 }
 
-/** Confirmar e incluir recarregam a descoberta, as contas e as conexões: o que nasceu sai da lista e aparece em Contas. */
+/**
+ * Confirmar e incluir recarregam a descoberta, as contas e as conexões: o que nasceu sai da lista e aparece em Contas. Logo
+ * depois, a primeira sincronização traz o histórico (Tarefa 4.5); se ela falhar, o que nasceu continua nascido e o resultado
+ * é nulo (a próxima sincronização importa).
+ */
 export function useAcoesDeNascimento(itemId: string) {
   const qc = useQueryClient();
   const recarregar = () =>
@@ -68,19 +73,21 @@ export function useAcoesDeNascimento(itemId: string) {
       qc.invalidateQueries({ queryKey: ["conexoes"] }),
     ]);
   return {
-    confirmar: async (pedido: PedidoDeNascimento) => {
+    confirmar: async (pedido: PedidoDeNascimento): Promise<ResultadoDaSincronizacao | null> => {
       await comSugestao(
         () => api.POST("/api/v1/integracoes/items/{id}/nascimento", { params: { path: { id: itemId } }, body: pedido }),
         "Não foi possível criar as contas. Tente de novo.",
       );
       await recarregar();
+      return sincronizarItem(qc, itemId).catch(() => null);
     },
-    incluir: async (vinculoId: string, corpo: Inclusao) => {
+    incluir: async (vinculoId: string, corpo: Inclusao): Promise<ResultadoDaSincronizacao | null> => {
       await comSugestao(
         () => api.POST("/api/v1/integracoes/vinculos/{id}/inclusao", { params: { path: { id: vinculoId } }, body: corpo }),
         "Não foi possível incluir a conta. Tente de novo.",
       );
       await recarregar();
+      return sincronizarItem(qc, itemId).catch(() => null);
     },
   };
 }

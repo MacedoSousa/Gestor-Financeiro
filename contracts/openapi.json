@@ -96,7 +96,7 @@
         "tags": [
           "Lancamentos"
         ],
-        "summary": "Concilia o saldo de hoje de uma poupança ou investimento com o do banco. Diferença positiva vira receita em Rendimentos (LANCADO); igual dá CONFERE e menor dá MENOR, sem lançar. Saldo exibido diferente do de hoje dá 409.",
+        "summary": "Concilia o saldo de hoje de uma poupança ou investimento com o do banco. Diferença positiva vira receita em Rendimentos (LANCADO); igual dá CONFERE e menor dá MENOR, sem lançar. Saldo exibido diferente do de hoje dá 409. Conta ligada ao banco dá 409 (o saldo é conferido sozinho).",
         "operationId": "ConciliarConta",
         "parameters": [
           {
@@ -1454,7 +1454,7 @@
         "tags": [
           "Lancamentos"
         ],
-        "summary": "Cria despesa ou receita (parcelada só em cartão). Repetir a mesma chave devolve 200 com o lançamento já criado. Conta ou categoria arquivada dá 400.",
+        "summary": "Cria despesa ou receita (parcelada só em cartão). Repetir a mesma chave devolve 200 com o lançamento já criado. Conta ou categoria arquivada dá 400; conta ligada ao banco dá 409 (os lançamentos chegam sozinhos).",
         "operationId": "CriarLancamento",
         "requestBody": {
           "content": {
@@ -1551,7 +1551,7 @@
         "tags": [
           "Lancamentos"
         ],
-        "summary": "Edita um lançamento. escopo: este (padrão) ou proximos (esta parcela e as seguintes). Em fatura fechada só descrição, contraparte e categoria mudam; mudar valor ou data ali, ou levar algo para fatura fechada, dá 409.",
+        "summary": "Edita um lançamento. escopo: este (padrão) ou proximos (esta parcela e as seguintes). Em fatura fechada só descrição, contraparte e categoria mudam; mudar valor ou data ali, ou levar algo para fatura fechada, dá 409. Em conta ligada ao banco só descrição e categoria mudam (senão 409), e editar marca o lançamento como revisado.",
         "operationId": "EditarLancamento",
         "parameters": [
           {
@@ -1614,7 +1614,7 @@
         "tags": [
           "Lancamentos"
         ],
-        "summary": "Apaga (soft delete). escopo: este (padrão) ou proximos (esta parcela e as seguintes, pulando faturas fechadas). Apagar lançamento de fatura fechada dá 409.",
+        "summary": "Apaga (soft delete). escopo: este (padrão) ou proximos (esta parcela e as seguintes, pulando faturas fechadas). Apagar lançamento de fatura fechada ou de conta ligada ao banco dá 409.",
         "operationId": "ApagarLancamento",
         "parameters": [
           {
@@ -1669,7 +1669,7 @@
         "tags": [
           "Lancamentos"
         ],
-        "summary": "Transfere entre duas contas do casal (pagar a fatura = destino no cartão). Grava as duas pernas juntas; repetir a mesma chave devolve 200 com a transferência já criada. Origem igual ao destino ou conta arquivada dá 400. Editar ou apagar uma perna, pelas rotas de lançamentos, age nas duas.",
+        "summary": "Transfere entre duas contas do casal (pagar a fatura = destino no cartão). Grava as duas pernas juntas; repetir a mesma chave devolve 200 com a transferência já criada. Origem igual ao destino ou conta arquivada dá 400; conta ligada ao banco dá 409. Editar ou apagar uma perna, pelas rotas de lançamentos, age nas duas.",
         "operationId": "CriarTransferencia",
         "requestBody": {
           "content": {
@@ -2808,6 +2808,81 @@
           }
         }
       }
+    },
+    "/api/v1/integracoes/items/{id}/sincronizacao": {
+      "post": {
+        "tags": [
+          "Integrações"
+        ],
+        "summary": "Importa agora as contas e os cartões nascidos deste banco: na primeira vez, o histórico desde 2026-01-01 e o saldo inicial; depois, os últimos 10 dias. Conta arquivada ou \"não importar\" fica de fora; a falha numa conta não desfaz as outras (contasComFalha). Só o titular (senão 403); banco recusou dá 502, Pluggy fora do ar dá 503.",
+        "operationId": "SincronizarItem",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SincronizacaoDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Bad Gateway",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -3609,6 +3684,55 @@
           }
         }
       },
+      "ContaDoItemDto": {
+        "required": [
+          "contaId",
+          "apelido",
+          "tipo",
+          "arquivada",
+          "historicoDesde",
+          "diferencaCentavos",
+          "faturasDivergentes"
+        ],
+        "type": "object",
+        "properties": {
+          "contaId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "apelido": {
+            "type": "string"
+          },
+          "tipo": {
+            "type": "string"
+          },
+          "arquivada": {
+            "type": "boolean"
+          },
+          "historicoDesde": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date"
+          },
+          "diferencaCentavos": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "faturasDivergentes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FaturaDivergenteDto"
+            }
+          }
+        }
+      },
       "ContaDoLancamentoDto": {
         "required": [
           "id",
@@ -4188,6 +4312,27 @@
           }
         }
       },
+      "FaturaDivergenteDto": {
+        "required": [
+          "vencimento",
+          "diferencaCentavos"
+        ],
+        "type": "object",
+        "properties": {
+          "vencimento": {
+            "type": "string",
+            "format": "date"
+          },
+          "diferencaCentavos": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          }
+        }
+      },
       "FaturaDto": {
         "required": [
           "vencimento",
@@ -4348,7 +4493,9 @@
           "estado",
           "motivo",
           "consentimentoVenceEm",
-          "ultimaSincronizacaoEm"
+          "ultimaSincronizacaoEm",
+          "ultimaTentativaEm",
+          "contas"
         ],
         "type": "object",
         "properties": {
@@ -4387,6 +4534,19 @@
               "string"
             ],
             "format": "date-time"
+          },
+          "ultimaTentativaEm": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "contas": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ContaDoItemDto"
+            }
           }
         }
       },
@@ -4487,6 +4647,14 @@
               "string"
             ],
             "format": "date"
+          },
+          "revisao": {
+            "type": "string",
+            "default": "REVISADA"
+          },
+          "confirmacao": {
+            "type": "string",
+            "default": "CONFIRMADA"
           }
         }
       },
@@ -5976,6 +6144,49 @@
           },
           "userVerification": {
             "type": "string"
+          }
+        }
+      },
+      "SincronizacaoDto": {
+        "required": [
+          "contasSincronizadas",
+          "contasComFalha",
+          "lancamentosNovos",
+          "lancamentosAtualizados"
+        ],
+        "type": "object",
+        "properties": {
+          "contasSincronizadas": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "contasComFalha": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "lancamentosNovos": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "lancamentosAtualizados": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
           }
         }
       },

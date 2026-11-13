@@ -63,9 +63,10 @@ internal sealed partial class ServicoDeConexoes(
         var items = await db.Items.AsNoTracking().OrderBy(i => i.Id).ToListAsync(ct);
         var apelidos = (await usuarios.ListarDoCasalAsync(casal, ct)).ToDictionary(u => u.UsuarioId, u => u.Apelido);
         var configurados = Enumerable.Range(Conexao.SlotMinimo, Conexao.SlotMaximo).ToDictionary(s => s, s => segredos.Ler(s) is not null);
+        var contasPorItem = await ContasPorItemAsync(ct);
 
         var dto = new ConexoesDto(
-            conexoes.Select(c => Dto(c, apelidos, configurados[c.Slot], items.Where(i => i.ConexaoId == c.Id))).ToList(),
+            conexoes.Select(c => Dto(c, apelidos, configurados[c.Slot], items.Where(i => i.ConexaoId == c.Id), contasPorItem)).ToList(),
             configurados.Select(s => new SlotDto(s.Key, s.Value, conexoes.Any(c => c.Slot == s.Key))).ToList(),
             BancosConhecidos.Lista);
         return new ResultadoDeConexoes.Lista(dto);
@@ -330,13 +331,38 @@ internal sealed partial class ServicoDeConexoes(
 
     // ------------------------------------------------------------------ DTOs
 
-    private ConexaoDto Dto(Conexao c, IReadOnlyDictionary<Guid, string> apelidos, bool slotConfigurado, IEnumerable<Item> items) =>
+    private ConexaoDto Dto(Conexao c, IReadOnlyDictionary<Guid, string> apelidos, bool slotConfigurado, IEnumerable<Item> items,
+        IReadOnlyDictionary<Guid, List<ContaDoItemDto>>? contasPorItem = null) =>
         new(c.Id, c.UsuarioId, apelidos.GetValueOrDefault(c.UsuarioId, "?"), c.Slot, slotConfigurado,
-            c.UsuarioId == atual.UsuarioId, items.Select(Dto).ToList());
+            c.UsuarioId == atual.UsuarioId, items.Select(i => Dto(i, contasPorItem?.GetValueOrDefault(i.Id))).ToList());
 
-    private static ItemDto Dto(Item i) =>
+    private static ItemDto Dto(Item i, IReadOnlyList<ContaDoItemDto>? contas = null) =>
         new(i.Id, i.Banco, i.CodigoBanco, i.Estado, i.MotivoErro,
-            i.ConsentimentoVenceEm is { } vence ? ConversaoPluggy.DiaDeSaoPaulo(vence) : null, i.UltimaSincronizacaoEm);
+            i.ConsentimentoVenceEm is { } vence ? ConversaoPluggy.DiaDeSaoPaulo(vence) : null, i.UltimaSincronizacaoEm, i.UltimaTentativaEm,
+            contas ?? []);
+
+    /// <summary>
+    /// Contas e cartões nascidos de cada item (vínculo CONTA ou CARTAO com conta que existe no casal), com o histórico e as
+    /// diferenças que já persistiram 2 sincronizações (Tarefa 4.5). Sem id do banco.
+    /// </summary>
+    private async Task<Dictionary<Guid, List<ContaDoItemDto>>> ContasPorItemAsync(CancellationToken ct)
+    {
+        var vinculos = await db.Vinculos.AsNoTracking()
+            .Where(v => v.ContaId != null && (v.Tipo == TipoDeVinculo.Conta || v.Tipo == TipoDeVinculo.Cartao))
+            .ToListAsync(ct);
+        if (vinculos.Count == 0) return [];
+        var doCasal = (await contas.ListarAsync(ct)).ToDictionary(k => k.Id);
+        return vinculos
+            .Where(v => doCasal.ContainsKey(v.ContaId!.Value))
+            .GroupBy(v => v.ItemId)
+            .ToDictionary(g => g.Key, g => g
+                .Select(v => (Vinculo: v, Conta: doCasal[v.ContaId!.Value]))
+                .OrderBy(x => x.Conta.Apelido, StringComparer.CurrentCulture)
+                .Select(x => new ContaDoItemDto(x.Conta.Id, x.Conta.Apelido, x.Conta.Tipo, x.Conta.Arquivada, x.Vinculo.HistoricoDesde,
+                    x.Vinculo.Tipo == TipoDeVinculo.Conta ? x.Vinculo.DiferencaVisivel : null,
+                    x.Vinculo.FaturasVisiveis.Select(f => new FaturaDivergenteDto(f.Vencimento, f.DiferencaCentavos)).ToList()))
+                .ToList());
+    }
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Pluggy recusou o item no cadastro (slot {Slot}, status {Status}, código {Codigo}).")]
     private static partial void ItemRecusado(ILogger logger, int slot, int status, string codigo);

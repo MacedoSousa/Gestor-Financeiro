@@ -58,6 +58,40 @@ public sealed class PostgresFixture : IAsyncLifetime
             ConexaoMigrador: Conexao(nome, "gf_migrator"));
     }
 
+    /// <summary>
+    /// Banco novo migrado só até <paramref name="ultima"/> (inclusive), para testar uma migração sobre dados de antes dela.
+    /// <see cref="MigrarTudoAsync"/> aplica o resto.
+    /// </summary>
+    public async Task<BancoDeTeste> NovoBancoAteAsync(string ultima)
+    {
+        var nome = $"gestor_{Guid.NewGuid():N}";
+        await using (var db = new NpgsqlConnection(_container.GetConnectionString()))
+        {
+            await db.OpenAsync();
+            await ExecutarAsync(db, $"CREATE DATABASE {nome} OWNER gf_migrator");
+        }
+        var parcial = Directory.CreateTempSubdirectory("gf-migracoes-").FullName;
+        try
+        {
+            foreach (var arquivo in Directory.GetFiles(PastaDeMigracoes(), "*.sql").Order(StringComparer.Ordinal))
+                if (string.CompareOrdinal(Path.GetFileName(arquivo)[..5], ultima) <= 0)
+                    File.Copy(arquivo, Path.Combine(parcial, Path.GetFileName(arquivo)));
+            await MigradorSql.AplicarAsync(Conexao(nome, "gf_migrator"), parcial, TextWriter.Null);
+        }
+        finally
+        {
+            Directory.Delete(parcial, recursive: true);
+        }
+        return new BancoDeTeste(
+            ConexaoApp: Conexao(nome, "gf_app"),
+            ConexaoSuperusuario: new NpgsqlConnectionStringBuilder(_container.GetConnectionString()) { Database = nome }.ConnectionString,
+            ConexaoMigrador: Conexao(nome, "gf_migrator"));
+    }
+
+    /// <summary>Aplica as migrações que faltam (o mesmo migrador da instalação).</summary>
+    public static Task MigrarTudoAsync(BancoDeTeste banco) =>
+        MigradorSql.AplicarAsync(banco.ConexaoMigrador, PastaDeMigracoes(), TextWriter.Null);
+
     private string Conexao(string banco, string usuario) =>
         new NpgsqlConnectionStringBuilder(_container.GetConnectionString())
         {

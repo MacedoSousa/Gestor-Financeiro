@@ -12,7 +12,8 @@ namespace GestorFinanceiro.Modules.Contas.Aplicacao;
 /// Contas ligadas ao banco (D5, D17), para o Integracoes. Valida como o cadastro manual, no casal da sessão (ou do job).
 /// O id vem de quem chama: repetir o pedido devolve a conta que já existe, sem criar outra.
 /// </summary>
-internal sealed class ContasLigadas(ContasDbContext db, IUsuarioAtual atual, ServicoDeContas servico, TimeProvider relogio)
+internal sealed class ContasLigadas(ContasDbContext db, IUsuarioAtual atual, ServicoDeContas servico, TimeProvider relogio,
+    IEnumerable<IVerificadorDeUsoDaConta> verificadores)
     : IContasLigadas
 {
     private const string IndiceDeApelido = "ux_contas_apelido";
@@ -76,10 +77,14 @@ internal sealed class ContasLigadas(ContasDbContext db, IUsuarioAtual atual, Ser
 
     public async Task<bool> MarcarLigadaAsync(Guid contaId, CancellationToken ct)
     {
+        // Na trava da conta, a mesma do lançar: um lançamento manual em andamento termina antes de a conta virar do banco.
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
+        await db.Database.ExecuteSqlAsync($"SELECT pg_advisory_xact_lock(hashtextextended({ChaveDeTrava.Conta(contaId)}, 0))", ct);
         var conta = await db.Contas.FirstOrDefaultAsync(c => c.Id == contaId, ct);
         if (conta is null) return false;
         conta.MarcarLigada(relogio.GetUtcNow());
         await db.SaveChangesAsync(ct);
+        await tx.CommitAsync(ct);
         return true;
     }
 
@@ -89,6 +94,27 @@ internal sealed class ContasLigadas(ContasDbContext db, IUsuarioAtual atual, Ser
             ?? throw new InvalidOperationException("Conta não encontrada no casal.");
         conta.DefinirSaldoInicialDoBanco(new Dinheiro(centavos), em);
         await db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>
+    /// Na trava da conta (a mesma da importação e do apagar conta): um lançamento nesta conta ou já está gravado quando os
+    /// verificadores olham, ou espera e encontra a conta desligada (e a importação, que exige conta ligada, recusa).
+    /// </summary>
+    public async Task<ResultadoDoDesligar> DesligarAsync(Guid contaId, CancellationToken ct)
+    {
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
+        await db.Database.ExecuteSqlAsync($"SELECT pg_advisory_xact_lock(hashtextextended({ChaveDeTrava.Conta(contaId)}, 0))", ct);
+        var conta = await db.Contas.FirstOrDefaultAsync(c => c.Id == contaId, ct);
+        if (conta is not { Ligada: true }) return ResultadoDoDesligar.NaoEraLigada;
+
+        var emUso = false;
+        foreach (var verificador in verificadores)
+            emUso |= await verificador.EstaEmUsoAsync(contaId, ct);
+        conta.Desligar();
+        if (!emUso) conta.Arquivar();
+        await db.SaveChangesAsync(ct);
+        await tx.CommitAsync(ct);
+        return emUso ? ResultadoDoDesligar.Manual : ResultadoDoDesligar.Arquivada;
     }
 
     // Traduzido para lower() do Postgres dos dois lados, a mesma regra do índice ux_contas_apelido.

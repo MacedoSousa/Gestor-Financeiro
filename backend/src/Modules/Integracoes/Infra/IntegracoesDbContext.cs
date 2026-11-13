@@ -45,5 +45,7 @@ internal sealed class VinculoConfig : IEntityTypeConfiguration<Vinculo>
         b.HasKey(x => x.Id);
         b.Property(x => x.IdExterno).HasMaxLength(Vinculo.IdExternoMaximo);
         b.Property(x => x.FaturasDivergentes).HasColumnType("jsonb");
+        b.Ignore(x => x.FaturasVisiveis);
+        b.Ignore(x => x.DiferencaVisivel);
     }
 }
