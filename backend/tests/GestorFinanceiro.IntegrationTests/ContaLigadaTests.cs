@@ -354,4 +354,41 @@ public class ContaLigadaTests(PostgresFixture pg)
         Assert.Equal((c.Poupanca, 10_000L), (aporte.ContaId, aporte.AporteCentavos));
         Assert.NotEqual(Guid.Empty, entrada);
     }
+    /// <summary>Revisão da E4, rodada 3: "esta e as próximas" não muda o valor de nenhuma parcela numa conta do banco.</summary>
+    [Fact]
+    public async Task Parcelado_manual_de_antes_de_ligar_nao_muda_valor_pelas_proximas()
+    {
+        await using var c = await IniciarAsync();
+        var r = await c.Cliente.PostAsJsonAsync("/api/v1/contas", new
+        {
+            tipo = "CARTAO", apelido = "Cartão da Fase 1", saldoInicialCentavos = 0L, saldoInicialEm = "2026-01-01",
+            diaFechamento = 25, diaVencimento = 5, limiteCentavos = 500_000L,
+        });
+        Assert.Equal(HttpStatusCode.Created, r.StatusCode);
+        var cartao = Guid.Parse(r.Headers.Location!.ToString().Split('/').Last());
+        var mercado = await CategoriaAsync(c.Cliente, "Mercado");
+        var compra = await c.Cliente.PostAsJsonAsync("/api/v1/lancamentos", new
+        {
+            chaveIdempotente = Guid.NewGuid(), contaId = cartao, natureza = "DESPESA", valorCentavos = 10_000L, data = "2026-11-03",
+            descricao = "Geladeira", categoriaId = mercado, parcelas = 3,
+        });
+        Assert.Equal(HttpStatusCode.Created, compra.StatusCode);
+        var primeira = (await JsonAsync(compra)).GetProperty("id").GetGuid();
+        await ExecutarAsync(c.Banco, $"UPDATE contas.contas SET ligada_em = now() WHERE id = '{cartao}'");
+        var antes = await EscalarAsync<string>(c.Banco,
+            $"SELECT string_agg(valor_centavos::text, ',' ORDER BY parcela) FROM lancamentos.transacoes WHERE conta_id = '{cartao}'");
+        Assert.Equal("-3334,-3333,-3333", antes);
+
+        // O valor da 1ª (33,34) levado às próximas mudaria o total da compra.
+        var recusa = await c.Cliente.PutAsJsonAsync($"/api/v1/lancamentos/{primeira}?escopo=proximos",
+            Edicao(3_334, "2026-11-03", "Geladeira nova", mercado));
+
+        Assert.Equal(HttpStatusCode.Conflict, recusa.StatusCode);
+        Assert.Equal(TituloLancamentos, await TituloAsync(recusa));
+        Assert.Equal(antes, await EscalarAsync<string>(c.Banco,
+            $"SELECT string_agg(valor_centavos::text, ',' ORDER BY parcela) FROM lancamentos.transacoes WHERE conta_id = '{cartao}'"));
+        // Só "esta": descrição e categoria mudam.
+        Assert.Equal(HttpStatusCode.NoContent, (await c.Cliente.PutAsJsonAsync($"/api/v1/lancamentos/{primeira}",
+            Edicao(3_334, "2026-11-03", "Geladeira nova", mercado))).StatusCode);
+    }
 }

@@ -411,7 +411,10 @@ public class ImportacaoTests(PostgresFixture pg)
             }
         }
 
-        await Assert.ThrowsAnyAsync<Exception>(() => ImportarAsync(c, c.Corrente, Linha("tx-nossa", -100), Linha("tx-de-outro-casal", -2_550)));
+        var erro = await Assert.ThrowsAsync<Microsoft.EntityFrameworkCore.DbUpdateException>(() =>
+            ImportarAsync(c, c.Corrente, Linha("tx-nossa", -100), Linha("tx-de-outro-casal", -2_550)));
+        var pg = Assert.IsType<PostgresException>(erro.InnerException);
+        Assert.Equal(("23505", "ux_transacoes_origem_id_externo"), (pg.SqlState, pg.ConstraintName));
 
         Assert.Equal(0L, await EscalarAsync<long>(c.Banco, $"SELECT count(*) FROM lancamentos.transacoes WHERE casal_id <> '{outro}'"));
         Assert.Equal($"{contaDele}|-777|false", await EscalarAsync<string>(c.Banco,

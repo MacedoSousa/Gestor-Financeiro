@@ -129,12 +129,6 @@ internal sealed class ServicoDeLancamentos(LancamentosDbContext db, IUsuarioAtua
         if (p.CategoriaId is not { } categoriaId) return Invalido("categoriaId", "Informe a categoria.");
         var natureza = LerNatureza(p.Natureza);
         var conta = await contas.ObterAsync(alvo.ContaId, ct);
-        // Conta ligada (opção B): valor, data, natureza e contraparte não mudam à mão, nem na linha que o casal digitou antes de
-        // ligar (mudar o valor dela seria lançar à mão numa conta do banco; revisão da E4, rodada 2). Descrição e categoria, sim.
-        if (conta is { Ligada: true } && (p.Data != alvo.Data || natureza != alvo.Natureza
-                || (natureza == NaturezaDaTransacao.Despesa ? -p.ValorCentavos : p.ValorCentavos) != alvo.ValorCentavos
-                || Texto(p.Contraparte) != Texto(alvo.LerContraparte(cofre))))
-            return new ResultadoDeLancamento.Recusado(TituloContaLigada, 409);
         if (alvo.Parcela is not null && natureza != NaturezaDaTransacao.Despesa)
             return Invalido("natureza", "Só despesa pode ser parcelada.");
         if (await ValidarCategoriaAsync(categoriaId, natureza, alvo.CategoriaId, ct) is { } recusa) return recusa;
@@ -143,6 +137,13 @@ internal sealed class ServicoDeLancamentos(LancamentosDbContext db, IUsuarioAtua
         var lista = await AlvosAsync(alvo, proximas, ct);
         var valorComSinal = natureza == NaturezaDaTransacao.Despesa ? -p.ValorCentavos : p.ValorCentavos;
         var dataMudou = p.Data != alvo.Data;
+
+        // Conta ligada (opção B): valor, data, natureza e contraparte não mudam à mão, nem na linha que o casal digitou antes de
+        // ligar (mudar o valor dela seria lançar à mão numa conta do banco; revisão da E4, rodada 2). Confere cada linha que o
+        // escopo alcança: "esta e as próximas" levaria o valor da escolhida às outras (rodada 3). Descrição e categoria, sim.
+        if (conta is { Ligada: true } && (dataMudou || lista.Any(t => t.Natureza != natureza || t.ValorCentavos != valorComSinal
+                || Texto(p.Contraparte) != Texto(t.LerContraparte(cofre)))))
+            return new ResultadoDeLancamento.Recusado(TituloContaLigada, 409);
 
         // Primeiro decide tudo; só grava se nenhuma parcela esbarrar numa fatura fechada.
         var planos = new List<(Transacao T, DateOnly Data, DateOnly? Fatura, long Valor, NaturezaDaTransacao Natureza)>(lista.Count);
