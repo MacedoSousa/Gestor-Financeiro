@@ -5,7 +5,7 @@ import { useContas } from "../api/contas";
 import { n } from "../api/formulario";
 import { hojeIso, useCategorias, useExtrato, type FiltroDoExtrato, type Lancamento } from "../api/lancamentos";
 import { formatarReais } from "../lib/dinheiro";
-import { vemDoBanco } from "../lib/lancamentos";
+import { contasParaLancar, vemDoBanco } from "../lib/lancamentos";
 import { nomeDoMes, somarMeses } from "../lib/mes";
 import { EditarLancamento } from "./lancamentos/EditarLancamento";
 import { LancamentoRapido } from "./lancamentos/LancamentoRapido";
@@ -39,7 +39,7 @@ function Categoria({ l }: { l: Lancamento }) {
   if (l.revisao === "A_REVISAR")
     return (
       <td>
-        <span className="tom-alerta">A revisar</span>
+        <span className="tom-alerta sem-quebra">A revisar</span>
         {l.categoria && <span className="texto-fraco"> · {l.categoria.nome}?</span>}
       </td>
     );
@@ -195,16 +195,19 @@ export function Lancamentos() {
         <aside className="coluna-lateral">
           {contas.isError && <p className="alerta-form">{contas.error.message}</p>}
           {categorias.isError && <p className="alerta-form">{categorias.error.message}</p>}
-          {contas.data && contas.data.filter((c) => !c.arquivada).length === 0 && (
+          {contas.data && contasParaLancar(contas.data).length === 0 && (
             <section className="cartao">
               <h2 className="cartao-titulo">Lançamento rápido</h2>
               <p className="cartao-nota">
-                Cadastre uma conta antes de lançar. <Link to="/contas">Ir para contas e cartões</Link>
+                {contas.data.some((c) => !c.arquivada && c.ligada)
+                  ? "As contas que vêm do banco recebem os lançamentos sozinhas. Para lançar à mão, cadastre uma conta manual (dinheiro, por exemplo). "
+                  : "Cadastre uma conta antes de lançar. "}
+                <Link to="/contas">Ir para contas e cartões</Link>
               </p>
             </section>
           )}
-          {contas.data && contas.data.some((c) => !c.arquivada) && categorias.data && (
-            <LancamentoRapido contas={contas.data} categorias={categorias.data} />
+          {contas.data && contasParaLancar(contas.data).length > 0 && categorias.data && (
+            <LancamentoRapido contas={contasParaLancar(contas.data)} categorias={categorias.data} />
           )}
         </aside>
       </div>

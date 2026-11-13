@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Conta } from "../api/contas";
 import type { Categoria, Lancamento } from "../api/lancamentos";
-import { avisaAporteEmDobro, categoriasDoTipo, ehEstorno, vemDoBanco } from "./lancamentos";
+import { avisaAporteEmDobro, categoriasDoTipo, contasParaLancar, ehEstorno, exigeEscolhaDeCategoria, vemDoBanco } from "./lancamentos";
 
 const cat = (id: string, tipo: string, papel: string | null = null, arquivada = false): Categoria => ({ id, nome: id, tipo, arquivada, papel });
 const conta = (tipo: string) => ({ id: "c", apelido: "c", tipo }) as Conta;
@@ -56,5 +56,27 @@ describe("vemDoBanco (Tarefa 4.4)", () => {
   it("conta manual, ou que a lista ainda não trouxe, edita tudo como antes", () => {
     expect(vemDoBanco(l, [{ id: "itau", ligada: false } as Conta])).toBe(false);
     expect(vemDoBanco(l, undefined)).toBe(false);
+  });
+});
+
+describe("contasParaLancar (testador da E4, achado 3)", () => {
+  it("tira as arquivadas e as ligadas ao banco: lançar nelas dá 409", () => {
+    const contas = [
+      { id: "manual", arquivada: false, ligada: false },
+      { id: "velha", arquivada: true, ligada: false },
+      { id: "itau", arquivada: false, ligada: true },
+    ] as Conta[];
+    expect(contasParaLancar(contas).map((c) => c.id)).toEqual(["manual"]);
+  });
+});
+
+describe("exigeEscolhaDeCategoria (testador da E4, achado 2)", () => {
+  const base = { revisao: "A_REVISAR", categoria: null } as unknown as Lancamento;
+  it("importado sem categoria não vem com uma categoria marcada: a pessoa escolhe", () => {
+    expect(exigeEscolhaDeCategoria(base)).toBe(true);
+  });
+  it("com sugestão ou já revisado, a categoria atual vale", () => {
+    expect(exigeEscolhaDeCategoria({ ...base, categoria: { id: "m", nome: "Mercado", arquivada: false } })).toBe(false);
+    expect(exigeEscolhaDeCategoria({ ...base, revisao: "REVISADA" })).toBe(false);
   });
 });

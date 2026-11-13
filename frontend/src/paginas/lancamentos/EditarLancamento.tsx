@@ -4,7 +4,7 @@ import { ErroDeApi } from "../../api/autenticacao";
 import { n } from "../../api/formulario";
 import { apagarLancamento, editarLancamento, type Categoria, type Escopo, type Lancamento } from "../../api/lancamentos";
 import { centavosDeTexto, formatarReais, textoDeCentavos } from "../../lib/dinheiro";
-import { categoriasDoTipo, ehEstorno, type TipoDeEntrada } from "../../lib/lancamentos";
+import { categoriasDoTipo, ehEstorno, exigeEscolhaDeCategoria, type TipoDeEntrada } from "../../lib/lancamentos";
 import { Alerta, Campo, CampoSelecao } from "../Campo";
 
 type Props = { lancamento: Lancamento; categorias: Categoria[]; doBanco?: boolean; aoFechar: () => void };
@@ -42,7 +42,10 @@ export function EditarLancamento({ lancamento: l, categorias, doBanco = false, a
   const comAtual = categorias.map((c) => (c.id === l.categoria?.id ? { ...c, arquivada: false } : c));
   const opcoesDeCategoria = categoriasDoTipo(tipo as TipoDeEntrada, comAtual)
     .map((c) => ({ valor: c.id, rotulo: c.id === l.categoria?.id && categorias.find((o) => o.id === c.id)?.arquivada ? `${c.nome} (arquivada)` : c.nome }));
-  const categoria = opcoesDeCategoria.some((o) => o.valor === categoriaId) ? categoriaId : (opcoesDeCategoria[0]?.valor ?? "");
+  // Importado sem categoria: nada vem marcado; a pessoa escolhe (D15).
+  const escolher = exigeEscolhaDeCategoria(l);
+  const categoria = opcoesDeCategoria.some((o) => o.valor === categoriaId) ? categoriaId : escolher ? "" : (opcoesDeCategoria[0]?.valor ?? "");
+  const opcoesNaTela = escolher ? [{ valor: "", rotulo: "Escolha a categoria" }, ...opcoesDeCategoria] : opcoesDeCategoria;
 
   function falhar(e: unknown) {
     if (e instanceof ErroDeApi && e.status === 401) void consultas.invalidateQueries({ queryKey: ["eu"] });
@@ -72,6 +75,7 @@ export function EditarLancamento({ lancamento: l, categorias, doBanco = false, a
     const centavos = centavosDeTexto(valor);
     if (!centavos) return falhar(new ErroDeApi(400, "Informe um valor maior que zero, como 142,50."));
     if (!descricao.trim()) return falhar(new ErroDeApi(400, "Informe a descrição."));
+    if (!transferencia && !categoria) return falhar(new ErroDeApi(400, "Escolha a categoria."));
     const corpo = transferencia
       ? { natureza: "TRANSFERENCIA", valorCentavos: centavos, data, descricao: descricao.trim() }
       : {
@@ -128,7 +132,7 @@ export function EditarLancamento({ lancamento: l, categorias, doBanco = false, a
             {!doBanco && (
               <Campo rotulo="Contraparte (opcional)" valor={contraparte} aoMudar={setContraparte} maxLength={140} autoComplete="off" />
             )}
-            <CampoSelecao rotulo="Categoria" valor={categoria} aoMudar={setCategoriaId} opcoes={opcoesDeCategoria} />
+            <CampoSelecao rotulo="Categoria" valor={categoria} aoMudar={setCategoriaId} opcoes={opcoesNaTela} />
           </>
         )}
         {!doBanco && <Campo rotulo="Data" tipo="date" valor={data} aoMudar={setData} />}

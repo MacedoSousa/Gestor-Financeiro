@@ -40,3 +40,16 @@ export function ehEstorno(l: Lancamento, categorias: Categoria[]): boolean {
 export function vemDoBanco(l: Lancamento, contas: readonly Conta[] | undefined): boolean {
   return contas?.find((c) => c.id === l.conta.id)?.ligada === true;
 }
+
+/** Contas que aceitam lançamento à mão: nem arquivadas nem ligadas ao banco (opção B; a API recusa com 409). */
+export function contasParaLancar<T extends Pick<Conta, "arquivada" | "ligada">>(contas: readonly T[]): T[] {
+  return contas.filter((c) => !c.arquivada && !c.ligada);
+}
+
+/**
+ * Importado ainda sem categoria (D15): o editor não marca nenhuma de antemão. Salvar sem escolher revisaria o lançamento
+ * com uma categoria que a pessoa não escolheu, e ele passaria a contar no orçamento.
+ */
+export function exigeEscolhaDeCategoria(l: Pick<Lancamento, "revisao" | "categoria">): boolean {
+  return l.revisao === "A_REVISAR" && !l.categoria;
+}

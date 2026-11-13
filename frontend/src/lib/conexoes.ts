@@ -126,17 +126,24 @@ export function textoDoHistorico(dia: string | null | undefined): string | null 
   return `Histórico desde ${dia.slice(8, 10)}/${dia.slice(5, 7)}`;
 }
 
-const reaisComSinal = (centavos: number) => `${centavos < 0 ? "−" : ""}${formatarReais(Math.abs(centavos))}`;
+/** Frase com o valor à parte: a tela põe só o valor na fonte de número (classe `num`). */
+export type FraseComValor = { antes: string; valor: string; depois: string };
 
-/** Saldo do banco menos o do sistema, quando já persistiu 2 sincronizações (a API manda nulo antes). */
-export function textoDaDiferenca(centavos: number | null | undefined): string | null {
+/**
+ * Saldo do banco menos o do sistema, quando já persistiu 2 sincronizações (a API manda nulo antes): diz quem tem mais.
+ */
+export function textoDaDiferenca(centavos: number | null | undefined): FraseComValor | null {
   if (centavos == null) return null;
-  return `Diferença de ${reaisComSinal(centavos)} com o banco`;
+  return { antes: "O banco mostra ", valor: formatarReais(Math.abs(centavos)), depois: ` a ${centavos > 0 ? "mais" : "menos"} que o sistema` };
 }
 
-/** Fatura do banco cujo total não bate com a soma das transações dela; o mês é o do vencimento. */
-export function textoDaFatura(f: { vencimento: string; diferencaCentavos: number }): string {
-  return `Fatura de ${soNomeDoMes(f.vencimento.slice(0, 7))}: diferença de ${reaisComSinal(f.diferencaCentavos)} com o banco`;
+/** Fatura do banco cujo total não bate com a soma das compras dela (total do banco menos a soma); o mês é o do vencimento. */
+export function textoDaFatura(f: { vencimento: string; diferencaCentavos: number }): FraseComValor {
+  return {
+    antes: `Fatura de ${soNomeDoMes(f.vencimento.slice(0, 7))}: o banco soma `,
+    valor: formatarReais(Math.abs(f.diferencaCentavos)),
+    depois: ` a ${f.diferencaCentavos > 0 ? "mais" : "menos"} que as compras dela`,
+  };
 }
 
 const plural = (n: number, um: string, varios: string) => `${n} ${n === 1 ? um : varios}`;
@@ -144,19 +151,18 @@ const plural = (n: number, um: string, varios: string) => `${n} ${n === 1 ? um :
 /** O que a sincronização fez, em uma frase (só contagens). */
 type Contagem = number | string; // inteiros da API chegam como number | string no tipo gerado
 
-export function textoDaSincronizacao(resumo: {
-  contasSincronizadas: Contagem;
-  contasComFalha: Contagem;
-  lancamentosNovos: Contagem;
-  lancamentosAtualizados?: Contagem;
-}): string {
+export function textoDaSincronizacao(
+  resumo: { contasSincronizadas: Contagem; contasComFalha: Contagem; lancamentosNovos: Contagem; lancamentosAtualizados?: Contagem },
+  banco?: string,
+): string {
   const r = {
     contasSincronizadas: Number(resumo.contasSincronizadas),
     contasComFalha: Number(resumo.contasComFalha),
     lancamentosNovos: Number(resumo.lancamentosNovos),
   };
   if (r.contasSincronizadas === 0 && r.contasComFalha === 0) return "Nada para sincronizar: nenhuma conta ativa deste banco.";
-  const feito = `Sincronizado: ${plural(r.contasSincronizadas, "conta", "contas")}, ${plural(r.lancamentosNovos, "lançamento novo", "lançamentos novos")}.`;
+  const novos = r.lancamentosNovos === 0 ? "nenhum lançamento novo" : plural(r.lancamentosNovos, "lançamento novo", "lançamentos novos");
+  const feito = `${banco ? `${banco} sincronizado` : "Sincronizado"}: ${plural(r.contasSincronizadas, "conta", "contas")}, ${novos}.`;
   if (r.contasComFalha === 0) return feito;
   const falha = r.contasComFalha === 1 ? "1 conta não veio" : `${r.contasComFalha} contas não vieram`;
   return `${feito} ${falha} do banco agora; a próxima sincronização tenta de novo.`;
