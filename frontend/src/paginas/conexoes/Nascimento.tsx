@@ -168,7 +168,12 @@ function Investimentos({
             <div className="item-texto">
               <span style={{ fontWeight: 500 }}>{a.nome}</span>
               <span className="cartao-nota">
-                {a.tipo} · <span className="num">{formatarReais(a.saldoCentavos)}</span>
+                {a.tipo} ·{" "}
+                {a.saldoCentavos == null ? (
+                  <span className="tom-alerta">o banco não informou o valor; ela entra no grupo sem valor até o banco informar</span>
+                ) : (
+                  <span className="num">{formatarReais(a.saldoCentavos)}</span>
+                )}
               </span>
             </div>
             <Campo rotulo={`Grupo de ${a.nome}`} valor={a.grupo} aoMudar={(v) => aoMudarLinha({ ...a, grupo: v })} erro={erros[a.idExterno]?.mensagem} maxLength={APELIDO_MAXIMO + 10} autoComplete="off" />

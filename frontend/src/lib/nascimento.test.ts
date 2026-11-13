@@ -43,7 +43,7 @@ const encontrada = (idExterno: string, tipo: string, extra: Partial<Record<strin
   ...extra,
 });
 
-const descoberta = (contas: ReturnType<typeof encontrada>[], aplicacoes: { idExterno: string; nome: string; tipo: string; saldoCentavos: number }[] = []) => ({
+const descoberta = (contas: ReturnType<typeof encontrada>[], aplicacoes: { idExterno: string; nome: string; tipo: string; saldoCentavos: number | null }[] = []) => ({
   banco: "Itaú",
   contas,
   aplicacoes,
@@ -158,6 +158,11 @@ describe("linhasDeAplicacao e montarPedido", () => {
   it("as aplicações começam num grupo só, com o nome do banco", () => {
     const linhas = linhasDeAplicacao(descoberta([], [{ idExterno: "a", nome: "CDB", tipo: "CDB", saldoCentavos: 1 }]));
     expect(primeira(linhas)).toMatchObject({ idExterno: "a", grupo: "Investimentos Itaú" });
+  });
+
+  it("aplicação sem valor no banco continua sem valor, não vira R$ 0,00 (D21)", () => {
+    const linhas = linhasDeAplicacao(descoberta([], [{ idExterno: "a", nome: "Fundo", tipo: "MUTUAL_FUND", saldoCentavos: null }]));
+    expect(primeira(linhas).saldoCentavos).toBeNull();
   });
 
   it("monta o corpo da API: titular vazio é conjunta, dias só no cartão, grupo vazio aguarda e a meta vem do grupo", () => {

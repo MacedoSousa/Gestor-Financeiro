@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 import { useContas } from "../api/contas";
+import { textoDoPatrimonioDosInvestimentos } from "../lib/conexoes";
 import { useCategorias } from "../api/lancamentos";
 import { useVisaoGeral } from "../api/painel";
 import { nomeDoMes } from "../lib/mes";
@@ -42,6 +43,9 @@ function NovoLancamento({ aoFechar }: { aoFechar: () => void }) {
 
 export function VisaoGeral() {
   const consulta = useVisaoGeral();
+  // D21: o grupo de investimento entra no patrimônio a partir da data em que foi confirmado.
+  const contas = useContas();
+  const notaDosInvestimentos = textoDoPatrimonioDosInvestimentos(contas.data ?? []);
   const [novo, setNovo] = useState(false);
   const v = consulta.data;
   const tentando = consulta.isFetching;
@@ -85,7 +89,7 @@ export function VisaoGeral() {
 
       {v && (
         <>
-          <CartoesDoTopo visao={v} {...base} />
+          <CartoesDoTopo visao={v} {...base} notaDosInvestimentos={notaDosInvestimentos} />
 
           {v.avisosDeFatura.erro !== null || v.avisosDeFatura.dados === null ? (
             <div role="alert" className="faixa-aviso">
@@ -104,7 +108,12 @@ export function VisaoGeral() {
 
           <div className="painel-linha painel-linha-1">
             <Secao titulo="Patrimônio em 12 meses" secao={v.patrimonioEm12Meses} {...base}>
-              {(d) => <GraficoDoPatrimonio dados={d} />}
+              {(d) => (
+                <>
+                  <GraficoDoPatrimonio dados={d} />
+                  {notaDosInvestimentos && <p className="cartao-nota">{notaDosInvestimentos}</p>}
+                </>
+              )}
             </Secao>
             <Secao titulo="Metas" secao={v.metas} {...base} acao={<Link to="/metas">Ver todas</Link>}>
               {(d) => <MetasDoPainel dados={d} />}

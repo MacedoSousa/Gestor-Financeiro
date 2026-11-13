@@ -137,6 +137,40 @@ export function textoDaDiferenca(centavos: number | null | undefined): FraseComV
   return { antes: "O banco mostra ", valor: formatarReais(Math.abs(centavos)), depois: ` a ${centavos > 0 ? "mais" : "menos"} que o sistema` };
 }
 
+/**
+ * Grupo de investimento (D21): o valor no banco, só quando difere do saldo do sistema na última sincronização. Nada é
+ * lançado: o rendimento entra no sistema na próxima etapa (E6).
+ */
+export function textoDoGrupoNoBanco(
+  valorNoBancoCentavos: number | null | undefined,
+  diferencaCentavos: number | null | undefined,
+): FraseComValor | null {
+  if (valorNoBancoCentavos == null || diferencaCentavos == null) return null;
+  return {
+    antes: "No banco hoje: ",
+    valor: formatarReais(valorNoBancoCentavos),
+    depois: " · o rendimento entra no sistema na próxima etapa",
+  };
+}
+
+const dataBr = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
+
+/**
+ * Nota do patrimônio (D21): o grupo de investimento entra no patrimônio a partir do dia em que foi confirmado (o saldo
+ * inicial dele), não antes. Nulo sem grupo ligado ao banco.
+ */
+export function textoDoPatrimonioDosInvestimentos(
+  contas: readonly { tipo: string; ligada?: boolean | null; arquivada?: boolean | null; saldoInicialEm: string }[],
+): string | null {
+  // Grupo arquivado não conta mais para o que a nota explica.
+  const datas = [...new Set(contas.filter((c) => c.tipo === "INVESTIMENTO" && c.ligada && !c.arquivada).map((c) => c.saldoInicialEm))].sort();
+  const lista = datas.map(dataBr);
+  const ultima = lista.pop();
+  if (ultima === undefined) return null;
+  if (lista.length === 0) return `Investimentos contam a partir de ${ultima} (data da confirmação).`;
+  return `Investimentos contam a partir de ${lista.join(", ")} e ${ultima} (data da confirmação de cada grupo).`;
+}
+
 /** Fatura do banco cujo total não bate com a soma das compras dela (total do banco menos a soma); o mês é o do vencimento. */
 export function textoDaFatura(f: { vencimento: string; diferencaCentavos: number }): FraseComValor {
   return {

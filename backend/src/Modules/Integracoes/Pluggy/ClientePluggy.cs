@@ -76,7 +76,7 @@ internal sealed partial class ClientePluggy(
     {
         using var doc = await GetAsync(c, $"/investments?itemId={Uri.EscapeDataString(itemId)}", "/investments", ct);
         return Resultados(doc).Select(e => new InvestimentoPluggy(Texto(e, "id")!, Texto(e, "type") ?? "?", Texto(e, "subtype"),
-            Texto(e, "name") ?? "", ConversaoPluggy.Centavos(e.GetProperty("balance")))).ToList();
+            Texto(e, "name") ?? "", ConversaoPluggy.CentavosOuNulo(e.TryGetProperty("balance", out var b) ? b : null))).ToList();
     }
 
     // ---------------------------------------------------------------- HTTP

@@ -156,6 +156,30 @@
         }
       }
     },
+    "/api/v1/integracoes/grupos-de-investimento": {
+      "get": {
+        "tags": [
+          "Integrações"
+        ],
+        "summary": "Grupos de investimento do casal com o valor no banco e a diferença para o sistema na última sincronização (D21). Nada é lançado: o rendimento entra no sistema na próxima etapa.",
+        "operationId": "ListarGruposDeInvestimento",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/GrupoNoBancoDto"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/visao-geral": {
       "get": {
         "tags": [
@@ -3007,6 +3031,7 @@
           "saldoCentavos": {
             "pattern": "^-?(?:0|[1-9]\\d*)$",
             "type": [
+              "null",
               "integer",
               "string"
             ],
@@ -3692,7 +3717,8 @@
           "arquivada",
           "historicoDesde",
           "diferencaCentavos",
-          "faturasDivergentes"
+          "faturasDivergentes",
+          "valorNoBancoCentavos"
         ],
         "type": "object",
         "properties": {
@@ -3730,6 +3756,15 @@
             "items": {
               "$ref": "#/components/schemas/FaturaDivergenteDto"
             }
+          },
+          "valorNoBancoCentavos": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
           }
         }
       },
@@ -4378,6 +4413,38 @@
               "string"
             ],
             "format": "uuid"
+          }
+        }
+      },
+      "GrupoNoBancoDto": {
+        "required": [
+          "contaId",
+          "valorNoBancoCentavos",
+          "diferencaCentavos"
+        ],
+        "type": "object",
+        "properties": {
+          "contaId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "valorNoBancoCentavos": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "diferencaCentavos": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
           }
         }
       },
@@ -6488,6 +6555,9 @@
       "name": "Lancamentos"
     },
     {
+      "name": "Integrações"
+    },
+    {
       "name": "Painel"
     },
     {
@@ -6504,9 +6574,6 @@
     },
     {
       "name": "Metas"
-    },
-    {
-      "name": "Integrações"
     }
   ]
 }

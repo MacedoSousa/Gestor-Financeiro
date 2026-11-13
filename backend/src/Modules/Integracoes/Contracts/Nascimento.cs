@@ -20,7 +20,8 @@ public sealed record ContaEncontradaDto(string IdExterno, string Tipo, string No
     int? DiaFechamentoSugerido, int? DiaVencimentoSugerido, long? LimiteCentavos, string? JaVemDe);
 
 /// <param name="Tipo">Subtipo do banco quando houver (ex.: CDB), senão o tipo.</param>
-public sealed record AplicacaoEncontradaDto(string IdExterno, string Nome, string Tipo, long SaldoCentavos);
+/// <param name="SaldoCentavos">Valor líquido no banco; nulo quando o banco não informou um valor válido.</param>
+public sealed record AplicacaoEncontradaDto(string IdExterno, string Nome, string Tipo, long? SaldoCentavos);
 
 /// <param name="VinculoId">Para POST /api/v1/integracoes/vinculos/{id}/inclusao.</param>
 public sealed record ContaNaoImportadaDto(Guid VinculoId, string IdExterno, string Tipo, string NomeNoBanco, string ApelidoSugerido);

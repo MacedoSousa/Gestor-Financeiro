@@ -41,6 +41,9 @@ internal sealed class Vinculo : Entidade, ICasalScoped
     public string? FaturasDivergentes { get; private set; }
     public DateTimeOffset? NaoImportarEm { get; private set; }
 
+    /// <summary>Só aplicação: o balance da última sincronização; nulo se o banco não mandou um valor válido (D21).</summary>
+    public long? ValorBancoCentavos { get; private set; }
+
     private Vinculo() { }
 
     public static Vinculo Criar(Guid casalId, Guid itemId, string tipo, string idExterno, Guid? contaId, byte[]? identidadeHmac)
@@ -98,7 +101,27 @@ internal sealed class Vinculo : Entidade, ICasalScoped
         ImportadoAte = hoje;
     }
 
-    /// <summary>Conferência de saldo (só CONTA): diferença zero zera a contagem; outra soma uma sincronização seguida.</summary>
+    /// <summary>Aplicação: o valor que o banco mandou agora (nulo = sem valor válido). Nada é lançado (D21).</summary>
+    public void RegistrarValorNoBanco(long? centavos)
+    {
+        if (Tipo != TipoDeVinculo.Investimento) throw new InvalidOperationException("Só aplicação guarda o valor no banco.");
+        ValorBancoCentavos = centavos;
+    }
+
+    /// <summary>
+    /// Aplicação de um grupo: a diferença do grupo (soma dos valores no banco menos o saldo do sistema), a mesma em todas as
+    /// aplicações dele. Nula quando não dá para conferir (alguma aplicação sem valor): limpa a conferência.
+    /// </summary>
+    public void ConferirGrupo(long? diferencaCentavos)
+    {
+        if (Tipo != TipoDeVinculo.Investimento) throw new InvalidOperationException("Só aplicação confere grupo.");
+        ConferirSaldo(diferencaCentavos ?? 0);
+    }
+
+    /// <summary>
+    /// Conferência de saldo (conta; e grupo de investimento, por <see cref="ConferirGrupo"/>): diferença zero zera a
+    /// contagem; outra soma uma sincronização seguida.
+    /// </summary>
     public void ConferirSaldo(long diferencaCentavos)
     {
         if (diferencaCentavos == 0)

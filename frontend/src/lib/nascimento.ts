@@ -23,7 +23,8 @@ export type LinhaDeConta = {
 };
 
 /** Uma aplicação; `grupo` vazio = fica aguardando grupo (não vira conta agora). */
-export type LinhaDeAplicacao = { idExterno: string; nome: string; tipo: string; saldoCentavos: number; grupo: string };
+/** saldoCentavos nulo = o banco não informou um valor válido (D21). */
+export type LinhaDeAplicacao = { idExterno: string; nome: string; tipo: string; saldoCentavos: number | null; grupo: string };
 
 export const APELIDO_MAXIMO = 60;
 
@@ -81,7 +82,7 @@ export function linhasDeAplicacao(d: Pick<Descoberta, "banco" | "aplicacoes">): 
     idExterno: a.idExterno,
     nome: a.nome,
     tipo: a.tipo,
-    saldoCentavos: Number(a.saldoCentavos),
+    saldoCentavos: a.saldoCentavos == null ? null : Number(a.saldoCentavos),
     grupo: `Investimentos ${d.banco}`.slice(0, APELIDO_MAXIMO),
   }));
 }

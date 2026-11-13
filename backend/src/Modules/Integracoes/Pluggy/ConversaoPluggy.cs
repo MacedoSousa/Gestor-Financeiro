@@ -17,17 +17,33 @@ internal static class ConversaoPluggy
         if (valor.ValueKind != JsonValueKind.Number || !valor.TryGetDecimal(out var reais))
             throw new FormatException("Valor da Pluggy não é um número.");
 
-        var centavos = reais * 100m;
-        if (centavos != decimal.Truncate(centavos))
-            throw new FormatException("Valor da Pluggy com mais de duas casas decimais.");
-
         try
         {
+            var centavos = reais * 100m;
+            if (centavos != decimal.Truncate(centavos))
+                throw new FormatException("Valor da Pluggy com mais de duas casas decimais.");
             return decimal.ToInt64(centavos);
         }
         catch (OverflowException e)
         {
             throw new FormatException("Valor da Pluggy fora da faixa.", e);
+        }
+    }
+
+    /// <summary>
+    /// Como <see cref="Centavos"/>, mas nulo em vez de exceção (ausente, nulo, não numérico, mais de 2 casas ou fora da
+    /// faixa). Só para o balance da aplicação, que não pode derrubar a leitura do item (D21, item 4).
+    /// </summary>
+    public static long? CentavosOuNulo(JsonElement? valor)
+    {
+        if (valor is not { ValueKind: JsonValueKind.Number } numero) return null;
+        try
+        {
+            return Centavos(numero);
+        }
+        catch (FormatException)
+        {
+            return null;
         }
     }
 
