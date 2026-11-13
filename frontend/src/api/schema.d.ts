@@ -834,6 +834,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/integracoes/conexoes/previa": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confere o item no banco antes de salvar e devolve os nomes das contas dele (tipo e nome, sem número nem saldo). Nada é gravado. Mesmas recusas do cadastro: slot em uso (409), item repetido (409), item recusado pelo banco (400). */
+        post: operations["PreviaDoItem"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/integracoes/conexoes/{id}/items": {
         parameters: {
             query?: never;
@@ -1158,6 +1175,10 @@ export interface components {
             /** Format: int64 */
             saldoCentavos: number | string;
             arquivada: boolean;
+        };
+        ContaDaPreviaDto: {
+            tipo: string;
+            nome: string;
         };
         ContaDeInvestimentoDto: {
             /** Format: uuid */
@@ -1643,6 +1664,13 @@ export interface components {
         PedidoCriadoDto: {
             codigo: string;
         };
+        PedidoDePreviaDto: {
+            /** Format: int32 */
+            slot: null | number | string;
+            /** Format: uuid */
+            conexaoId: null | string;
+            itemId: null | string;
+        };
         PedidoDeRevisaoDto: {
             ids: null | string[];
             /** Format: uuid */
@@ -1661,6 +1689,9 @@ export interface components {
             rotulo: string;
             /** Format: int64 */
             totalCentavos: null | number | string;
+        };
+        PreviaDoItemDto: {
+            contas: components["schemas"]["ContaDaPreviaDto"][];
         };
         PrimeiroAcessoDto: {
             cpf: string;
@@ -4096,6 +4127,55 @@ export interface operations {
             };
             /** @description Service Unavailable */
             503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    PreviaDoItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PedidoDePreviaDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PreviaDoItemDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflict */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

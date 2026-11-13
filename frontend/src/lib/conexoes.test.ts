@@ -11,6 +11,7 @@ import {
   textoDaDiferenca,
   textoDaFatura,
   textoDoGrupoNoBanco,
+  textoDaPrevia,
   textoDoPatrimonioDosInvestimentos,
   textoDaSincronizacao,
   textoDoConsentimento,
@@ -250,5 +251,18 @@ describe("textos da sincronização (Tarefa 4.5)", () => {
     expect(textoDaSincronizacao({ contasSincronizadas: 0, contasComFalha: 0, lancamentosNovos: 0, lancamentosAtualizados: 0 })).toBe(
       "Nada para sincronizar: nenhuma conta ativa deste banco.",
     );
+  });
+});
+
+describe("prévia do item (pedido da pessoa, E5)", () => {
+  it("lista o tipo e o nome de cada conta, para conferir o banco antes de salvar", () => {
+    expect(
+      textoDaPrevia([
+        { tipo: "CORRENTE", nome: "Conta Corrente" },
+        { tipo: "CARTAO", nome: "Cartão Platinum" },
+        { tipo: "POUPANCA", nome: "Poupança Fácil" },
+      ]),
+    ).toBe("Este item tem: Conta corrente · Conta Corrente, Cartão · Cartão Platinum, Poupança · Poupança Fácil.");
+    expect(textoDaPrevia([])).toBe("O banco não mostrou nenhuma conta neste item. Confira se o id é do banco certo.");
   });
 });

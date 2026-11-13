@@ -11,6 +11,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { ErroDeApi } from "../api/autenticacao";
 import { n } from "../api/formulario";
 import {
+  previaDoItem,
   useAcoesDeConexoes,
   useConexoes,
   type Banco,
@@ -32,6 +33,7 @@ import {
   separarConexoes,
   textoDaDiferenca,
   textoDoGrupoNoBanco,
+  textoDaPrevia,
   textoDaFatura,
   textoDaSincronizacao,
   textoDoConsentimento,
@@ -344,6 +346,10 @@ function NovaConexao({
   const [itemId, setItemId] = useState("");
   const [banco, setBanco] = useState<EscolhaDeBanco>(ESCOLHA_DE_BANCO_VAZIA);
   const [erros, setErros] = useState<ErrosDoCadastro>({});
+  // Prévia (pedido da pessoa, E5): confere no banco as contas do item antes de salvar; mudar slot ou id pede de novo.
+  const [previa, setPrevia] = useState<{ chave: string; texto: string } | null>(null);
+  const chaveDaPrevia = `${slot ?? ""}|${itemId.trim()}`;
+  const conferido = previa?.chave === chaveDaPrevia;
   const nenhumSlot = slots.every(
     (s) =>
       avisoDoSlot({
@@ -359,6 +365,12 @@ function NovaConexao({
     setErros(encontrados);
     if (Object.keys(encontrados).length > 0 || slot === null) {
       focarPrimeiroErro(form);
+      return;
+    }
+    if (!conferido) {
+      let texto = "";
+      if (await tentar(async () => void (texto = textoDaPrevia((await previaDoItem({ slot }, itemId)).contas))))
+        setPrevia({ chave: chaveDaPrevia, texto });
       return;
     }
     const nome = nomeDoBancoEscolhido(banco, bancos);
@@ -409,16 +421,29 @@ function NovaConexao({
         aoTrocarEscolha={() => setErros(limparErrosDoBanco)}
       />
       <Alerta mensagem={erro} tentativa={tentativa} />
+      <PreviaDoItem texto={conferido ? previa.texto : undefined} />
       <div>
         <button
           type="submit"
           className="botao-primario"
           disabled={ocupado || nenhumSlot}
         >
-          {ocupado ? "Consultando o banco…" : "Conectar"}
+          {ocupado ? "Consultando o banco…" : conferido ? "Salvar" : "Conferir no banco"}
         </button>
       </div>
     </form>
+  );
+}
+
+/**
+ * O que o item tem no banco, antes de salvar (pedido da pessoa, E5). Fica sempre no DOM, como status: o leitor de tela
+ * anuncia quando o texto chega. Nada foi gravado ainda.
+ */
+function PreviaDoItem({ texto }: { texto?: string }) {
+  return (
+    <p role="status" className={texto ? "aviso-form" : "sr-only"}>
+      {texto && `${texto} É o banco certo? Salve; senão, corrija o id.`}
+    </p>
   );
 }
 
@@ -440,6 +465,8 @@ function NovoBanco({
   const [itemId, setItemId] = useState("");
   const [banco, setBanco] = useState<EscolhaDeBanco>(ESCOLHA_DE_BANCO_VAZIA);
   const [erros, setErros] = useState<ErrosDoCadastro>({});
+  const [previa, setPrevia] = useState<{ chave: string; texto: string } | null>(null);
+  const conferido = previa?.chave === itemId.trim();
 
   useEffect(() => {
     form.current?.querySelector<HTMLInputElement>("input")?.focus();
@@ -451,6 +478,12 @@ function NovoBanco({
     setErros(encontrados);
     if (Object.keys(encontrados).length > 0) {
       focarPrimeiroErro(form);
+      return;
+    }
+    if (!conferido) {
+      let texto = "";
+      if (await tentar(async () => void (texto = textoDaPrevia((await previaDoItem({ conexaoId: conexao.id }, itemId)).contas))))
+        setPrevia({ chave: itemId.trim(), texto });
       return;
     }
     const nome = nomeDoBancoEscolhido(banco, bancos);
@@ -496,9 +529,10 @@ function NovoBanco({
         aoTrocarEscolha={() => setErros(limparErrosDoBanco)}
       />
       <Alerta mensagem={erro} tentativa={tentativa} />
+      <PreviaDoItem texto={conferido ? previa.texto : undefined} />
       <div className="acoes-linha">
         <button type="submit" className="botao-primario" disabled={ocupado}>
-          {ocupado ? "Consultando o banco…" : "Acrescentar"}
+          {ocupado ? "Consultando o banco…" : conferido ? "Salvar" : "Conferir no banco"}
         </button>
         <button
           type="button"

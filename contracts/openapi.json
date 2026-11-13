@@ -2483,6 +2483,60 @@
         }
       }
     },
+    "/api/v1/integracoes/conexoes/previa": {
+      "post": {
+        "tags": [
+          "Integrações"
+        ],
+        "summary": "Confere o item no banco antes de salvar e devolve os nomes das contas dele (tipo e nome, sem número nem saldo). Nada é gravado. Mesmas recusas do cadastro: slot em uso (409), item repetido (409), item recusado pelo banco (400).",
+        "operationId": "PreviaDoItem",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PedidoDePreviaDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PreviaDoItemDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/integracoes/conexoes/{id}/items": {
       "post": {
         "tags": [
@@ -3832,6 +3886,21 @@
           },
           "arquivada": {
             "type": "boolean"
+          }
+        }
+      },
+      "ContaDaPreviaDto": {
+        "required": [
+          "tipo",
+          "nome"
+        ],
+        "type": "object",
+        "properties": {
+          "tipo": {
+            "type": "string"
+          },
+          "nome": {
+            "type": "string"
           }
         }
       },
@@ -5880,6 +5949,38 @@
           }
         }
       },
+      "PedidoDePreviaDto": {
+        "required": [
+          "slot",
+          "conexaoId",
+          "itemId"
+        ],
+        "type": "object",
+        "properties": {
+          "slot": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "conexaoId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "itemId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
       "PedidoDeRevisaoDto": {
         "required": [
           "ids",
@@ -5956,6 +6057,20 @@
               "string"
             ],
             "format": "int64"
+          }
+        }
+      },
+      "PreviaDoItemDto": {
+        "required": [
+          "contas"
+        ],
+        "type": "object",
+        "properties": {
+          "contas": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ContaDaPreviaDto"
+            }
           }
         }
       },

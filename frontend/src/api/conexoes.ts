@@ -11,6 +11,7 @@ export type Banco = components["schemas"]["BancoDto"];
 export type ContaDoItem = components["schemas"]["ContaDoItemDto"];
 export type ResultadoDaSincronizacao = components["schemas"]["SincronizacaoDto"];
 export type GrupoNoBanco = components["schemas"]["GrupoNoBancoDto"];
+export type PreviaDoItem = components["schemas"]["PreviaDoItemDto"];
 type CorpoDoBanco = { codigoBanco: string; banco: string | null };
 
 const NAO_EXISTE = "Esta conexão já não existe. Atualize a página.";
@@ -32,6 +33,17 @@ export function useGruposDeInvestimento() {
       chamarFormulario(() => api.GET("/api/v1/integracoes/grupos-de-investimento"), "Não foi possível conferir os investimentos com o banco."),
   });
 }
+
+/** Confere o item no banco antes de salvar; nada é gravado. Conexão nova pelo slot; banco novo pela conexão. */
+export const previaDoItem = (alvo: { slot: number } | { conexaoId: string }, itemId: string) =>
+  chamarFormulario(
+    () =>
+      api.POST("/api/v1/integracoes/conexoes/previa", {
+        body: { slot: "slot" in alvo ? alvo.slot : null, conexaoId: "conexaoId" in alvo ? alvo.conexaoId : null, itemId: itemId.trim() },
+      }),
+    "Não foi possível consultar o banco. Tente de novo.",
+    NAO_EXISTE,
+  );
 
 const criar = (slot: number, itemId: string, b: CorpoDoBanco) =>
   chamarFormulario(() => api.POST("/api/v1/integracoes/conexoes", { body: { slot, itemId, ...b } }), "Não foi possível conectar. Tente de novo.");

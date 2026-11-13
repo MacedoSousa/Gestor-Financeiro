@@ -556,4 +556,84 @@ public class ConexoesTests(PostgresFixture pg)
         Assert.Equal("Nubank", bancos["260"]);
         Assert.Equal("Banco do Brasil", bancos["001"]);
     }
+
+    // ------------------------------------------------------------------ Prévia das contas do item (pedido da pessoa, E5)
+
+    private const string RotaDaPrevia = "/api/v1/integracoes/conexoes/previa";
+
+    private static readonly ContaPluggy CorrenteDaPrevia =
+        new("conta-previa-1", "BANK", "CHECKING_ACCOUNT", "Conta Corrente", null, "0001/12345-6", 150_000, null, null, null);
+
+    private static readonly ContaPluggy CartaoDaPrevia =
+        new("cartao-previa-1", "CREDIT", "CREDIT_CARD", "Cartão Platinum", null, null, 80_000, 500_000, "ANA TESTE", "4821");
+
+    /// <summary>
+    /// Antes de salvar, a pessoa vê os nomes das contas do item, para conferir se o id é do banco certo. Nada é gravado: nem
+    /// conexão, nem item, nem vínculo.
+    /// </summary>
+    [Fact]
+    public async Task Previa_mostra_as_contas_do_item_sem_gravar_nada()
+    {
+        await using var t = await NovoCasalComApiAsync();
+        var itemId = ItemSintetico();
+        t.Pluggy.Cadastrar(IdSlot1, itemId);
+        t.Pluggy.CadastrarConta(itemId, CorrenteDaPrevia);
+        t.Pluggy.CadastrarConta(itemId, CartaoDaPrevia);
+
+        var r = await t.Ana.PostAsJsonAsync(RotaDaPrevia, new { slot = 1, itemId });
+
+        Assert.Equal(HttpStatusCode.OK, r.StatusCode);
+        var contas = (await JsonAsync(r)).GetProperty("contas").EnumerateArray()
+            .Select(k => $"{k.GetProperty("tipo").GetString()}|{k.GetProperty("nome").GetString()}").ToList();
+        Assert.Equal(["CORRENTE|Conta Corrente", "CARTAO|Cartão Platinum"], contas);
+        foreach (var tabela in new[] { "conexoes", "items", "vinculos" }) Assert.Equal(0L, await ContarAsync(t.C, tabela));
+        var corpo = await r.Content.ReadAsStringAsync();
+        foreach (var proibido in new[] { itemId, CorrenteDaPrevia.Id, "12345", "4821", "150000", "ANA TESTE" })
+            Assert.DoesNotContain(proibido, corpo, StringComparison.OrdinalIgnoreCase);
+        foreach (var linha in t.Logs.Linhas) Assert.DoesNotContain(itemId, linha, StringComparison.Ordinal);
+    }
+
+    /// <summary>Na conexão que já existe (acrescentar banco), a prévia usa o slot dela; o outro cônjuge não usa a conexão alheia.</summary>
+    [Fact]
+    public async Task Previa_de_banco_novo_usa_o_slot_da_propria_conexao()
+    {
+        await using var t = await NovoCasalComApiAsync();
+        var primeiro = ItemSintetico();
+        var segundo = ItemSintetico();
+        t.Pluggy.Cadastrar(IdSlot1, primeiro);
+        t.Pluggy.Cadastrar(IdSlot1, segundo);
+        t.Pluggy.CadastrarConta(segundo, CartaoDaPrevia);
+        var conexao = (await JsonAsync(await CadastrarAsync(t.Ana, 1, primeiro))).GetProperty("id").GetGuid();
+
+        var r = await t.Ana.PostAsJsonAsync(RotaDaPrevia, new { conexaoId = conexao, itemId = segundo });
+        Assert.Equal(HttpStatusCode.OK, r.StatusCode);
+        Assert.Equal("Cartão Platinum", (await JsonAsync(r)).GetProperty("contas")[0].GetProperty("nome").GetString());
+        Assert.Equal(1L, await ContarAsync(t.C, "items"));
+
+        Assert.Equal(HttpStatusCode.Forbidden, (await t.Bruno.PostAsJsonAsync(RotaDaPrevia, new { conexaoId = conexao, itemId = segundo })).StatusCode);
+    }
+
+    [Fact]
+    public async Task Previa_recusa_slot_alheio_item_repetido_e_item_que_o_banco_nao_aceita()
+    {
+        await using var t = await NovoCasalComApiAsync();
+        var itemId = ItemSintetico();
+        t.Pluggy.Cadastrar(IdSlot1, itemId);
+        Assert.Equal(HttpStatusCode.Created, (await CadastrarAsync(t.Ana, 1, itemId)).StatusCode);
+
+        var slotAlheio = await t.Bruno.PostAsJsonAsync(RotaDaPrevia, new { slot = 1, itemId = ItemSintetico() });
+        Assert.Equal(HttpStatusCode.Conflict, slotAlheio.StatusCode);
+        Assert.Equal(TituloSlotEmUso, await TituloAsync(slotAlheio));
+
+        var repetido = await t.Bruno.PostAsJsonAsync(RotaDaPrevia, new { slot = 2, itemId });
+        Assert.Equal(HttpStatusCode.Conflict, repetido.StatusCode);
+        Assert.Equal(TituloItemRepetido, await TituloAsync(repetido));
+
+        var recusado = await t.Bruno.PostAsJsonAsync(RotaDaPrevia, new { slot = 2, itemId = ItemSintetico() });
+        Assert.Equal(HttpStatusCode.BadRequest, recusado.StatusCode);
+        Assert.Equal(TituloRecusado(2), await TituloAsync(recusado));
+
+        Assert.Equal(HttpStatusCode.BadRequest, (await t.Bruno.PostAsJsonAsync(RotaDaPrevia, new { slot = 2, itemId = "" })).StatusCode);
+        Assert.Equal(1L, await ContarAsync(t.C, "items"));
+    }
 }
