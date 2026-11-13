@@ -52,7 +52,41 @@ internal sealed partial class Sincronizacao(
     {
         var (acesso, recusa) = await descoberta.AcessoAsync(itemId, ct);
         if (recusa is not null) return new ResultadoDaSincronizacao.Recusada(recusa);
-        var a = acesso!;
+
+        // Uma sincronização por item de cada vez (revisão da E4, achado 5): a segunda espera a primeira terminar e então vê
+        // importado_ate e as conferências já gravados. Trava de sessão, numa conexão aberta só para isso.
+        await db.Database.OpenConnectionAsync(ct);
+        try
+        {
+            await db.Database.ExecuteSqlAsync($"SELECT pg_advisory_lock(hashtextextended('integracoes.sincronizacao:' || {itemId}::text, 0))", ct);
+            try
+            {
+                return await SincronizarNaTravaAsync(acesso!, ct);
+            }
+            finally
+            {
+                await db.Database.ExecuteSqlAsync(
+                    $"SELECT pg_advisory_unlock(hashtextextended('integracoes.sincronizacao:' || {itemId}::text, 0))", CancellationToken.None);
+            }
+        }
+        finally
+        {
+            await db.Database.CloseConnectionAsync();
+        }
+    }
+
+    private async Task<ResultadoDaSincronizacao> SincronizarNaTravaAsync(AcessoAoItem a, CancellationToken ct)
+    {
+        // Lote completo só com o item atualizado no banco; atualizando ou com erro, nada some por ausência (achado 4).
+        bool atualizado;
+        try
+        {
+            atualizado = (await pluggy.ObterItemAsync(a.Chaves, a.ItemPluggy, ct)).Status == "UPDATED";
+        }
+        catch (Exception e) when (e is ErroDaPluggy or HttpRequestException || (e is TaskCanceledException && !ct.IsCancellationRequested))
+        {
+            atualizado = false; // a leitura das contas, logo abaixo, decide se a sincronização segue
+        }
 
         var (leitura, falha) = await descoberta.LerAsync(a, ct);
         if (falha is not null)
@@ -78,7 +112,7 @@ internal sealed partial class Sincronizacao(
             if (!doCasal.TryGetValue(vinculo.ContaId!.Value, out var conta) || !conta.Ligada || conta.Arquivada) continue;
             try
             {
-                var r = await ImportarAsync(a, leitura!, vinculo.Id, conta, hoje, ct);
+                var r = await ImportarAsync(a, leitura!, vinculo.Id, conta, hoje, atualizado, ct);
                 sincronizadas++;
                 novos += r.Novos;
                 atualizados += r.Atualizados;
@@ -98,7 +132,7 @@ internal sealed partial class Sincronizacao(
 
     /// <summary>Uma conta ou cartão: lê, importa, define o saldo inicial (só na primeira vez), confere e avança o vínculo.</summary>
     private async Task<Importada> ImportarAsync(AcessoAoItem a, LeituraDoBanco leitura, Guid vinculoId, ContaResumo conta, DateOnly hoje,
-        CancellationToken ct)
+        bool apagarAusentes, CancellationToken ct)
     {
         var vinculo = await db.Vinculos.FirstAsync(v => v.Id == vinculoId, ct);
         var doBanco = leitura.Contas.FirstOrDefault(c => c.Id == vinculo.IdExterno)
@@ -120,7 +154,7 @@ internal sealed partial class Sincronizacao(
             .Select(t => new LancamentoImportado(t.Id, t.Data, ConversaoPluggy.ValorNoSistema(doBanco.Tipo, t.ValorCentavos), t.Descricao,
                 t.Status == "PENDING", t.Parcela, t.Parcelas, t.CategoriaId, t.FaturaId))
             .ToList();
-        var resumo = await importacao.ImportarAsync(conta.Id, janela, lote, ct);
+        var resumo = await importacao.ImportarAsync(conta.Id, janela, lote, ct, apagarAusentes);
 
         if (primeira)
             await contasLigadas.DefinirSaldoInicialAsync(conta.Id, SaldoInicial(cartao, doBanco, lote, leitura, historico, hoje), historico, ct);

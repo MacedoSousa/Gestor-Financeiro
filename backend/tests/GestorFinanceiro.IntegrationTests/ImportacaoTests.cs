@@ -377,4 +377,58 @@ public class ImportacaoTests(PostgresFixture pg)
         await Assert.ThrowsAsync<InvalidOperationException>(() => ImportarAsync(c, manual, Linha("tx-sintetica-1", -2_550)));
         Assert.Equal(0L, await AtivasAsync(c));
     }
+    [Fact]
+    public async Task Chave_que_ja_esta_em_outra_conta_do_casal_nao_muda_de_conta()
+    {
+        await using var c = await IniciarAsync();
+        await ImportarAsync(c, c.Corrente, Linha("tx-sintetica-1", -2_550));
+
+        var resumo = await ImportarAsync(c, c.Cartao, Linha("tx-sintetica-1", -9_999));
+
+        Assert.Equal(new ResumoDaImportacao(0, 0, 1, 0, 0, 0), resumo);
+        Assert.Equal($"{c.Corrente}|-2550", await EscalarAsync<string>(c.Banco,
+            "SELECT conta_id || '|' || valor_centavos FROM lancamentos.transacoes WHERE id_externo = 'tx-sintetica-1'"));
+    }
+
+    [Fact]
+    public async Task Chave_de_outro_casal_derruba_o_lote_sem_tocar_na_linha_dele()
+    {
+        await using var c = await IniciarAsync();
+        var outro = Guid.NewGuid();
+        var contaDele = Guid.NewGuid();
+        await using (var db = new NpgsqlConnection(c.Banco.ConexaoSuperusuario))
+        {
+            await db.OpenAsync();
+            foreach (var sql in new[]
+                     {
+                         $"INSERT INTO identidade.casais (id, nome_familia) VALUES ('{outro}', 'Outra Família')",
+                         "INSERT INTO lancamentos.transacoes (id, casal_id, conta_id, data, valor_centavos, natureza, descricao_cifrada, origem, id_externo, revisao) " +
+                         $"VALUES ('{Guid.NewGuid()}', '{outro}', '{contaDele}', '2026-11-01', -777, 'DESPESA', '\\x01', 'OPEN_FINANCE', 'tx-de-outro-casal', 'A_REVISAR')",
+                     })
+            {
+                await using var cmd = new NpgsqlCommand(sql, db);
+                await cmd.ExecuteNonQueryAsync();
+            }
+        }
+
+        await Assert.ThrowsAnyAsync<Exception>(() => ImportarAsync(c, c.Corrente, Linha("tx-nossa", -100), Linha("tx-de-outro-casal", -2_550)));
+
+        Assert.Equal(0L, await EscalarAsync<long>(c.Banco, $"SELECT count(*) FROM lancamentos.transacoes WHERE casal_id <> '{outro}'"));
+        Assert.Equal($"{contaDele}|-777|false", await EscalarAsync<string>(c.Banco,
+            "SELECT conta_id || '|' || valor_centavos || '|' || is_deleted FROM lancamentos.transacoes WHERE id_externo = 'tx-de-outro-casal'"));
+    }
+
+    [Fact]
+    public async Task Sem_apagar_ausentes_o_que_sumiu_fica()
+    {
+        await using var c = await IniciarAsync();
+        await ImportarAsync(c, c.Corrente, Linha("tx-sintetica-1", -2_550), Linha("tx-sintetica-2", -1_000));
+
+        await using var escopo = c.Api.Services.CreateAsyncScope();
+        var resumo = await escopo.ServiceProvider.GetRequiredService<IImportacaoDeLancamentos>()
+            .ImportarAsync(c.Corrente, Desde, [Linha("tx-sintetica-1", -2_550)], CancellationToken.None, apagarAusentes: false);
+
+        Assert.Equal(new ResumoDaImportacao(0, 0, 0, 0, 0, 0), resumo);
+        Assert.Equal(2L, await AtivasAsync(c));
+    }
 }

@@ -35,7 +35,12 @@ public interface IImportacaoDeLancamentos
     /// não vieram no lote são tratadas como apagadas pelo banco (confirmadas → soft delete) ou como pendentes a promover (a
     /// confirmar → par único na definitiva). Qualquer linha inválida desfaz o lote inteiro.
     /// </summary>
+    /// <param name="apagarAusentes">
+    /// Falso quando o banco pode ter mandado um lote incompleto (item ainda atualizando, por exemplo): nada some por ausência;
+    /// o resto (criar, atualizar, promover pendente com par) segue. Lote vazio com a janela cheia também nunca apaga.
+    /// </param>
     /// <exception cref="InvalidOperationException">A conta não existe no casal ou não é ligada.</exception>
     /// <exception cref="ArgumentException">Uma linha do lote é inválida (nada foi gravado).</exception>
-    Task<ResumoDaImportacao> ImportarAsync(Guid contaId, DateOnly desde, IReadOnlyList<LancamentoImportado> lote, CancellationToken ct);
+    Task<ResumoDaImportacao> ImportarAsync(Guid contaId, DateOnly desde, IReadOnlyList<LancamentoImportado> lote, CancellationToken ct,
+        bool apagarAusentes = true);
 }

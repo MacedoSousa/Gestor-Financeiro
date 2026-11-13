@@ -25,7 +25,8 @@ internal sealed class Importacao(LancamentosDbContext db, IUsuarioAtual atual, I
 
     private const int IdExternoMaximo = 100;
 
-    public async Task<ResumoDaImportacao> ImportarAsync(Guid contaId, DateOnly desde, IReadOnlyList<LancamentoImportado> lote, CancellationToken ct)
+    public async Task<ResumoDaImportacao> ImportarAsync(Guid contaId, DateOnly desde, IReadOnlyList<LancamentoImportado> lote, CancellationToken ct,
+        bool apagarAusentes = true)
     {
         ArgumentNullException.ThrowIfNull(lote);
         var casalId = atual.CasalId ?? throw new InvalidOperationException("Importação sem casal.");
@@ -40,7 +41,7 @@ internal sealed class Importacao(LancamentosDbContext db, IUsuarioAtual atual, I
             var conta = await contas.ObterAsync(contaId, ct);
             if (conta is not { Ligada: true }) throw new InvalidOperationException("A conta não existe no casal ou não é ligada.");
 
-            var resumo = await AplicarAsync(casalId, conta, desde, lote, ct);
+            var resumo = await AplicarAsync(casalId, conta, desde, lote, apagarAusentes, ct);
             await db.SaveChangesAsync(ct);
             await tx.CommitAsync(ct);
             return resumo;
@@ -53,7 +54,7 @@ internal sealed class Importacao(LancamentosDbContext db, IUsuarioAtual atual, I
     }
 
     private async Task<ResumoDaImportacao> AplicarAsync(Guid casalId, ContaResumo conta, DateOnly desde, IReadOnlyList<LancamentoImportado> lote,
-        CancellationToken ct)
+        bool apagarAusentes, CancellationToken ct)
     {
         int criados = 0, atualizados = 0, ignorados = 0, apagados = 0, promovidas = 0, semPar = 0;
         var chaves = lote.Select(l => l.IdExterno).ToArray();
@@ -104,6 +105,9 @@ internal sealed class Importacao(LancamentosDbContext db, IUsuarioAtual atual, I
         var sumidas = naJanela.Where(t => t.Confirmacao == ConfirmacaoDaTransacao.Confirmada).ToList();
         var pendentes = naJanela.Where(t => t.Confirmacao == ConfirmacaoDaTransacao.AConfirmar).ToList();
 
+        // Apagar é para sempre (D6: apagada não volta). Lote vazio com a janela cheia é resposta suspeita do banco, e quem
+        // chama pode saber que o lote veio incompleto: nesses casos nada some por ausência (revisão da E4, achado 4).
+        if (!apagarAusentes || lote.Count == 0) sumidas.Clear();
         foreach (var t in sumidas)
         {
             db.Transacoes.Remove(t); // SoftDeleteInterceptor: is_deleted = true, com auditoria.

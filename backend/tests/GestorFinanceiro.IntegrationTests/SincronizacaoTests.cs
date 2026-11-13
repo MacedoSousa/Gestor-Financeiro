@@ -496,4 +496,155 @@ public class SincronizacaoTests(PostgresFixture pg)
         Assert.True(await EscalarAsync<bool>(c.Banco,
             $"SELECT ultima_sincronizacao_em IS NULL AND ultima_tentativa_em IS NOT NULL FROM integracoes.items WHERE id = '{item}'"));
     }
+    /// <summary>
+    /// Revisão da E4 (achado 1): conta manual da Fase 1 ligada ao banco (LIGAR) com o histórico digitado. O banco traz o mesmo
+    /// histórico; a diferença com o banco aponta a duplicidade e o casal apaga os manuais (são dele). Depois disso, fecha.
+    /// </summary>
+    [Fact]
+    public async Task Ligar_conta_com_historico_manual_deixa_o_casal_limpar_o_que_veio_em_dobro()
+    {
+        await using var c = await IniciarAsync();
+        var r = await c.Ana.PostAsJsonAsync("/api/v1/contas", new
+        {
+            tipo = "CORRENTE", apelido = "Itaú da Fase 1", saldoInicialCentavos = 180_000L, saldoInicialEm = "2026-01-01",
+        });
+        Assert.Equal(HttpStatusCode.Created, r.StatusCode);
+        var conta = Guid.Parse(r.Headers.Location!.ToString().Split('/').Last());
+        var categorias = await JsonAsync(await c.Ana.GetAsync("/api/v1/categorias"));
+        var mercado = categorias.EnumerateArray().Single(k => k.GetProperty("nome").GetString() == "Mercado").GetProperty("id").GetGuid();
+        var manual = await c.Ana.PostAsJsonAsync("/api/v1/lancamentos", new
+        {
+            chaveIdempotente = Guid.NewGuid(), contaId = conta, natureza = "DESPESA", valorCentavos = 30_000L, data = "2026-11-03",
+            descricao = "Mercado", categoriaId = mercado,
+        });
+        Assert.Equal(HttpStatusCode.Created, manual.StatusCode);
+        var idManual = (await JsonAsync(manual)).GetProperty("id").GetGuid();
+
+        var itemPluggy = $"item-sintetico-{Guid.NewGuid():N}";
+        c.Pluggy.Cadastrar(IdSlot1, itemPluggy);
+        c.Pluggy.CadastrarConta(itemPluggy, Corrente);
+        c.Pluggy.CadastrarTransacao(Corrente.Id, Tx("tx-janeiro", "2026-01-05", -1_000));
+        c.Pluggy.CadastrarTransacao(Corrente.Id, Tx("tx-mercado", "2026-11-03", -30_000));
+        var rc = await c.Ana.PostAsJsonAsync("/api/v1/integracoes/conexoes", new { slot = 1, itemId = itemPluggy, codigoBanco = "341" });
+        var item = (await JsonAsync(rc)).GetProperty("items")[0].GetProperty("id").GetGuid();
+        await EsperarAsync(c.Ana.PostAsJsonAsync($"/api/v1/integracoes/items/{item}/nascimento", new
+        {
+            contas = new[] { new { idExterno = Corrente.Id, acao = "LIGAR", contaExistenteId = conta } }, aplicacoes = Array.Empty<object>(),
+        }), HttpStatusCode.NoContent);
+
+        await SincronizarOkAsync(c, item);
+        await SincronizarOkAsync(c, item);
+        // Em dobro: o banco tem 1.500,00 e o sistema, 1.500,00 − 300,00 do manual.
+        Assert.Equal(30_000, (await ContaNaTelaAsync(c, item, conta)).GetProperty("diferencaCentavos").GetInt64());
+
+        await EsperarAsync(c.Ana.DeleteAsync($"/api/v1/lancamentos/{idManual}"), HttpStatusCode.NoContent);
+        await SincronizarOkAsync(c, item);
+
+        Assert.Equal(150_000, await SaldoAsync(c, conta, "2026-11-05"));
+        Assert.Equal(JsonValueKind.Null, (await ContaNaTelaAsync(c, item, conta)).GetProperty("diferencaCentavos").ValueKind);
+    }
+
+    [Fact]
+    public async Task Reconciliacao_nao_desliga_conta_do_conjuge_de_outro_casal_nem_do_nascimento_pela_metade()
+    {
+        await using var c = await IniciarAsync();
+        var (item, _) = await NascerAsync(c, Corrente);
+        var casal = await EscalarAsync<Guid>(c.Banco, $"SELECT casal_id FROM integracoes.items WHERE id = '{item}'");
+
+        // Conta do Bruno, por um item da conexão dele.
+        var pluggyDoBruno = $"item-sintetico-{Guid.NewGuid():N}";
+        var contaDoBruno = Corrente with { Id = "conta-sintetica-do-bruno", AgenciaEConta = "0002/54321-0" };
+        c.Pluggy.Cadastrar(IdSlot2, pluggyDoBruno);
+        c.Pluggy.CadastrarConta(pluggyDoBruno, contaDoBruno);
+        var rb = await c.Bruno.PostAsJsonAsync("/api/v1/integracoes/conexoes", new { slot = 2, itemId = pluggyDoBruno, codigoBanco = "341" });
+        Assert.Equal(HttpStatusCode.Created, rb.StatusCode);
+        var itemDoBruno = (await JsonAsync(rb)).GetProperty("items")[0].GetProperty("id").GetGuid();
+        var bruno = await EscalarAsync<Guid>(c.Banco, "SELECT id FROM identidade.usuarios WHERE nome_completo = 'Bruno Teste'");
+        await EsperarAsync(c.Bruno.PostAsJsonAsync($"/api/v1/integracoes/items/{itemDoBruno}/nascimento", new
+        {
+            contas = new[] { new { idExterno = contaDoBruno.Id, acao = "CRIAR", apelido = "Itaú Corrente · Bruno", titularUsuarioId = bruno } },
+            aplicacoes = Array.Empty<object>(),
+        }), HttpStatusCode.NoContent);
+
+        // Conta ligada de outro casal, sem vínculo nenhum.
+        var outroCasal = Guid.NewGuid();
+        var contaAlheia = Guid.NewGuid();
+        await EscalarAsync<int>(c.Banco, $"INSERT INTO identidade.casais (id, nome_familia) VALUES ('{outroCasal}', 'Outra Família') RETURNING 1");
+        await EscalarAsync<int>(c.Banco,
+            "INSERT INTO contas.contas (id, casal_id, tipo, apelido, saldo_inicial_centavos, saldo_inicial_em, ligada_em) " +
+            $"VALUES ('{contaAlheia}', '{outroCasal}', 'CORRENTE', 'Alheia', 0, '2026-01-01', now()) RETURNING 1");
+
+        // Nascimento pela metade: o vínculo já aponta para um id que ainda não é conta.
+        var aindaNaoNasceu = Guid.CreateVersion7();
+        c.Pluggy.CadastrarConta(pluggyDoBruno, Cartao);
+        await EscalarAsync<int>(c.Banco,
+            "INSERT INTO integracoes.vinculos (id, casal_id, item_id, tipo, id_externo, conta_id) " +
+            $"VALUES ('{Guid.CreateVersion7()}', '{casal}', '{itemDoBruno}', 'CARTAO', '{Cartao.Id}', '{aindaNaoNasceu}') RETURNING 1");
+
+        await SincronizarOkAsync(c, item);
+
+        Assert.Equal(2L, await EscalarAsync<long>(c.Banco, $"SELECT count(*) FROM contas.contas WHERE casal_id = '{casal}' AND ligada_em IS NOT NULL"));
+        Assert.True(await EscalarAsync<bool>(c.Banco, $"SELECT ligada_em IS NOT NULL FROM contas.contas WHERE id = '{contaAlheia}'"));
+        Assert.Equal(aindaNaoNasceu, await EscalarAsync<Guid>(c.Banco, $"SELECT conta_id FROM integracoes.vinculos WHERE id_externo = '{Cartao.Id}'"));
+    }
+
+    [Fact]
+    public async Task Sincronizacoes_simultaneas_do_mesmo_item_nao_duplicam_nem_perdem_a_conferencia()
+    {
+        await using var c = await IniciarAsync();
+        var (item, itemPluggy) = await NascerAsync(c, Corrente);
+        c.Pluggy.CadastrarTransacao(Corrente.Id, Tx("tx-janeiro", "2026-01-05", -1_000));
+        c.Pluggy.CadastrarTransacao(Corrente.Id, Tx("tx-mercado", "2026-11-03", -30_000));
+
+        var primeiras = await Task.WhenAll(SincronizarAsync(c.Ana, item), SincronizarAsync(c.Ana, item));
+        Assert.All(primeiras, r => Assert.Equal(HttpStatusCode.OK, r.StatusCode));
+        var conta = await ContaAsync(c, Corrente.Id);
+        Assert.Equal(2L, await LancamentosAsync(c, conta));
+        Assert.Equal(150_000, await SaldoAsync(c, conta, "2026-11-05"));
+
+        c.Pluggy.AtualizarConta(itemPluggy, Corrente with { SaldoCentavos = 151_000 });
+        var seguintes = await Task.WhenAll(SincronizarAsync(c.Ana, item), SincronizarAsync(c.Ana, item));
+        Assert.All(seguintes, r => Assert.Equal(HttpStatusCode.OK, r.StatusCode));
+        Assert.Equal(2, await EscalarAsync<short>(c.Banco, $"SELECT diferencas_seguidas FROM integracoes.vinculos WHERE id_externo = '{Corrente.Id}'"));
+    }
+
+    /// <summary>Revisão da E4 (achado 4): com o item ainda atualizando no banco, o que sumiu do lote não é apagado.</summary>
+    [Fact]
+    public async Task Item_que_nao_esta_atualizado_no_banco_nao_apaga_o_que_sumiu()
+    {
+        await using var c = await IniciarAsync();
+        var (item, itemPluggy) = await NascerAsync(c, Corrente);
+        c.Pluggy.CadastrarTransacao(Corrente.Id, Tx("tx-janeiro", "2026-01-05", -1_000));
+        c.Pluggy.CadastrarTransacao(Corrente.Id, Tx("tx-mercado", "2026-11-03", -30_000));
+        c.Pluggy.CadastrarTransacao(Corrente.Id, Tx("tx-padaria", "2026-11-04", -2_000));
+        await SincronizarOkAsync(c, item);
+        var conta = await ContaAsync(c, Corrente.Id);
+
+        c.Pluggy.Cadastrar(IdSlot1, itemPluggy, status: "UPDATING");
+        c.Pluggy.RemoverTransacao(Corrente.Id, "tx-padaria");
+        await SincronizarOkAsync(c, item);
+        Assert.Equal(3L, await LancamentosAsync(c, conta));
+
+        c.Pluggy.Cadastrar(IdSlot1, itemPluggy);
+        await SincronizarOkAsync(c, item);
+        Assert.Equal(2L, await LancamentosAsync(c, conta));
+    }
+
+    /// <summary>Revisão da E4 (achado 4): lote vazio com a janela cheia é resposta suspeita; nada é apagado.</summary>
+    [Fact]
+    public async Task Lote_vazio_com_a_janela_cheia_nao_apaga()
+    {
+        await using var c = await IniciarAsync();
+        var (item, _) = await NascerAsync(c, Corrente);
+        c.Pluggy.CadastrarTransacao(Corrente.Id, Tx("tx-janeiro", "2026-01-05", -1_000));
+        c.Pluggy.CadastrarTransacao(Corrente.Id, Tx("tx-mercado", "2026-11-03", -30_000));
+        await SincronizarOkAsync(c, item);
+        var conta = await ContaAsync(c, Corrente.Id);
+
+        c.Pluggy.RemoverTransacao(Corrente.Id, "tx-mercado");
+        c.Pluggy.RemoverTransacao(Corrente.Id, "tx-janeiro");
+        await SincronizarOkAsync(c, item);
+
+        Assert.Equal(2L, await LancamentosAsync(c, conta));
+    }
 }

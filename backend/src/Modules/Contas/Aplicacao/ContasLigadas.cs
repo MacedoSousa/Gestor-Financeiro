@@ -76,10 +76,14 @@ internal sealed class ContasLigadas(ContasDbContext db, IUsuarioAtual atual, Ser
 
     public async Task<bool> MarcarLigadaAsync(Guid contaId, CancellationToken ct)
     {
+        // Na trava da conta, a mesma do lançar: um lançamento manual em andamento termina antes de a conta virar do banco.
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
+        await db.Database.ExecuteSqlAsync($"SELECT pg_advisory_xact_lock(hashtextextended({ChaveDeTrava.Conta(contaId)}, 0))", ct);
         var conta = await db.Contas.FirstOrDefaultAsync(c => c.Id == contaId, ct);
         if (conta is null) return false;
         conta.MarcarLigada(relogio.GetUtcNow());
         await db.SaveChangesAsync(ct);
+        await tx.CommitAsync(ct);
         return true;
     }
 
