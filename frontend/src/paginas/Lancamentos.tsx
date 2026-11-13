@@ -58,7 +58,7 @@ export function Lancamentos() {
   const contas = useContas();
   const categorias = useCategorias();
   const aRevisar = useARevisar();
-  const pendentes = (aRevisar.data ?? []).reduce((soma, g) => soma + Number(g.quantidade), 0);
+  const haARevisar = (aRevisar.data?.length ?? 0) > 0;
   const [mes, setMes] = useState(() => hojeIso().slice(0, 7));
   const [titular, setTitular] = useState<Titular>();
   const [origem, setOrigem] = useState<"MANUAL" | "OPEN_FINANCE">();
@@ -119,10 +119,9 @@ export function Lancamentos() {
         </div>
       </header>
 
-      {pendentes > 0 && (
+      {haARevisar && (
         <p className="faixa-aviso">
-          {pendentes === 1 ? "1 lançamento do banco a revisar." : `${pendentes} lançamentos do banco a revisar.`}{" "}
-          <Link to="/lancamentos/revisar">Revisar importados</Link>
+          Há lançamentos do banco a revisar: eles só entram no orçamento depois. <Link to="/lancamentos/revisar">Revisar importados</Link>
         </p>
       )}
 

@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import { Link } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { ErroDeApi } from "../api/autenticacao";
@@ -17,17 +17,21 @@ function GrupoDaRevisao({ grupo, categorias, aoRevisar }: { grupo: GrupoARevisar
   const [categoria, setCategoria] = useState(() => categoriaInicial(grupo, categorias));
   const [aplicar, setAplicar] = useState<Aplicar>("SO_ESTA");
   const [erro, setErro] = useState<string>();
+  const [semCategoria, setSemCategoria] = useState(false);
   const [tentativa, setTentativa] = useState(0);
   const [ocupado, setOcupado] = useState(false);
+  const form = useRef<HTMLFormElement>(null);
   const opcoes = categoriasDoGrupo(grupo.natureza, categorias);
+  const natureza = grupo.natureza === "RECEITA" ? "receita" : "despesa";
   const total = n(grupo.totalCentavos);
   const quantidade = Number(grupo.quantidade);
 
   async function revisar(e: FormEvent) {
     e.preventDefault();
     if (!categoria) {
-      setErro("Escolha a categoria.");
-      setTentativa((t) => t + 1);
+      // O erro fica no próprio campo (aria-invalid), e o foco vai para ele.
+      setSemCategoria(true);
+      form.current?.querySelector<HTMLSelectElement>("select")?.focus();
       return;
     }
     setOcupado(true);
@@ -48,7 +52,13 @@ function GrupoDaRevisao({ grupo, categorias, aoRevisar }: { grupo: GrupoARevisar
 
   return (
     <li className="item-linha grupo-revisao">
-      <form className="grupo-revisao-form" onSubmit={(e) => void revisar(e)} noValidate aria-label={`Revisar ${grupo.descricao}`}>
+      <form
+        ref={form}
+        className="grupo-revisao-form"
+        onSubmit={(e) => void revisar(e)}
+        noValidate
+        aria-label={`Revisar ${grupo.descricao} (${natureza})`}
+      >
         <div className="item-texto">
           <span style={{ fontWeight: 500 }}>{grupo.descricao}</span>
           <span className="cartao-nota">
@@ -65,11 +75,15 @@ function GrupoDaRevisao({ grupo, categorias, aoRevisar }: { grupo: GrupoARevisar
           <CampoSelecao
             rotulo="Categoria"
             valor={categoria}
-            aoMudar={setCategoria}
+            aoMudar={(v) => {
+              setCategoria(v);
+              setSemCategoria(false);
+            }}
+            erro={semCategoria ? "Escolha a categoria." : undefined}
             opcoes={[{ valor: "", rotulo: "Escolha a categoria" }, ...opcoes.map((c) => ({ valor: c.id, rotulo: c.nome }))]}
             nota={grupo.categoriaSugeridaId && categoria === grupo.categoriaSugeridaId ? "Sugerida pela regra ou pela categoria do banco." : undefined}
           />
-          <div className="opcoes-aplicar" role="radiogroup" aria-label="Aplicar">
+          <div className="opcoes-aplicar" role="radiogroup" aria-label={`Como aplicar a ${grupo.descricao} (${natureza})`}>
             {opcoesDeAplicar(grupo).map((o) => (
               <label key={o.valor} className="campo-check opcao-slot">
                 <input type="radio" name={`aplicar-${grupo.ids[0]}`} value={o.valor} checked={aplicar === o.valor} onChange={() => setAplicar(o.valor)} />
@@ -77,7 +91,7 @@ function GrupoDaRevisao({ grupo, categorias, aoRevisar }: { grupo: GrupoARevisar
               </label>
             ))}
           </div>
-          <button type="submit" className="botao-primario">
+          <button type="submit" className="botao-secundario">
             {ocupado ? "Revisando…" : quantidade === 1 ? "Revisar" : `Revisar os ${quantidade}`}
           </button>
         </fieldset>
@@ -152,6 +166,12 @@ function LinhaDoMapa({ entrada, categorias }: { entrada: CategoriaExterna; categ
 
   async function salvar(e: FormEvent) {
     e.preventDefault();
+    // O botão não se desabilita (o foco ficaria perdido): o envio repetido é ignorado aqui.
+    if (ocupado) return;
+    if (categoria === entrada.categoriaId) {
+      setAviso("Nada mudou.");
+      return;
+    }
     setOcupado(true);
     setErro(undefined);
     setAviso(undefined);
@@ -180,7 +200,7 @@ function LinhaDoMapa({ entrada, categorias }: { entrada: CategoriaExterna; categ
           aoMudar={setCategoria}
           opcoes={categorias.filter((c) => !c.arquivada || c.id === entrada.categoriaId).map((c) => ({ valor: c.id, rotulo: c.nome }))}
         />
-        <button type="submit" className="botao-secundario" disabled={ocupado || categoria === entrada.categoriaId}>
+        <button type="submit" className="botao-secundario" aria-busy={ocupado || undefined}>
           {ocupado ? "Salvando…" : "Salvar"}
         </button>
       </form>
@@ -194,6 +214,12 @@ export function RevisarImportados() {
   const categorias = useCategorias();
   const mapa = useMapaDoBanco();
   const [aviso, setAviso] = useState<string>();
+  const titulo = useRef<HTMLHeadingElement>(null);
+  // Revisado, o grupo some: o foco vai para o título da lista, em vez de cair no topo da página.
+  const aoRevisar = (texto: string) => {
+    setAviso(texto);
+    requestAnimationFrame(() => titulo.current?.focus());
+  };
   const carregando = grupos.isPending || categorias.isPending;
   const lista = grupos.data ?? [];
 
@@ -214,7 +240,7 @@ export function RevisarImportados() {
 
       <div className="duas-colunas">
         <section className="cartao coluna-principal" aria-labelledby="titulo-a-revisar">
-          <h2 id="titulo-a-revisar" className="cartao-titulo">
+          <h2 id="titulo-a-revisar" className="cartao-titulo" tabIndex={-1} ref={titulo}>
             A revisar
           </h2>
           {carregando && <p className="cartao-nota">Carregando…</p>}
@@ -228,7 +254,7 @@ export function RevisarImportados() {
           {categorias.data && lista.length > 0 && (
             <ul className="lista-itens">
               {lista.map((g) => (
-                <GrupoDaRevisao key={g.ids.join(",")} grupo={g} categorias={categorias.data} aoRevisar={setAviso} />
+                <GrupoDaRevisao key={g.ids.join(",")} grupo={g} categorias={categorias.data} aoRevisar={aoRevisar} />
               ))}
             </ul>
           )}
@@ -241,7 +267,8 @@ export function RevisarImportados() {
               Categorias do banco
             </h2>
             <p className="cartao-nota" style={{ margin: 0 }}>
-              O que você marcou com “sempre que o banco disser”. Só sugere: tudo continua a revisar.
+              O que você marcou com “sempre que o banco disser”. Só sugere para o que vier do banco daqui em diante; não muda o
+              que já está na lista.
             </p>
             {mapa.isError && <p className="alerta-form">{mapa.error.message}</p>}
             {mapa.data && mapa.data.length === 0 && <p className="cartao-nota">Nenhuma ainda.</p>}

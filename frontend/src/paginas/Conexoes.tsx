@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   useId,
   useRef,
@@ -78,7 +79,10 @@ function useTentativa() {
     }
   }
 
-  return { erro, tentativa, ocupado, tentar };
+  /** Um alerta velho não fica junto de um campo que mudou (o erro era do id ou do slot de antes). */
+  const limpar = useCallback(() => setErro(undefined), []);
+
+  return { erro, tentativa, ocupado, tentar, limpar };
 }
 
 /** Depois de validar no navegador: o foco vai ao primeiro campo com erro (rádio do slot, id do item, banco ou código). */
@@ -340,7 +344,7 @@ function NovaConexao({
   aoConcluir: (aviso: string) => void;
 }) {
   const acoes = useAcoesDeConexoes();
-  const { erro, tentativa, ocupado, tentar } = useTentativa();
+  const { erro, tentativa, ocupado, tentar, limpar } = useTentativa();
   const form = useRef<HTMLFormElement>(null);
   const [slot, setSlot] = useState<number | null>(null);
   const [itemId, setItemId] = useState("");
@@ -350,6 +354,7 @@ function NovaConexao({
   const [previa, setPrevia] = useState<{ chave: string; texto: string } | null>(null);
   const chaveDaPrevia = `${slot ?? ""}|${itemId.trim()}`;
   const conferido = previa?.chave === chaveDaPrevia;
+  useEffect(limpar, [chaveDaPrevia, limpar]);
   const nenhumSlot = slots.every(
     (s) =>
       avisoDoSlot({
@@ -460,13 +465,14 @@ function NovoBanco({
   aoCancelar: () => void;
 }) {
   const acoes = useAcoesDeConexoes();
-  const { erro, tentativa, ocupado, tentar } = useTentativa();
+  const { erro, tentativa, ocupado, tentar, limpar } = useTentativa();
   const form = useRef<HTMLFormElement>(null);
   const [itemId, setItemId] = useState("");
   const [banco, setBanco] = useState<EscolhaDeBanco>(ESCOLHA_DE_BANCO_VAZIA);
   const [erros, setErros] = useState<ErrosDoCadastro>({});
   const [previa, setPrevia] = useState<{ chave: string; texto: string } | null>(null);
   const conferido = previa?.chave === itemId.trim();
+  useEffect(limpar, [itemId, limpar]);
 
   useEffect(() => {
     form.current?.querySelector<HTMLInputElement>("input")?.focus();

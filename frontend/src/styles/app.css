@@ -1533,3 +1533,14 @@ select.entrada {
   flex-direction: column;
   gap: 6px;
 }
+
+/* Botão secundário desabilitado: apagado e sem cara de clicável (revisão da E5). */
+.botao-secundario:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.cartao-titulo[tabindex="-1"]:focus-visible {
+  outline: 2px solid var(--destaque-claro);
+  outline-offset: 2px;
+}
