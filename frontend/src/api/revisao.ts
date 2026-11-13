@@ -24,10 +24,13 @@ export function useMapaDoBanco() {
   });
 }
 
-/** O lote inteiro ou nada (o servidor recusa se algum já foi revisado). */
-export const revisarLote = (ids: readonly string[], categoriaId: string, aplicar: Aplicar) =>
+/** O lote inteiro ou nada. Com "sempre que o banco disser", vai junto o código que o botão mostrou. */
+export const revisarLote = (ids: readonly string[], categoriaId: string, aplicar: Aplicar, categoriaDoBanco: string | null) =>
   chamarFormulario(
-    () => api.POST("/api/v1/lancamentos/revisao", { body: { ids: [...ids], categoriaId, aplicar } }),
+    () =>
+      api.POST("/api/v1/lancamentos/revisao", {
+        body: { ids: [...ids], categoriaId, aplicar, categoriaDoBanco: aplicar === "SEMPRE_DO_BANCO" ? categoriaDoBanco : null },
+      }),
     "Não foi possível revisar. Tente de novo.",
     "Algum lançamento deste grupo já não existe. Atualize a página.",
   );

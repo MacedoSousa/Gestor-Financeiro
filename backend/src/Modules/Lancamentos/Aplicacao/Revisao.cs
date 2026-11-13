@@ -31,17 +31,15 @@ internal sealed class Revisao(LancamentosDbContext db, IUsuarioAtual atual, ICof
         return linhas
             .Select(t => (T: t, Descricao: t.LerDescricaoDoBanco(cofre)))
             .GroupBy(x => (Chave: SugestaoDeCategoria.Normalizada(x.T, cofre) ?? $"#{x.T.Id}", x.T.Natureza))
+            // Grupo maior que o lote máximo vem em partes, cada uma revisável de uma vez.
+            .SelectMany(g => g.Chunk(LoteMaximo).Select(parte => (g.Key.Natureza, Itens: parte)))
             .Select(g =>
             {
-                var itens = g.ToList();
+                var itens = g.Itens;
                 var categorias = itens.Select(x => x.T.CategoriaId).Distinct().ToList();
-                var doBanco = itens.Where(x => x.T.CategoriaExterna is not null)
-                    .GroupBy(x => x.T.CategoriaExterna!, StringComparer.Ordinal)
-                    .OrderByDescending(c => c.Count()).ThenBy(c => c.Key, StringComparer.Ordinal)
-                    .Select(c => (Codigo: c.Key, Nome: c.Select(x => x.T.CategoriaExternaNome).FirstOrDefault(n => n is not null)))
-                    .FirstOrDefault();
-                return new GrupoARevisarDto(itens[0].Descricao, Natureza(g.Key.Natureza), itens.Count, itens.Sum(x => x.T.ValorCentavos),
-                    categorias is [{ } unica] ? unica : null, doBanco.Codigo, doBanco.Nome, itens.Select(x => x.T.Id).ToList());
+                var (codigo, nome) = CodigoMaisComum(itens.Select(x => x.T));
+                return new GrupoARevisarDto(itens[0].Descricao, Natureza(g.Natureza), itens.Length, itens.Sum(x => x.T.ValorCentavos),
+                    categorias is [{ } unica] ? unica : null, codigo, nome, itens.Select(x => x.T.Id).ToList());
             })
             .OrderByDescending(g => g.Quantidade).ThenBy(g => g.TotalCentavos)
             .ToList();
@@ -65,11 +63,15 @@ internal sealed class Revisao(LancamentosDbContext db, IUsuarioAtual atual, ICof
         try
         {
             await db.Database.ExecuteSqlAsync($"SELECT pg_advisory_xact_lock(hashtextextended('lancamentos.casal:' || {casalId}::text, 0))", ct);
-            await db.Database.ExecuteSqlAsync($"SELECT pg_advisory_xact_lock(hashtextextended('lancamentos.categoria:' || {categoriaId}::text, 0))", ct);
 
+            // Trava das contas do lote (a mesma da edição e da importação), depois da do casal e antes da categoria: uma edição à
+            // mão em curso termina antes, e a linha que ela revisou é lida já REVISADA (o lote então é recusado).
+            var contasDoLote = await db.Transacoes.AsNoTracking().Where(t => ids.Contains(t.Id)).Select(t => t.ContaId).Distinct().ToListAsync(ct);
+            await TravaDeConta.TomarAsync(db, contasDoLote, ct);
             var lote = await db.Transacoes.Where(t => ids.Contains(t.Id)).ToListAsync(ct);
             if (lote.Count != ids.Count) return new ResultadoDeLancamento.NaoEncontrado();
             if (lote.Any(t => t.Revisao != RevisaoDaTransacao.ARevisar)) return new ResultadoDeLancamento.Recusado(TituloJaRevisado, 409);
+            await db.Database.ExecuteSqlAsync($"SELECT pg_advisory_xact_lock(hashtextextended('lancamentos.categoria:' || {categoriaId}::text, 0))", ct);
             var naturezas = lote.Select(t => t.Natureza).Distinct().ToList();
             if (naturezas is not [var natureza] || natureza == NaturezaDaTransacao.Transferencia)
                 return Invalido("ids", "Revise despesas e receitas em lotes separados.");
@@ -84,7 +86,7 @@ internal sealed class Revisao(LancamentosDbContext db, IUsuarioAtual atual, ICof
             var recusa = pedido.Aplicar switch
             {
                 "SEMPRE" => await GravarRegraAsync(casalId, primeiro, categoriaId, ct),
-                "SEMPRE_DO_BANCO" => await GravarMapaAsync(casalId, primeiro, categoriaId, ct),
+                "SEMPRE_DO_BANCO" => await GravarMapaAsync(casalId, lote, pedido.CategoriaDoBanco, categoriaId, ct),
                 _ => null,
             };
             if (recusa is not null) return recusa;
@@ -111,16 +113,31 @@ internal sealed class Revisao(LancamentosDbContext db, IUsuarioAtual atual, ICof
         return null;
     }
 
-    private async Task<ResultadoDeLancamento?> GravarMapaAsync(Guid casalId, Transacao primeiro, Guid categoriaId, CancellationToken ct)
+    /// <summary>
+    /// O código que a tela mostrou no botão (tem de estar no lote) ou, sem ele, o mais comum do lote, com a mesma regra da
+    /// lista. Só código de 8 dígitos que veio do banco numa linha do lote.
+    /// </summary>
+    private async Task<ResultadoDeLancamento?> GravarMapaAsync(Guid casalId, IReadOnlyList<Transacao> lote, string? pedido, Guid categoriaId,
+        CancellationToken ct)
     {
-        if (!MapaDeCategoriaExterna.CodigoValido(primeiro.CategoriaExterna))
-            return Invalido("aplicar", "O banco não mandou a categoria deste lançamento.");
-        var codigo = primeiro.CategoriaExterna!;
+        var (codigo, nome) = pedido is null
+            ? CodigoMaisComum(lote)
+            : (pedido, lote.Where(t => t.CategoriaExterna == pedido).Select(t => t.CategoriaExternaNome).FirstOrDefault(n => n is not null));
+        if (codigo is null || !MapaDeCategoriaExterna.CodigoValido(codigo) || !lote.Any(t => t.CategoriaExterna == codigo))
+            return Invalido("categoriaDoBanco", "O banco não mandou essa categoria nestes lançamentos.");
         var entrada = await db.Mapa.FirstOrDefaultAsync(m => m.CategoriaExterna == codigo, ct);
-        if (entrada is null) db.Mapa.Add(MapaDeCategoriaExterna.Criar(casalId, codigo, primeiro.CategoriaExternaNome, categoriaId));
-        else entrada.Apontar(categoriaId, primeiro.CategoriaExternaNome);
+        if (entrada is null) db.Mapa.Add(MapaDeCategoriaExterna.Criar(casalId, codigo, nome, categoriaId));
+        else entrada.Apontar(categoriaId, nome);
         return null;
     }
+
+    /// <summary>O código da Pluggy mais comum entre as linhas (empate: o menor), com o nome dele; nulo se nenhuma tem.</summary>
+    private static (string? Codigo, string? Nome) CodigoMaisComum(IEnumerable<Transacao> linhas) =>
+        linhas.Where(t => t.CategoriaExterna is not null)
+            .GroupBy(t => t.CategoriaExterna!, StringComparer.Ordinal)
+            .OrderByDescending(c => c.Count()).ThenBy(c => c.Key, StringComparer.Ordinal)
+            .Select(c => ((string?)c.Key, c.Select(t => t.CategoriaExternaNome).FirstOrDefault(n => n is not null)))
+            .FirstOrDefault();
 
     public async Task<IReadOnlyList<CategoriaExternaDto>?> MapaAsync(CancellationToken ct) =>
         atual.CasalId is null

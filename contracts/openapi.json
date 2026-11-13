@@ -6011,6 +6011,12 @@
               "null",
               "string"
             ]
+          },
+          "categoriaDoBanco": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },

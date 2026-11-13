@@ -33,7 +33,7 @@ function GrupoDaRevisao({ grupo, categorias, aoRevisar }: { grupo: GrupoARevisar
     setOcupado(true);
     setErro(undefined);
     try {
-      await revisarLote(grupo.ids, categoria, aplicar);
+      await revisarLote(grupo.ids, categoria, aplicar, grupo.categoriaDoBanco ?? null);
       aoRevisar(textoDaRevisao(quantidade));
       await Promise.all(
         ["a-revisar", "lancamentos", "categorias-externas", "visao-geral"].map((chave) => consultas.invalidateQueries({ queryKey: [chave] })),

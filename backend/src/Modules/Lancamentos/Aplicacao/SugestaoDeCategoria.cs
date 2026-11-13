@@ -25,20 +25,28 @@ internal sealed class SugestaoDeCategoria(LancamentosDbContext db, ICofre cofre)
         var mapa = (await db.Mapa.AsNoTracking().ToListAsync(ct))
             .ToDictionary(m => m.CategoriaExterna, m => m.CategoriaId, StringComparer.Ordinal);
         if (regras.Count == 0 && mapa.Count == 0) return;
-        var categorias = await db.Categorias.AsNoTracking().ToDictionaryAsync(c => c.Id, ct);
 
+        var sugestoes = new List<(Transacao T, Guid Categoria)>();
         foreach (var t in candidatas)
         {
-            Guid? sugerida = null;
             if (Normalizada(t, cofre) is { } normalizada
                 && regras.TryGetValue(Convert.ToHexString(RegraDeCategoria.Indice(casalId, normalizada, cofre)), out var daRegra))
-                sugerida = daRegra;
+                sugestoes.Add((t, daRegra));
             else if (t.CategoriaExterna is { } codigo && mapa.TryGetValue(codigo, out var doMapa))
-                sugerida = doMapa;
-
-            if (sugerida is { } id && categorias.TryGetValue(id, out var categoria) && !categoria.Arquivada && Serve(categoria, t.Natureza))
-                t.SugerirCategoria(id);
+                sugestoes.Add((t, doMapa));
         }
+        if (sugestoes.Count == 0) return;
+
+        // A trava de cada categoria sugerida (a mesma do apagar categoria), em ordem, e só então a leitura: uma categoria
+        // apagada em paralelo não recebe linha (revisão da E5, achado 2). Quem chama já tem as travas do casal e da conta.
+        var ids = sugestoes.Select(s => s.Categoria).Distinct().Order().ToList();
+        foreach (var id in ids)
+            await db.Database.ExecuteSqlAsync($"SELECT pg_advisory_xact_lock(hashtextextended('lancamentos.categoria:' || {id}::text, 0))", ct);
+        var categorias = await db.Categorias.AsNoTracking().Where(c => ids.Contains(c.Id)).ToDictionaryAsync(c => c.Id, ct);
+
+        foreach (var (t, id) in sugestoes)
+            if (categorias.TryGetValue(id, out var categoria) && !categoria.Arquivada && Serve(categoria, t.Natureza))
+                t.SugerirCategoria(id);
     }
 
     /// <summary>A descrição do banco normalizada (a mesma da pendente, Tarefa 4.3); nula sem descrição.</summary>

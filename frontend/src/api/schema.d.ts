@@ -1676,6 +1676,7 @@ export interface components {
             /** Format: uuid */
             categoriaId: null | string;
             aplicar: null | string;
+            categoriaDoBanco?: null | string;
         };
         PedidoPendenteDto: {
             /** Format: uuid */

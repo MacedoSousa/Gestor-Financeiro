@@ -389,4 +389,114 @@ public class RevisaoTests(PostgresFixture pg)
         Assert.Equal(HttpStatusCode.BadRequest,
             (await c.Cliente.PutAsJsonAsync($"/api/v1/lancamentos/categorias-externas/{id}", new { categoriaId = Guid.NewGuid() })).StatusCode);
     }
+
+    // ------------------------------------------------------------------ Revisão da E5, rodada 1
+
+    /// <summary>
+    /// O botão grava o código que a tela mostrou (o mais comum do grupo), não o do primeiro id; código que não está no lote é
+    /// recusado.
+    /// </summary>
+    [Fact]
+    public async Task Sempre_que_o_banco_disser_grava_o_codigo_que_a_tela_mostrou()
+    {
+        await using var c = await IniciarAsync();
+        await ImportarAsync(c, Linha("tx-1", -1_000, "PADARIA 1", CodigoPadaria, "Padaria"), Linha("tx-2", -2_000, "PADARIA 2", CodigoMercado, "Supermercado"),
+            Linha("tx-3", -3_000, "PADARIA 3", CodigoMercado, "Supermercado"));
+        var ids = new[] { await IdAsync(c, "tx-1"), await IdAsync(c, "tx-2"), await IdAsync(c, "tx-3") };
+        var mercado = await CategoriaAsync(c.Cliente, "Mercado");
+
+        var foraDoLote = await c.Cliente.PostAsJsonAsync("/api/v1/lancamentos/revisao",
+            new { ids, categoriaId = mercado, aplicar = "SEMPRE_DO_BANCO", categoriaDoBanco = "09090909" });
+        Assert.Equal(HttpStatusCode.BadRequest, foraDoLote.StatusCode);
+        Assert.Equal(0L, await MapaAsync(c));
+
+        var r = await c.Cliente.PostAsJsonAsync("/api/v1/lancamentos/revisao",
+            new { ids, categoriaId = mercado, aplicar = "SEMPRE_DO_BANCO", categoriaDoBanco = CodigoMercado });
+        Assert.Equal(HttpStatusCode.NoContent, r.StatusCode);
+        Assert.Equal($"{CodigoMercado}|Supermercado", await EscalarAsync<string>(c.Banco,
+            "SELECT categoria_externa || '|' || nome_externo FROM lancamentos.mapa_categoria_externa"));
+    }
+
+    /// <summary>Sem o código no pedido, vale o mais comum do lote (o mesmo que a tela mostra).</summary>
+    [Fact]
+    public async Task Sem_o_codigo_no_pedido_vale_o_mais_comum_do_lote()
+    {
+        await using var c = await IniciarAsync();
+        await ImportarAsync(c, Linha("tx-1", -1_000, "PADARIA 1", null, null), Linha("tx-2", -2_000, "PADARIA 2", CodigoMercado, "Supermercado"));
+
+        await RevisarOkAsync(c, [await IdAsync(c, "tx-1"), await IdAsync(c, "tx-2")], await CategoriaAsync(c.Cliente, "Mercado"), "SEMPRE_DO_BANCO");
+
+        Assert.Equal(CodigoMercado, await EscalarAsync<string>(c.Banco, "SELECT categoria_externa FROM lancamentos.mapa_categoria_externa"));
+    }
+
+    /// <summary>
+    /// Nunca mexe no que o casal revisou: a pendente revisada que vira definitiva nova leva a categoria do casal, mesmo com
+    /// uma regra que sugeriria outra.
+    /// </summary>
+    [Fact]
+    public async Task Pendente_revisada_promovida_fica_com_a_categoria_do_casal_e_nao_com_a_sugestao()
+    {
+        await using var c = await IniciarAsync();
+        var restaurantes = await CategoriaAsync(c.Cliente, "Restaurantes");
+        var mercado = await CategoriaAsync(c.Cliente, "Mercado");
+        await ImportarAsync(c, Linha("tx-regra", -500, "PADARIA DO ZE"));
+        await RevisarOkAsync(c, [await IdAsync(c, "tx-regra")], restaurantes, "SEMPRE");
+        await ImportarAsync(c, new LancamentoImportado("tx-pendente", new DateOnly(2026, 11, 3), -2_550, "PADARIA DO ZE", true, null, null, null, null));
+        Assert.Equal("Restaurantes|A_REVISAR", await EstadoAsync(c, "tx-pendente"));
+        await RevisarOkAsync(c, [await IdAsync(c, "tx-pendente")], mercado, "SO_ESTA");
+
+        // O banco troca a pendente pela definitiva (outro id), sem mandar a pendente.
+        await using (var escopo = c.Api.Services.CreateAsyncScope())
+            await escopo.ServiceProvider.GetRequiredService<IImportacaoDeLancamentos>().ImportarAsync(c.Corrente, Desde,
+                [Linha("tx-regra", -500, "PADARIA DO ZE"), new LancamentoImportado("tx-definitiva", new DateOnly(2026, 11, 4), -2_550, "PADARIA DO ZE", false, null, null, null, null)],
+                apagarAusentes: true, CancellationToken.None);
+
+        Assert.Equal("Mercado|REVISADA", await EstadoAsync(c, "tx-definitiva"));
+    }
+
+    /// <summary>Grupo maior que o lote máximo vem em partes de até 500, cada uma revisável.</summary>
+    [Fact]
+    public async Task Grupo_grande_vem_em_lotes_de_ate_500()
+    {
+        await using var c = await IniciarAsync();
+        await ImportarAsync(c, [.. Enumerable.Range(1, 501).Select(i => Linha($"tx-{i}", -100 - i, $"PADARIA {i}"))]);
+
+        var grupos = (await JsonAsync(await c.Cliente.GetAsync("/api/v1/lancamentos/a-revisar"))).EnumerateArray()
+            .Select(g => g.GetProperty("ids").GetArrayLength()).Order().ToList();
+
+        Assert.Equal([1, 500], grupos);
+    }
+
+    /// <summary>Isolamento entre casais nas rotas da revisão e na sugestão (filtros Casal e SoftDelete).</summary>
+    [Fact]
+    public async Task Revisao_de_outro_casal_nao_aparece_nem_e_alterada_nem_sugere()
+    {
+        await using var c = await IniciarAsync();
+        var outro = Guid.NewGuid();
+        var categoriaAlheia = Guid.NewGuid();
+        var linhaAlheia = Guid.NewGuid();
+        var mapaAlheio = Guid.NewGuid();
+        await EscalarAsync<int>(c.Banco, $"INSERT INTO identidade.casais (id, nome_familia) VALUES ('{outro}', 'Outra Família') RETURNING 1");
+        await EscalarAsync<int>(c.Banco,
+            $"INSERT INTO lancamentos.categorias (id, casal_id, nome, tipo) VALUES ('{categoriaAlheia}', '{outro}', 'Alheia', 'DESPESA') RETURNING 1");
+        await EscalarAsync<int>(c.Banco,
+            "INSERT INTO lancamentos.transacoes (id, casal_id, conta_id, data, valor_centavos, natureza, descricao_cifrada, origem, id_externo, revisao, categoria_externa) " +
+            $"VALUES ('{linhaAlheia}', '{outro}', '{Guid.NewGuid()}', '2026-11-03', -777, 'DESPESA', '\\x01', 'OPEN_FINANCE', 'tx-alheia', 'A_REVISAR', '{CodigoPadaria}') RETURNING 1");
+        await EscalarAsync<int>(c.Banco,
+            "INSERT INTO lancamentos.mapa_categoria_externa (id, casal_id, categoria_externa, categoria_id) " +
+            $"VALUES ('{mapaAlheio}', '{outro}', '{CodigoPadaria}', '{categoriaAlheia}') RETURNING 1");
+        await ImportarAsync(c, Linha("tx-1", -1_000, "PADARIA 1"));
+
+        // A sugestão não usa o mapa do outro casal.
+        Assert.Equal("-|A_REVISAR", await EstadoAsync(c, "tx-1"));
+        var grupos = (await JsonAsync(await c.Cliente.GetAsync("/api/v1/lancamentos/a-revisar"))).EnumerateArray().ToList();
+        Assert.Equal([await IdAsync(c, "tx-1")], grupos.SelectMany(g => g.GetProperty("ids").EnumerateArray().Select(x => x.GetGuid())).ToList());
+        Assert.Empty((await JsonAsync(await c.Cliente.GetAsync("/api/v1/lancamentos/categorias-externas"))).EnumerateArray());
+
+        Assert.Equal(HttpStatusCode.NotFound, (await RevisarAsync(c, [linhaAlheia], await CategoriaAsync(c.Cliente, "Mercado"), "SO_ESTA")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await c.Cliente.PutAsJsonAsync($"/api/v1/lancamentos/categorias-externas/{mapaAlheio}",
+            new { categoriaId = await CategoriaAsync(c.Cliente, "Mercado") })).StatusCode);
+        Assert.Equal($"A_REVISAR|{categoriaAlheia}", await EscalarAsync<string>(c.Banco,
+            $"SELECT t.revisao || '|' || m.categoria_id FROM lancamentos.transacoes t, lancamentos.mapa_categoria_externa m WHERE t.id = '{linhaAlheia}' AND m.id = '{mapaAlheio}'"));
+    }
 }

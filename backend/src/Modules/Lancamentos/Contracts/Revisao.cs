@@ -17,9 +17,13 @@ public sealed record GrupoARevisarDto(string Descricao, string Natureza, int Qua
 /// <param name="Ids">De 1 a 500 lançamentos "a revisar" do casal, todos da mesma natureza.</param>
 /// <param name="Aplicar">
 /// SO_ESTA: só estes. SEMPRE: também cria ou atualiza a regra pela descrição do banco do primeiro. SEMPRE_DO_BANCO: também
-/// grava o mapa pela categoria da Pluggy do primeiro (o único caminho que grava o mapa, decisão 2).
+/// grava o mapa pela categoria da Pluggy (o único caminho que grava o mapa, decisão 2).
 /// </param>
-public sealed record PedidoDeRevisaoDto(IReadOnlyList<Guid>? Ids, Guid? CategoriaId, string? Aplicar);
+/// <param name="CategoriaDoBanco">
+/// Com SEMPRE_DO_BANCO: o código que a tela mostrou no botão (tem de estar no lote). Sem ele, vale o mais comum do lote,
+/// como na lista.
+/// </param>
+public sealed record PedidoDeRevisaoDto(IReadOnlyList<Guid>? Ids, Guid? CategoriaId, string? Aplicar, string? CategoriaDoBanco = null);
 
 /// <summary>Uma entrada do mapa "sempre que o banco disser &lt;categoria&gt;" (decisão 2), editável na tela de revisão.</summary>
 public sealed record CategoriaExternaDto(Guid Id, string CategoriaExterna, string? Nome, Guid CategoriaId);
