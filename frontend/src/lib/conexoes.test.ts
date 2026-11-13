@@ -10,6 +10,8 @@ import {
   separarConexoes,
   textoDaDiferenca,
   textoDaFatura,
+  textoDoGrupoNoBanco,
+  textoDoPatrimonioDosInvestimentos,
   textoDaSincronizacao,
   textoDoConsentimento,
   textoDoHistorico,
@@ -198,6 +200,29 @@ describe("textos da sincronização (Tarefa 4.5)", () => {
     expect(textoDaDiferenca(1_000)).toEqual({ antes: "O banco mostra ", valor: "R$\u00a010,00", depois: " a mais que o sistema" });
     expect(textoDaDiferenca(-250_050)).toEqual({ antes: "O banco mostra ", valor: "R$\u00a02.500,50", depois: " a menos que o sistema" });
     expect(textoDaDiferenca(null)).toBeNull();
+  });
+
+  it("grupo de investimento: valor no banco só quando difere do sistema (D21)", () => {
+    expect(textoDoGrupoNoBanco(2_510_050, 10_000)).toEqual({
+      antes: "No banco hoje: ",
+      valor: "R$\u00a025.100,50",
+      depois: " · o rendimento entra no sistema na próxima etapa",
+    });
+    expect(textoDoGrupoNoBanco(2_500_050, null)).toBeNull();
+    expect(textoDoGrupoNoBanco(null, null)).toBeNull();
+    expect(textoDoGrupoNoBanco(null, 10_000)).toBeNull();
+  });
+
+  it("patrimônio: investimentos contam a partir da confirmação do grupo (D21)", () => {
+    const conta = (tipo: string, ligada: boolean, saldoInicialEm: string) => ({ tipo, ligada, saldoInicialEm });
+    expect(textoDoPatrimonioDosInvestimentos([conta("CORRENTE", true, "2026-01-01")])).toBeNull();
+    expect(textoDoPatrimonioDosInvestimentos([conta("INVESTIMENTO", false, "2026-01-01")])).toBeNull();
+    expect(textoDoPatrimonioDosInvestimentos([conta("INVESTIMENTO", true, "2026-11-12"), conta("INVESTIMENTO", true, "2026-11-12")])).toBe(
+      "Investimentos contam a partir de 12/11/2026 (data da confirmação).",
+    );
+    expect(textoDoPatrimonioDosInvestimentos([conta("INVESTIMENTO", true, "2026-11-13"), conta("INVESTIMENTO", true, "2026-11-12")])).toBe(
+      "Investimentos contam a partir de 12/11/2026 e 13/11/2026 (data da confirmação de cada grupo).",
+    );
   });
 
   it("fatura do banco diferente: mês por extenso do vencimento", () => {

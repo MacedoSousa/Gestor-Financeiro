@@ -10,6 +10,7 @@ export type Slot = components["schemas"]["SlotDto"];
 export type Banco = components["schemas"]["BancoDto"];
 export type ContaDoItem = components["schemas"]["ContaDoItemDto"];
 export type ResultadoDaSincronizacao = components["schemas"]["SincronizacaoDto"];
+export type GrupoNoBanco = components["schemas"]["GrupoNoBancoDto"];
 type CorpoDoBanco = { codigoBanco: string; banco: string | null };
 
 const NAO_EXISTE = "Esta conexão já não existe. Atualize a página.";
@@ -19,6 +20,16 @@ export function useConexoes() {
     queryKey: ["conexoes"],
     retry: false,
     queryFn: () => chamarFormulario(() => api.GET("/api/v1/integracoes/conexoes"), "Não foi possível carregar as conexões."),
+  });
+}
+
+/** Grupos de investimento e o valor no banco na última sincronização (D21); só informa, nada é lançado. */
+export function useGruposDeInvestimento() {
+  return useQuery({
+    queryKey: ["grupos-de-investimento"],
+    retry: false,
+    queryFn: () =>
+      chamarFormulario(() => api.GET("/api/v1/integracoes/grupos-de-investimento"), "Não foi possível conferir os investimentos com o banco."),
   });
 }
 
@@ -62,7 +73,7 @@ export async function sincronizarItem(qc: ReturnType<typeof useQueryClient>, ite
     );
   } finally {
     await Promise.all(
-      ["conexoes", "contas", "saldos", "lancamentos", "visao-geral"].map((chave) => qc.invalidateQueries({ queryKey: [chave] })),
+      ["conexoes", "contas", "saldos", "lancamentos", "visao-geral", "grupos-de-investimento"].map((chave) => qc.invalidateQueries({ queryKey: [chave] })),
     );
   }
 }

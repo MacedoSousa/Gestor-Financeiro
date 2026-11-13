@@ -31,6 +31,7 @@ import {
   pedidoDoBanco,
   separarConexoes,
   textoDaDiferenca,
+  textoDoGrupoNoBanco,
   textoDaFatura,
   textoDaSincronizacao,
   textoDoConsentimento,
@@ -195,10 +196,10 @@ function EstadoDoBanco({
   );
 }
 
-/** Aviso de diferença com o banco: só o valor na fonte de número. */
-function Frase({ frase }: { frase: FraseComValor }) {
+/** Aviso de diferença com o banco: só o valor na fonte de número. "Neutra" informa sem alarmar (grupo de investimento, D21). */
+function Frase({ frase, neutra = false }: { frase: FraseComValor; neutra?: boolean }) {
   return (
-    <span className="cartao-nota tom-alerta" style={{ display: "block" }}>
+    <span className={neutra ? "cartao-nota" : "cartao-nota tom-alerta"} style={{ display: "block" }}>
       {frase.antes}
       <span className="num">{frase.valor}</span>
       {frase.depois}
@@ -219,6 +220,14 @@ function ContasDoBanco({ contas }: { contas: readonly ContaDoItem[] }) {
         const diferenca = textoDaDiferenca(
           c.diferencaCentavos == null ? null : n(c.diferencaCentavos),
         );
+        // Grupo de investimento (D21): sem histórico; mostra o valor no banco quando difere do sistema.
+        const grupo = c.tipo === "INVESTIMENTO";
+        const noBanco = grupo
+          ? textoDoGrupoNoBanco(
+              c.valorNoBancoCentavos == null ? null : n(c.valorNoBancoCentavos),
+              c.diferencaCentavos == null ? null : n(c.diferencaCentavos),
+            )
+          : null;
         const faturas = c.faturasDivergentes.map((f) => ({
           chave: f.vencimento,
           frase: textoDaFatura({
@@ -234,9 +243,9 @@ function ContasDoBanco({ contas }: { contas: readonly ContaDoItem[] }) {
             )}
             <span className="texto-suave">
               {" "}
-              · {historico ?? "aguardando a primeira sincronização"}
+              · {grupo ? "grupo de investimento" : historico ?? "aguardando a primeira sincronização"}
             </span>
-            {diferenca && <Frase frase={diferenca} />}
+            {grupo ? noBanco && <Frase frase={noBanco} neutra /> : diferenca && <Frase frase={diferenca} />}
             {faturas.map((f) => (
               <Frase key={f.chave} frase={f.frase} />
             ))}

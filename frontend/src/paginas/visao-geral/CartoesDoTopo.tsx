@@ -5,7 +5,7 @@ import type { AindaDaParaGastar, Secao, VisaoGeral } from "../../api/painel";
 import { formatarReais, formatarReaisInteiros } from "../../lib/dinheiro";
 import { ErroDeSecao } from "./Secao";
 
-type Props = { visao: VisaoGeral; tentando: boolean; aoTentarDeNovo: () => void };
+type Props = { visao: VisaoGeral; tentando: boolean; aoTentarDeNovo: () => void; notaDosInvestimentos?: string | null };
 
 type Conteudo = { valor: ReactNode; nota: ReactNode; tom?: "alerta" | "positivo"; alerta?: ReactNode };
 
@@ -78,7 +78,7 @@ function conteudoDoGastar(d: AindaDaParaGastar): Conteudo {
   };
 }
 
-export function CartoesDoTopo({ visao, tentando, aoTentarDeNovo }: Props) {
+export function CartoesDoTopo({ visao, tentando, aoTentarDeNovo, notaDosInvestimentos }: Props) {
   const base = { tentando, aoTentarDeNovo };
   return (
     <section className="grade-kpi" aria-label="Resumo do mês">
@@ -159,6 +159,12 @@ export function CartoesDoTopo({ visao, tentando, aoTentarDeNovo }: Props) {
                   </span>
                 )}
                 Não inclui dívidas fora do cartão (empréstimo, consórcio)
+                {notaDosInvestimentos && (
+                  <>
+                    <br />
+                    {notaDosInvestimentos}
+                  </>
+                )}
               </>
             ),
           };

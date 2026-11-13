@@ -7,6 +7,8 @@ import { hojeIso } from "../api/lancamentos";
 import { centavosDeTexto, formatarReais, textoDeCentavos } from "../lib/dinheiro";
 import { Alerta, Campo, CampoSelecao } from "./Campo";
 import { seloDaConta } from "../lib/nascimento";
+import { useGruposDeInvestimento } from "../api/conexoes";
+import { textoDoGrupoNoBanco, type FraseComValor } from "../lib/conexoes";
 
 const formatarData = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
 
@@ -61,7 +63,17 @@ const formularioDe = (c: Conta): Formulario => ({
 
 const dia = (texto: string) => (/^\d{1,2}$/.test(texto) && Number(texto) >= 1 && Number(texto) <= 31 ? Number(texto) : null);
 
-function ContaNaLista({ conta, saldo, aoEditar }: { conta: Conta; saldo?: { saldoCentavos: number | string; faturaAberta?: Fatura | null; faturaFechada?: Fatura | null }; aoEditar: () => void }) {
+function ContaNaLista({
+  conta,
+  saldo,
+  noBanco,
+  aoEditar,
+}: {
+  conta: Conta;
+  saldo?: { saldoCentavos: number | string; faturaAberta?: Fatura | null; faturaFechada?: Fatura | null };
+  noBanco?: FraseComValor | null;
+  aoEditar: () => void;
+}) {
   const dados = [conta.instituicao, conta.agenciaMascarada && `Ag. ${conta.agenciaMascarada}`, conta.numeroMascarado && `C/C ${conta.numeroMascarado}`]
     .filter(Boolean)
     .join(" · ");
@@ -82,6 +94,13 @@ function ContaNaLista({ conta, saldo, aoEditar }: { conta: Conta; saldo?: { sald
           {rotuloDoTipo(conta.tipo)} · {conta.titular?.apelido ?? "Conjunta"}
           {dados && ` · ${dados}`}
         </span>
+        {noBanco && (
+          <span className="cartao-nota">
+            {noBanco.antes}
+            <span className="num">{noBanco.valor}</span>
+            {noBanco.depois}
+          </span>
+        )}
         {saldo?.faturaAberta && <FaturaLinha rotulo="Fatura aberta" fatura={saldo.faturaAberta} />}
         {saldo?.faturaFechada && <FaturaLinha rotulo="Fatura fechada" fatura={saldo.faturaFechada} />}
       </div>
@@ -111,6 +130,17 @@ export function Contas() {
   const eu = useEu();
   const contas = useContas();
   const saldos = useSaldos();
+  // Só informa (D21): sem a conferência, a lista segue sem a linha "No banco hoje".
+  const grupos = useGruposDeInvestimento();
+  const noBancoPorConta = new Map(
+    (grupos.data ?? []).map((g) => [
+      g.contaId,
+      textoDoGrupoNoBanco(
+        g.valorNoBancoCentavos == null ? null : n(g.valorNoBancoCentavos),
+        g.diferencaCentavos == null ? null : n(g.diferencaCentavos),
+      ),
+    ]),
+  );
   const vazio = contas.data?.length === 0;
   const [editando, setEditando] = useState<string | null>(null);
   const [form, setForm] = useState<Formulario | null>(null);
@@ -212,7 +242,13 @@ export function Contas() {
           {contas.data && contas.data.length > 0 && (
             <ul className="lista-itens">
               {contas.data.map((c) => (
-                <ContaNaLista key={c.id} conta={c} saldo={saldoPorConta.get(c.id)} aoEditar={() => abrir(c)} />
+                <ContaNaLista
+                  key={c.id}
+                  conta={c}
+                  saldo={saldoPorConta.get(c.id)}
+                  noBanco={noBancoPorConta.get(c.id)}
+                  aoEditar={() => abrir(c)}
+                />
               ))}
             </ul>
           )}
