@@ -23,8 +23,14 @@ export type LinhaDeConta = {
 };
 
 /** Uma aplicação; `grupo` vazio = fica aguardando grupo (não vira conta agora). */
-/** saldoCentavos nulo = o banco não informou um valor válido (D21). */
-export type LinhaDeAplicacao = { idExterno: string; nome: string; tipo: string; saldoCentavos: number | null; grupo: string };
+/** saldoCentavos nulo = o banco não informou um valor válido (D21). situacao: ATIVA, PENDENTE ou DESCONHECIDA (D22). */
+export type LinhaDeAplicacao = { idExterno: string; nome: string; tipo: string; saldoCentavos: number | null; situacao: string; grupo: string };
+
+/** Aplicação que não vai para grupo (D22): resgatada no banco, ou sem a situação informada. Só aparece, com o motivo. */
+export type AplicacaoForaDeGrupo = { idExterno: string; nome: string; tipo: string; motivo: string };
+
+/** Só ATIVA e PENDENTE podem ir para grupo (D22). */
+const vaiParaGrupo = (situacao: string) => situacao === "ATIVA" || situacao === "PENDENTE";
 
 export const APELIDO_MAXIMO = 60;
 
@@ -48,10 +54,11 @@ export function resumoDaDescoberta(d: Pick<Descoberta, "banco" | "contas" | "apl
   const novas = d.contas.filter((c) => !c.jaVemDe);
   const cartoes = novas.filter((c) => c.tipo === "CARTAO").length;
   const contas = novas.length - cartoes;
+  const investimentos = d.aplicacoes.filter((a) => vaiParaGrupo(a.situacao)).length;
   const partes = [
     contas > 0 ? plural(contas, "conta", "contas") : null,
     cartoes > 0 ? plural(cartoes, "cartão", "cartões") : null,
-    d.aplicacoes.length > 0 ? plural(d.aplicacoes.length, "investimento", "investimentos") : null,
+    investimentos > 0 ? plural(investimentos, "investimento", "investimentos") : null,
   ].filter((p): p is string => p !== null);
   return partes.length === 0
     ? `Nada novo no ${d.banco}: o que o banco mostra já está no sistema.`
@@ -78,15 +85,30 @@ export function linhasIniciais(d: Pick<Descoberta, "contas">): LinhaDeConta[] {
 
 /** As aplicações começam todas num grupo com o nome do banco; a pessoa separa por meta ("CDBs Casa", "CDBs Carro"). */
 export function linhasDeAplicacao(d: Pick<Descoberta, "banco" | "aplicacoes">): LinhaDeAplicacao[] {
-  return d.aplicacoes.map((a) => ({
-    idExterno: a.idExterno,
-    nome: a.nome,
-    tipo: a.tipo,
-    saldoCentavos: a.saldoCentavos == null ? null : Number(a.saldoCentavos),
-    grupo: `Investimentos ${d.banco}`.slice(0, APELIDO_MAXIMO),
-  }));
+  return d.aplicacoes
+    .filter((a) => vaiParaGrupo(a.situacao))
+    .map((a) => ({
+      idExterno: a.idExterno,
+      nome: a.nome,
+      tipo: a.tipo,
+      saldoCentavos: a.saldoCentavos == null ? null : Number(a.saldoCentavos),
+      situacao: a.situacao,
+      grupo: `Investimentos ${d.banco}`.slice(0, APELIDO_MAXIMO),
+    }));
 }
 
+/** As que não vão para grupo (D22), com o motivo: não entram no pedido. */
+export function aplicacoesForaDeGrupo(d: Pick<Descoberta, "aplicacoes">): AplicacaoForaDeGrupo[] {
+  return d.aplicacoes
+    .filter((a) => !vaiParaGrupo(a.situacao))
+    .map((a) => ({
+      idExterno: a.idExterno,
+      nome: a.nome,
+      tipo: a.tipo,
+      motivo:
+        a.situacao === "RESGATADA" ? "resgatada no banco; não entra em grupo" : "o banco não informou a situação; fica aguardando, sem grupo",
+    }));
+}
 /** Troca o titular; se o apelido ainda é o sugerido (para o titular antigo), troca junto. */
 export function trocarTitular(linha: LinhaDeConta, titular: string, banco: string, nomes: Readonly<Record<string, string>>): LinhaDeConta {
   const sugeridoAntes = apelidoSugerido(banco, linha.tipo, linha.titular ? (nomes[linha.titular] ?? null) : null);

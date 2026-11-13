@@ -449,6 +449,7 @@ public class NascimentoTests(PostgresFixture pg)
             real.DefinirSaldoInicialAsync(contaId, centavos, em, ct);
 
         public Task<ResultadoDoDesligar> DesligarAsync(Guid contaId, CancellationToken ct) => real.DesligarAsync(contaId, ct);
+        public Task<bool> ArquivarAsync(Guid contaId, CancellationToken ct) => real.ArquivarAsync(contaId, ct);
     }
 
     [Fact]
@@ -509,6 +510,58 @@ public class NascimentoTests(PostgresFixture pg)
 
         Assert.Equal("Reserva|2000000", await EscalarAsync<string>(c.Banco,
             "SELECT apelido || '|' || saldo_inicial_centavos FROM contas.contas WHERE tipo = 'INVESTIMENTO'"));
+    }
+
+    /// <summary>
+    /// D22: só aplicação ACTIVE entra no saldo inicial do grupo. A resgatada aparece na descoberta como RESGATADA e não
+    /// pode ir para grupo; a pendente pode, mas fica fora do saldo.
+    /// </summary>
+    [Fact]
+    public async Task Resgatada_nao_entra_no_nascimento()
+    {
+        await using var c = await IniciarAsync();
+        var (item, itemPluggy) = await ConectarAsync(c, c.Ana, 1);
+        c.Pluggy.CadastrarInvestimento(itemPluggy, new InvestimentoPluggy("cdb-sintetico-1", "FIXED_INCOME", "CDB", "CDB 110%", 2_000_000, "ACTIVE"));
+        c.Pluggy.CadastrarInvestimento(itemPluggy, new InvestimentoPluggy("cdb-sintetico-2", "FIXED_INCOME", "CDB", "CDB antigo", 300_000, "TOTAL_WITHDRAWAL"));
+        c.Pluggy.CadastrarInvestimento(itemPluggy, new InvestimentoPluggy("cdb-sintetico-3", "FIXED_INCOME", "CDB", "CDB novo", 100_000, "PENDING"));
+
+        var aplicacoes = (await DescobertaAsync(c.Ana, item)).GetProperty("aplicacoes").EnumerateArray()
+            .ToDictionary(a => a.GetProperty("idExterno").GetString()!, a => a.GetProperty("situacao").GetString());
+        Assert.Equal("ATIVA", aplicacoes["cdb-sintetico-1"]);
+        Assert.Equal("RESGATADA", aplicacoes["cdb-sintetico-2"]);
+        Assert.Equal("PENDENTE", aplicacoes["cdb-sintetico-3"]);
+
+        var recusa = await NascerAsync(c.Ana, item, [], [Grupo("cdb-sintetico-1", "Reserva"), Grupo("cdb-sintetico-2", "Reserva")]);
+        Assert.Equal(HttpStatusCode.BadRequest, recusa.StatusCode);
+        Assert.Equal(0L, await EscalarAsync<long>(c.Banco, "SELECT count(*) FROM contas.contas WHERE tipo = 'INVESTIMENTO'"));
+
+        await EsperarAsync(NascerAsync(c.Ana, item, [], [Grupo("cdb-sintetico-1", "Reserva"), Grupo("cdb-sintetico-3", "Reserva")]),
+            HttpStatusCode.NoContent);
+        Assert.Equal("Reserva|2000000", await EscalarAsync<string>(c.Banco,
+            "SELECT apelido || '|' || saldo_inicial_centavos FROM contas.contas WHERE tipo = 'INVESTIMENTO'"));
+        // A resgatada não fica aguardando grupo.
+        Assert.Equal(0L, await EscalarAsync<long>(c.Banco, "SELECT count(*) FROM integracoes.vinculos WHERE id_externo = 'cdb-sintetico-2'"));
+    }
+
+    /// <summary>
+    /// Revisão da D22 (Deveria 1): sem o status do banco, a aplicação aparece como DESCONHECIDA e não pode ir para grupo
+    /// (não nasce grupo com saldo 0 por falta de informação); sem grupo, fica aguardando.
+    /// </summary>
+    [Fact]
+    public async Task Aplicacao_sem_status_nao_entra_em_grupo()
+    {
+        await using var c = await IniciarAsync();
+        var (item, itemPluggy) = await ConectarAsync(c, c.Ana, 1);
+        c.Pluggy.CadastrarInvestimento(itemPluggy, new InvestimentoPluggy("cdb-sintetico-1", "FIXED_INCOME", "CDB", "CDB", 2_000_000, null));
+
+        var aplicacao = (await DescobertaAsync(c.Ana, item)).GetProperty("aplicacoes").EnumerateArray().Single();
+        Assert.Equal("DESCONHECIDA", aplicacao.GetProperty("situacao").GetString());
+        Assert.Equal(HttpStatusCode.BadRequest, (await NascerAsync(c.Ana, item, [], [Grupo("cdb-sintetico-1", "Reserva")])).StatusCode);
+
+        await EsperarAsync(NascerAsync(c.Ana, item, [], [Grupo("cdb-sintetico-1", null)]), HttpStatusCode.NoContent);
+        Assert.Equal(0L, await EscalarAsync<long>(c.Banco, "SELECT count(*) FROM contas.contas WHERE tipo = 'INVESTIMENTO'"));
+        Assert.Equal(1L, await EscalarAsync<long>(c.Banco,
+            "SELECT count(*) FROM integracoes.vinculos WHERE id_externo = 'cdb-sintetico-1' AND conta_id IS NULL"));
     }
 
     [Fact]
@@ -813,6 +866,7 @@ public class NascimentoTests(PostgresFixture pg)
             real.DefinirSaldoInicialAsync(contaId, centavos, em, ct);
 
         public Task<ResultadoDoDesligar> DesligarAsync(Guid contaId, CancellationToken ct) => real.DesligarAsync(contaId, ct);
+        public Task<bool> ArquivarAsync(Guid contaId, CancellationToken ct) => real.ArquivarAsync(contaId, ct);
     }
 
     private static async Task<Guid> CorrenteManualAsync(Ctx c, string apelido = "Minha corrente")
@@ -1077,6 +1131,7 @@ public class NascimentoTests(PostgresFixture pg)
             real.DefinirSaldoInicialAsync(contaId, centavos, em, ct);
 
         public Task<ResultadoDoDesligar> DesligarAsync(Guid contaId, CancellationToken ct) => real.DesligarAsync(contaId, ct);
+        public Task<bool> ArquivarAsync(Guid contaId, CancellationToken ct) => real.ArquivarAsync(contaId, ct);
     }
 
     [Fact]

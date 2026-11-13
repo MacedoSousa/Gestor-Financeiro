@@ -32,7 +32,37 @@ internal sealed record FaturaPluggy(string Id, DateOnly Vencimento, DateOnly? Fe
 /// <c>balance</c> (valor líquido atual). Nulo quando o banco não mandou um valor que o sistema aceite: ausente, nulo, não
 /// numérico ou com mais de 2 casas (D21, item 4). A aplicação continua listada.
 /// </param>
-internal sealed record InvestimentoPluggy(string Id, string Tipo, string? Subtipo, string Nome, long? SaldoCentavos);
+/// <param name="Status">
+/// <c>status</c> da Pluggy: ACTIVE (aplicada), PENDING (em validação) ou TOTAL_WITHDRAWAL (resgatada). Só ACTIVE conta no
+/// saldo do grupo (D22). Nulo quando o banco não manda.
+/// </param>
+internal sealed record InvestimentoPluggy(string Id, string Tipo, string? Subtipo, string Nome, long? SaldoCentavos, string? Status = "ACTIVE")
+{
+    /// <summary>A situação no sistema (coluna <c>situacao_banco</c>): ATIVA, PENDENTE, RESGATADA ou DESCONHECIDA.</summary>
+    public string Situacao => SituacaoDaAplicacao.De(Status);
+
+    /// <summary>Só a aplicação ACTIVE entra no saldo do grupo (D22).</summary>
+    public bool Ativa => Situacao == SituacaoDaAplicacao.Ativa;
+
+    public bool Resgatada => Situacao == SituacaoDaAplicacao.Resgatada;
+}
+
+/// <summary>Status da aplicação na Pluggy traduzido para o sistema (D22).</summary>
+internal static class SituacaoDaAplicacao
+{
+    public const string Ativa = "ATIVA";
+    public const string Pendente = "PENDENTE";
+    public const string Resgatada = "RESGATADA";
+    public const string Desconhecida = "DESCONHECIDA";
+
+    public static string De(string? status) => status switch
+    {
+        "ACTIVE" => Ativa,
+        "PENDING" => Pendente,
+        "TOTAL_WITHDRAWAL" => Resgatada,
+        _ => Desconhecida,
+    };
+}
 
 /// <summary>
 /// Resposta de erro da Pluggy. Guarda só o status HTTP, o campo <c>code</c> e o <c>Retry-After</c>; nunca o corpo (D26).

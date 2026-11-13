@@ -220,14 +220,17 @@ internal sealed class Nascimento(
                 doGrupo.Add(vinculo.Id);
             }
 
-            // Aplicação sem valor no banco (D21, item 4) entra com 0: o grupo nasce, e a conferência mostra quando o valor vier.
-            var saldo = membros.Sum(m => doBanco[m.IdExterno!].SaldoCentavos ?? 0);
+            // Só a aplicação ACTIVE entra no saldo inicial (D22); a pendente entra no grupo e fica fora até o banco confirmar.
+            // Aplicação ativa sem valor no banco (D21, item 4) entra com 0: o grupo nasce, e a conferência mostra quando o
+            // valor vier.
+            var saldo = membros.Select(m => doBanco[m.IdExterno!]).Where(ap => ap.Ativa).Sum(ap => ap.SaldoCentavos ?? 0);
             var pedido = new NovaContaLigada(contaId, "INVESTIMENTO", nome, a.Item.Banco, a.Conexao.UsuarioId, saldo,
                 ConversaoPluggy.DiaDeSaoPaulo(relogio.GetUtcNow()), null, null, null);
             tarefas.Add(new Tarefa.CriarGrupo(nome, pedido, membros.Select(m => m.Grupo!.MetaId).FirstOrDefault(id => id is not null), doGrupo));
         }
 
-        foreach (var semGrupo in aplicacoes.Where(ap => ap.Grupo is null))
+        // Resgatada não fica aguardando grupo (D22).
+        foreach (var semGrupo in aplicacoes.Where(ap => ap.Grupo is null && !doBanco[ap.IdExterno!].Resgatada))
         {
             var vinculo = Existente(semGrupo.IdExterno!);
             if (vinculo is null)
@@ -369,6 +372,7 @@ internal sealed class Nascimento(
         }
 
         var aplicacoesDoBanco = leitura.Aplicacoes.Select(ap => ap.Id).ToHashSet(StringComparer.Ordinal);
+        var situacoes = leitura.Aplicacoes.GroupBy(ap => ap.Id, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.First().Situacao, StringComparer.Ordinal);
         vistas.Clear();
         for (var i = 0; i < aplicacoes.Count; i++)
         {
@@ -376,6 +380,15 @@ internal sealed class Nascimento(
             var chave = $"aplicacoes[{i}]";
             if (ap.IdExterno is null || !aplicacoesDoBanco.Contains(ap.IdExterno)) erros[$"{chave}.idExterno"] = ["Esta aplicação não está no banco."];
             else if (!vistas.Add(ap.IdExterno)) erros[$"{chave}.idExterno"] = ["Aplicação repetida na confirmação."];
+            // D22: resgatada não entra em grupo; sem a situação do banco, também não (o grupo nasceria sem ela, com saldo
+            // errado). Sem grupo, fica aguardando.
+            if (ap.Grupo is not null && ap.IdExterno is not null && situacoes.GetValueOrDefault(ap.IdExterno) is { } situacao)
+            {
+                if (situacao == SituacaoDaAplicacao.Resgatada)
+                    erros[$"{chave}.grupo"] = ["Esta aplicação foi resgatada no banco e não entra em grupo."];
+                else if (situacao == SituacaoDaAplicacao.Desconhecida)
+                    erros[$"{chave}.grupo"] = ["O banco não informou a situação desta aplicação. Deixe sem grupo e confirme depois."];
+            }
             if (ap.Grupo is not null && ap.Grupo.Nome?.Trim() is not { Length: > 0 and <= NomeMaximo })
                 erros[$"{chave}.grupo.nome"] = [$"O nome do grupo deve ter de 1 a {NomeMaximo} caracteres."];
             if (ap.Grupo?.MetaId is { } meta && !metasDoPainel.Contains(meta))

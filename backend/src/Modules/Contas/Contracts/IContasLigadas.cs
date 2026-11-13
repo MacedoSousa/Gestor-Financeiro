@@ -60,6 +60,12 @@ public interface IContasLigadas
     Task DefinirSaldoInicialAsync(Guid contaId, long centavos, DateOnly em, CancellationToken ct);
 
     /// <summary>
+    /// Arquiva uma conta ligada (grupo de investimento sem nenhuma aplicação ativa no banco, D22). Continua ligada e com o
+    /// histórico; o casal pode desarquivar. Falso se ela não existe no casal ou não é ligada.
+    /// </summary>
+    Task<bool> ArquivarAsync(Guid contaId, CancellationToken ct);
+
+    /// <summary>
     /// Reconciliação de conta ligada órfã (D18, E3 nota H; D19 item 3c): a conta deixa de vir do banco. Sem nenhum lançamento,
     /// é também arquivada (era a duplicata de uma confirmação em duas abas); com lançamentos, volta a ser manual (pode ser
     /// editada, recebe lançamentos à mão e o casal decide o que fazer com eles). Quem chama garante que nenhum vínculo a

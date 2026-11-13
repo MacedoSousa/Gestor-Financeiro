@@ -223,7 +223,7 @@ public class ClientePluggyTests
         var m = Montar();
         m.Pluggy.Responder = p => p.RequestUri!.AbsolutePath == "/bills"
             ? Json(200, """{"results":[{"id":"b1","dueDate":"2026-10-10T00:00:00.000Z","totalAmount":500.5}]}""")
-            : Json(200, """{"results":[{"id":"i1","type":"FIXED_INCOME","subtype":"CDB","name":"CDB Sintético","balance":10000.01}]}""");
+            : Json(200, """{"results":[{"id":"i1","type":"FIXED_INCOME","subtype":"CDB","name":"CDB Sintético","balance":10000.01,"status":"ACTIVE"}]}""");
 
         var faturas = await m.Cliente.ListarFaturasAsync(Credenciais, "c1", default);
         var investimentos = await m.Cliente.ListarInvestimentosAsync(Credenciais, "item-sintetico", default);
@@ -258,6 +258,25 @@ public class ClientePluggyTests
         var investimentos = await m.Cliente.ListarInvestimentosAsync(Credenciais, "item-sintetico", default);
 
         Assert.Equal([1050, null, null, null, null, 0, null], investimentos.Select(i => i.SaldoCentavos).ToArray());
+    }
+
+    /// <summary>D22: o status da aplicação vem do banco (ACTIVE, PENDING, TOTAL_WITHDRAWAL); ausente fica nulo.</summary>
+    [Fact]
+    public async Task Investimento_traz_o_status_do_banco()
+    {
+        var m = Montar();
+        m.Pluggy.Responder = _ => Json(200, """
+            {"results":[
+              {"id":"i1","type":"FIXED_INCOME","name":"A","balance":10,"status":"ACTIVE"},
+              {"id":"i2","type":"FIXED_INCOME","name":"B","balance":10,"status":"TOTAL_WITHDRAWAL"},
+              {"id":"i3","type":"FIXED_INCOME","name":"C","balance":10,"status":"PENDING"},
+              {"id":"i4","type":"FIXED_INCOME","name":"D","balance":10}
+            ]}
+            """);
+
+        var investimentos = await m.Cliente.ListarInvestimentosAsync(Credenciais, "item-sintetico", default);
+
+        Assert.Equal(["ACTIVE", "TOTAL_WITHDRAWAL", "PENDING", null], investimentos.Select(i => i.Status).ToArray());
     }
 
     [Fact]

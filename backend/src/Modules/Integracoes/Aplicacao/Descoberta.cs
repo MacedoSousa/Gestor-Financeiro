@@ -142,7 +142,7 @@ internal sealed partial class Descoberta(
             .Where(ap => vinculos.FirstOrDefault(v => v.Tipo == TipoDeVinculo.Investimento && v.IdExterno == ap.Id)?.ContaId is not { } c
                          || !existentes.Contains(c))
             .OrderBy(ap => ap.Nome, StringComparer.Ordinal)
-            .Select(ap => new AplicacaoEncontradaDto(ap.Id, ap.Nome, ap.Subtipo ?? ap.Tipo, ap.SaldoCentavos))
+            .Select(ap => new AplicacaoEncontradaDto(ap.Id, ap.Nome, ap.Subtipo ?? ap.Tipo, ap.SaldoCentavos, ap.Situacao))
             .ToList();
 
         return new DescobertaDto(a.Item.Banco, encontradas, aplicacoes, naoImportadas);
