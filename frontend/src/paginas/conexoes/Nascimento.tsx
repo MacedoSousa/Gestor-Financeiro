@@ -13,6 +13,7 @@ import {
   contasCompativeis,
   gruposDistintos,
   linhasDeAplicacao,
+  aplicacoesResgatadas,
   linhasIniciais,
   montarPedido,
   resumoDaDescoberta,
@@ -21,6 +22,7 @@ import {
   type Acao,
   type ErroDaLinha,
   type LinhaDeAplicacao,
+  type AplicacaoResgatada,
   type LinhaDeConta,
 } from "../../lib/nascimento";
 import { Alerta, Campo, CampoSelecao } from "../Campo";
@@ -140,6 +142,7 @@ function ContaEncontrada({
 
 function Investimentos({
   linhas,
+  resgatadas,
   metaPorGrupo,
   metas,
   erros,
@@ -148,6 +151,7 @@ function Investimentos({
   aoMudarMeta,
 }: {
   linhas: LinhaDeAplicacao[];
+  resgatadas: AplicacaoResgatada[];
   metaPorGrupo: Record<string, string>;
   metas: { id: string; nome: string }[];
   erros: Record<string, ErroDaLinha>;
@@ -160,7 +164,7 @@ function Investimentos({
     <fieldset className="escolha" disabled={ocupado}>
       <legend className="cartao-rotulo">Investimentos</legend>
       <p className="cartao-nota" style={{ margin: 0 }}>
-        Cada grupo vira uma conta de investimento, com o saldo somado das aplicações. Deixe o grupo vazio para decidir depois.
+        Cada grupo vira uma conta de investimento, com o saldo somado das aplicações ativas. Deixe o grupo vazio para decidir depois.
       </p>
       <ul className="lista-itens">
         {linhas.map((a) => (
@@ -174,12 +178,25 @@ function Investimentos({
                 ) : (
                   <span className="num">{formatarReais(a.saldoCentavos)}</span>
                 )}
+                {a.situacao === "PENDENTE" && " · em validação no banco; fica fora do saldo até o banco confirmar"}
               </span>
             </div>
             <Campo rotulo={`Grupo de ${a.nome}`} valor={a.grupo} aoMudar={(v) => aoMudarLinha({ ...a, grupo: v })} erro={erros[a.idExterno]?.mensagem} maxLength={APELIDO_MAXIMO + 10} autoComplete="off" />
           </li>
         ))}
       </ul>
+      {resgatadas.length > 0 && (
+        <ul className="lista-itens" aria-label="Aplicações resgatadas">
+          {resgatadas.map((r) => (
+            <li key={r.idExterno} className="item-linha aplicacao-linha">
+              <div className="item-texto">
+                <span style={{ fontWeight: 500 }}>{r.nome}</span>
+                <span className="cartao-nota">{r.tipo} · resgatada no banco; não entra em grupo</span>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
       {grupos.length > 0 && metas.length > 0 && (
         <div className="grade-form">
           {grupos.map((g) => (
@@ -300,6 +317,7 @@ function Confirmacao({ itemId, descoberta, aoAvisar }: { itemId: string; descobe
   const servidor = useErroDoServidor();
   const [linhas, setLinhas] = useState(() => linhasIniciais(descoberta));
   const [aplicacoes, setAplicacoes] = useState(() => linhasDeAplicacao(descoberta));
+  const resgatadas = aplicacoesResgatadas(descoberta);
   const [metaPorGrupo, setMetaPorGrupo] = useState<Record<string, string>>({});
   const [erros, setErros] = useState<Record<string, ErroDaLinha>>({});
   const [ocupado, setOcupado] = useState(false);
@@ -371,6 +389,13 @@ function Confirmacao({ itemId, descoberta, aoAvisar }: { itemId: string; descobe
           <p className="cartao-nota" style={{ margin: 0 }}>
             As contas deste banco já estão no sistema. <Link to="/contas">Ver as contas</Link>
           </p>
+          {resgatadas.length > 0 && (
+            <p className="cartao-nota" style={{ margin: 0 }}>
+              {resgatadas.length === 1
+                ? "1 aplicação resgatada no banco não entra no sistema."
+                : `${resgatadas.length} aplicações resgatadas no banco não entram no sistema.`}
+            </p>
+          )}
         </section>
       ) : (
         <form ref={form} className="cartao bloco-form" noValidate onSubmit={(e) => void confirmar(e)} aria-labelledby="titulo-encontradas">
@@ -390,9 +415,10 @@ function Confirmacao({ itemId, descoberta, aoAvisar }: { itemId: string; descobe
               aoMudar={(nova) => setLinhas((ls) => ls.map((x) => (x.idExterno === nova.idExterno ? nova : x)))}
             />
           ))}
-          {aplicacoes.length > 0 && (
+          {(aplicacoes.length > 0 || resgatadas.length > 0) && (
             <Investimentos
               linhas={aplicacoes}
+              resgatadas={resgatadas}
               metaPorGrupo={metaPorGrupo}
               metas={(metas.data?.metas ?? []).map((m) => ({ id: m.id, nome: m.nome }))}
               erros={erros}

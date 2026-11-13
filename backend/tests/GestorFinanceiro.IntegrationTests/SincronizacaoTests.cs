@@ -535,6 +535,93 @@ public class SincronizacaoTests(PostgresFixture pg)
             (await c.Api.CreateClient().GetAsync("/api/v1/integracoes/grupos-de-investimento")).StatusCode);
     }
 
+    /// <summary>
+    /// D22: aplicação que vira TOTAL_WITHDRAWAL sai da conferência do grupo (o valor no banco é só o das ACTIVE), e a
+    /// resgatada nova não fica aguardando grupo.
+    /// </summary>
+    [Fact]
+    public async Task Resgatada_sai_da_conferencia_quando_muda_de_status()
+    {
+        await using var c = await IniciarAsync();
+        var (item, itemPluggy, grupo) = await NascerComGrupoAsync(c);
+        await SincronizarOkAsync(c, item);
+        Assert.Equal("2000000;500050|-", await EstadoDoGrupoAsync(c));
+
+        c.Pluggy.AtualizarInvestimento(itemPluggy, new InvestimentoPluggy("cdb-sintetico-2", "FIXED_INCOME", "CDB", "CDB 120%", 500_050, "TOTAL_WITHDRAWAL"));
+        c.Pluggy.CadastrarInvestimento(itemPluggy, new InvestimentoPluggy("cdb-sintetico-velho", "FIXED_INCOME", "CDB", "CDB velho", 300_000, "TOTAL_WITHDRAWAL"));
+        await SincronizarOkAsync(c, item);
+
+        Assert.Equal("ATIVA;RESGATADA", await EscalarAsync<string>(c.Banco,
+            "SELECT string_agg(situacao_banco, ';' ORDER BY id_externo) FROM integracoes.vinculos WHERE tipo = 'INVESTIMENTO'"));
+        var naTela = await GrupoNasConexoesAsync(c, grupo);
+        Assert.Equal(2_000_000, naTela.GetProperty("valorNoBancoCentavos").GetInt64());
+        Assert.Equal(-500_050, naTela.GetProperty("diferencaCentavos").GetInt64());
+        Assert.Equal(0L, await EscalarAsync<long>(c.Banco, "SELECT count(*) FROM integracoes.vinculos WHERE id_externo = 'cdb-sintetico-velho'"));
+    }
+
+    /// <summary>
+    /// D22, correção do que já nasceu: o grupo marcado (a V0019 marca os de antes da regra) tem o saldo inicial refeito só
+    /// com as ACTIVE na sincronização seguinte, com auditoria, e a marca sai.
+    /// </summary>
+    [Fact]
+    public async Task Grupo_ja_nascido_refaz_o_saldo_inicial_so_com_as_ativas()
+    {
+        await using var c = await IniciarAsync();
+        var (item, itemPluggy, grupo) = await NascerComGrupoAsync(c);
+        c.Pluggy.AtualizarInvestimento(itemPluggy, new InvestimentoPluggy("cdb-sintetico-2", "FIXED_INCOME", "CDB", "CDB 120%", 500_050, "TOTAL_WITHDRAWAL"));
+        await EscalarAsync<int>(c.Banco, "UPDATE integracoes.vinculos SET refazer_saldo_inicial = true WHERE tipo = 'INVESTIMENTO' RETURNING 1");
+        var em = await EscalarAsync<DateTime>(c.Banco, $"SELECT saldo_inicial_em::timestamp FROM contas.contas WHERE id = '{grupo}'");
+
+        await SincronizarOkAsync(c, item);
+
+        Assert.Equal($"2000000|{em:yyyy-MM-dd}|false", await EscalarAsync<string>(c.Banco,
+            $"SELECT saldo_inicial_centavos || '|' || saldo_inicial_em || '|' || arquivada FROM contas.contas WHERE id = '{grupo}'"));
+        Assert.Equal(0L, await EscalarAsync<long>(c.Banco, "SELECT count(*) FROM integracoes.vinculos WHERE refazer_saldo_inicial"));
+        Assert.True(await EscalarAsync<long>(c.Banco,
+            $"SELECT count(*) FROM audit.eventos WHERE tabela = 'contas.contas' AND entidade_id = '{grupo}' AND acao = 'UPDATE'") >= 1);
+        Assert.Equal(JsonValueKind.Null, (await GrupoNasConexoesAsync(c, grupo)).GetProperty("diferencaCentavos").ValueKind);
+        Assert.Equal(0L, await EscalarAsync<long>(c.Banco, $"SELECT count(*) FROM lancamentos.transacoes WHERE conta_id = '{grupo}'"));
+
+        // Feito uma vez: a mudança seguinte do banco não refaz o saldo inicial (vira diferença).
+        c.Pluggy.AtualizarInvestimento(itemPluggy, new InvestimentoPluggy("cdb-sintetico-1", "FIXED_INCOME", "CDB", "CDB 110%", 2_010_000, "ACTIVE"));
+        await SincronizarOkAsync(c, item);
+        Assert.Equal(2_000_000, await EscalarAsync<long>(c.Banco, $"SELECT saldo_inicial_centavos FROM contas.contas WHERE id = '{grupo}'"));
+    }
+
+    /// <summary>D22: grupo já nascido sem nenhuma ACTIVE é arquivado, com saldo inicial 0.</summary>
+    [Fact]
+    public async Task Grupo_ja_nascido_sem_ativa_e_arquivado_com_saldo_zero()
+    {
+        await using var c = await IniciarAsync();
+        var (item, itemPluggy, grupo) = await NascerComGrupoAsync(c);
+        foreach (var (id, nome, valor) in new[] { ("cdb-sintetico-1", "CDB 110%", 2_000_000L), ("cdb-sintetico-2", "CDB 120%", 500_050L) })
+            c.Pluggy.AtualizarInvestimento(itemPluggy, new InvestimentoPluggy(id, "FIXED_INCOME", "CDB", nome, valor, "TOTAL_WITHDRAWAL"));
+        await EscalarAsync<int>(c.Banco, "UPDATE integracoes.vinculos SET refazer_saldo_inicial = true WHERE tipo = 'INVESTIMENTO' RETURNING 1");
+
+        await SincronizarOkAsync(c, item);
+
+        Assert.Equal("0|true|true", await EscalarAsync<string>(c.Banco,
+            $"SELECT saldo_inicial_centavos || '|' || arquivada || '|' || (ligada_em IS NOT NULL) FROM contas.contas WHERE id = '{grupo}'"));
+        Assert.Equal(0L, await EscalarAsync<long>(c.Banco, "SELECT count(*) FROM integracoes.vinculos WHERE refazer_saldo_inicial"));
+    }
+
+    /// <summary>D22: sem o status do banco, a correção espera (não arquiva um grupo por falta de informação).</summary>
+    [Fact]
+    public async Task Grupo_ja_nascido_sem_status_do_banco_espera()
+    {
+        await using var c = await IniciarAsync();
+        var (item, itemPluggy, grupo) = await NascerComGrupoAsync(c);
+        c.Pluggy.AtualizarInvestimento(itemPluggy, new InvestimentoPluggy("cdb-sintetico-1", "FIXED_INCOME", "CDB", "CDB 110%", 2_000_000, null));
+        c.Pluggy.AtualizarInvestimento(itemPluggy, new InvestimentoPluggy("cdb-sintetico-2", "FIXED_INCOME", "CDB", "CDB 120%", 500_050, null));
+        await EscalarAsync<int>(c.Banco, "UPDATE integracoes.vinculos SET refazer_saldo_inicial = true WHERE tipo = 'INVESTIMENTO' RETURNING 1");
+
+        await SincronizarOkAsync(c, item);
+
+        Assert.Equal("2500050|false", await EscalarAsync<string>(c.Banco,
+            $"SELECT saldo_inicial_centavos || '|' || arquivada FROM contas.contas WHERE id = '{grupo}'"));
+        Assert.Equal(2L, await EscalarAsync<long>(c.Banco, "SELECT count(*) FROM integracoes.vinculos WHERE refazer_saldo_inicial"));
+    }
+
     /// <summary>"valor de cada aplicação (ordem do id externo)|diferença do grupo".</summary>
     private static Task<string> EstadoDoGrupoAsync(Ctx c) => EscalarAsync<string>(c.Banco,
         "SELECT string_agg(coalesce(valor_banco_centavos::text, '-'), ';' ORDER BY id_externo) || '|' || " +

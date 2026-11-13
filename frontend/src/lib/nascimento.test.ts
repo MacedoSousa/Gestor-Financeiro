@@ -3,6 +3,7 @@ import {
   apelidoSugerido,
   contasCompativeis,
   linhasDeAplicacao,
+  aplicacoesResgatadas,
   linhasIniciais,
   montarPedido,
   resumoDaDescoberta,
@@ -43,10 +44,10 @@ const encontrada = (idExterno: string, tipo: string, extra: Partial<Record<strin
   ...extra,
 });
 
-const descoberta = (contas: ReturnType<typeof encontrada>[], aplicacoes: { idExterno: string; nome: string; tipo: string; saldoCentavos: number | null }[] = []) => ({
+const descoberta = (contas: ReturnType<typeof encontrada>[], aplicacoes: { idExterno: string; nome: string; tipo: string; saldoCentavos: number | null; situacao?: string }[] = []) => ({
   banco: "Itaú",
   contas,
-  aplicacoes,
+  aplicacoes: aplicacoes.map((a) => ({ situacao: "ATIVA", ...a })),
   naoImportadas: [],
 });
 
@@ -158,6 +159,19 @@ describe("linhasDeAplicacao e montarPedido", () => {
   it("as aplicações começam num grupo só, com o nome do banco", () => {
     const linhas = linhasDeAplicacao(descoberta([], [{ idExterno: "a", nome: "CDB", tipo: "CDB", saldoCentavos: 1 }]));
     expect(primeira(linhas)).toMatchObject({ idExterno: "a", grupo: "Investimentos Itaú" });
+  });
+
+  it("resgatada não vira linha de grupo; fica na lista das resgatadas (D22)", () => {
+    const d = descoberta([], [
+      { idExterno: "a1", nome: "CDB", tipo: "CDB", saldoCentavos: 1, situacao: "ATIVA" },
+      { idExterno: "a2", nome: "CDB antigo", tipo: "CDB", saldoCentavos: 300_000, situacao: "RESGATADA" },
+      { idExterno: "a3", nome: "CDB novo", tipo: "CDB", saldoCentavos: 1, situacao: "PENDENTE" },
+    ]);
+    expect(linhasDeAplicacao(d).map((l) => [l.idExterno, l.situacao])).toEqual([
+      ["a1", "ATIVA"],
+      ["a3", "PENDENTE"],
+    ]);
+    expect(aplicacoesResgatadas(d)).toEqual([{ idExterno: "a2", nome: "CDB antigo", tipo: "CDB" }]);
   });
 
   it("aplicação sem valor no banco continua sem valor, não vira R$ 0,00 (D21)", () => {

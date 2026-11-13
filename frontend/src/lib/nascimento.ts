@@ -23,8 +23,11 @@ export type LinhaDeConta = {
 };
 
 /** Uma aplicação; `grupo` vazio = fica aguardando grupo (não vira conta agora). */
-/** saldoCentavos nulo = o banco não informou um valor válido (D21). */
-export type LinhaDeAplicacao = { idExterno: string; nome: string; tipo: string; saldoCentavos: number | null; grupo: string };
+/** saldoCentavos nulo = o banco não informou um valor válido (D21). situacao: ATIVA, PENDENTE ou DESCONHECIDA (D22). */
+export type LinhaDeAplicacao = { idExterno: string; nome: string; tipo: string; saldoCentavos: number | null; situacao: string; grupo: string };
+
+/** Aplicação resgatada no banco: aparece como "resgatada" e não vai para grupo (D22). */
+export type AplicacaoResgatada = { idExterno: string; nome: string; tipo: string };
 
 export const APELIDO_MAXIMO = 60;
 
@@ -78,13 +81,21 @@ export function linhasIniciais(d: Pick<Descoberta, "contas">): LinhaDeConta[] {
 
 /** As aplicações começam todas num grupo com o nome do banco; a pessoa separa por meta ("CDBs Casa", "CDBs Carro"). */
 export function linhasDeAplicacao(d: Pick<Descoberta, "banco" | "aplicacoes">): LinhaDeAplicacao[] {
-  return d.aplicacoes.map((a) => ({
-    idExterno: a.idExterno,
-    nome: a.nome,
-    tipo: a.tipo,
-    saldoCentavos: a.saldoCentavos == null ? null : Number(a.saldoCentavos),
-    grupo: `Investimentos ${d.banco}`.slice(0, APELIDO_MAXIMO),
-  }));
+  return d.aplicacoes
+    .filter((a) => a.situacao !== "RESGATADA")
+    .map((a) => ({
+      idExterno: a.idExterno,
+      nome: a.nome,
+      tipo: a.tipo,
+      saldoCentavos: a.saldoCentavos == null ? null : Number(a.saldoCentavos),
+      situacao: a.situacao,
+      grupo: `Investimentos ${d.banco}`.slice(0, APELIDO_MAXIMO),
+    }));
+}
+
+/** As resgatadas no banco (D22): só para mostrar; não entram no grupo nem no pedido. */
+export function aplicacoesResgatadas(d: Pick<Descoberta, "aplicacoes">): AplicacaoResgatada[] {
+  return d.aplicacoes.filter((a) => a.situacao === "RESGATADA").map((a) => ({ idExterno: a.idExterno, nome: a.nome, tipo: a.tipo }));
 }
 
 /** Troca o titular; se o apelido ainda é o sugerido (para o titular antigo), troca junto. */

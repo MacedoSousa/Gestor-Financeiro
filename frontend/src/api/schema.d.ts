@@ -933,6 +933,7 @@ export interface components {
             tipo: string;
             /** Format: int64 */
             saldoCentavos: null | number | string;
+            situacao: string;
         };
         AporteDaMetaDto: {
             /** Format: uuid */

@@ -21,7 +21,11 @@ public sealed record ContaEncontradaDto(string IdExterno, string Tipo, string No
 
 /// <param name="Tipo">Subtipo do banco quando houver (ex.: CDB), senão o tipo.</param>
 /// <param name="SaldoCentavos">Valor líquido no banco; nulo quando o banco não informou um valor válido.</param>
-public sealed record AplicacaoEncontradaDto(string IdExterno, string Nome, string Tipo, long? SaldoCentavos);
+/// <param name="Situacao">
+/// ATIVA, PENDENTE (em validação no banco), RESGATADA ou DESCONHECIDA (D22). Só ATIVA entra no saldo do grupo; RESGATADA
+/// não pode ir para grupo.
+/// </param>
+public sealed record AplicacaoEncontradaDto(string IdExterno, string Nome, string Tipo, long? SaldoCentavos, string Situacao);
 
 /// <param name="VinculoId">Para POST /api/v1/integracoes/vinculos/{id}/inclusao.</param>
 public sealed record ContaNaoImportadaDto(Guid VinculoId, string IdExterno, string Tipo, string NomeNoBanco, string ApelidoSugerido);

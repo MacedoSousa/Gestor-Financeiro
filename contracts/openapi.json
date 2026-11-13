@@ -3015,7 +3015,8 @@
           "idExterno",
           "nome",
           "tipo",
-          "saldoCentavos"
+          "saldoCentavos",
+          "situacao"
         ],
         "type": "object",
         "properties": {
@@ -3036,6 +3037,9 @@
               "string"
             ],
             "format": "int64"
+          },
+          "situacao": {
+            "type": "string"
           }
         }
       },

@@ -44,6 +44,12 @@ internal sealed class Vinculo : Entidade, ICasalScoped
     /// <summary>Só aplicação: o balance da última sincronização; nulo se o banco não mandou um valor válido (D21).</summary>
     public long? ValorBancoCentavos { get; private set; }
 
+    /// <summary>Só aplicação: ATIVA, PENDENTE, RESGATADA ou DESCONHECIDA na última leitura; nulo antes dela (D22).</summary>
+    public string? SituacaoBanco { get; private set; }
+
+    /// <summary>Grupo nascido antes da regra "só ACTIVE": a próxima sincronização refaz o saldo inicial dele (D22, V0019).</summary>
+    public bool RefazerSaldoInicial { get; private set; }
+
     private Vinculo() { }
 
     public static Vinculo Criar(Guid casalId, Guid itemId, string tipo, string idExterno, Guid? contaId, byte[]? identidadeHmac)
@@ -102,11 +108,27 @@ internal sealed class Vinculo : Entidade, ICasalScoped
     }
 
     /// <summary>Aplicação: o valor que o banco mandou agora (nulo = sem valor válido). Nada é lançado (D21).</summary>
-    public void RegistrarValorNoBanco(long? centavos)
+    public void RegistrarValorNoBanco(long? centavos, string situacao)
     {
         if (Tipo != TipoDeVinculo.Investimento) throw new InvalidOperationException("Só aplicação guarda o valor no banco.");
         ValorBancoCentavos = centavos;
+        SituacaoBanco = situacao;
     }
+
+    /// <summary>
+    /// Valor no banco de um grupo (as aplicações dele, de qualquer item): a soma das ATIVA (D22). Nulo quando não dá para
+    /// saber: alguma aplicação ainda não lida, com situação desconhecida, ou ativa sem valor. Sem nenhuma ativa, 0.
+    /// </summary>
+    public static long? ValorDoGrupo(IEnumerable<Vinculo> membros)
+    {
+        var lista = membros.ToList();
+        if (lista.Any(m => m.SituacaoBanco is null or SituacaoDaAplicacao.Desconhecida)) return null;
+        var ativas = lista.Where(m => m.SituacaoBanco == SituacaoDaAplicacao.Ativa).ToList();
+        return ativas.Any(m => m.ValorBancoCentavos is null) ? null : ativas.Sum(m => m.ValorBancoCentavos!.Value);
+    }
+
+    /// <summary>O saldo inicial do grupo já foi refeito só com as aplicações ativas (D22).</summary>
+    public void SaldoInicialRefeito() => RefazerSaldoInicial = false;
 
     /// <summary>
     /// Aplicação de um grupo: a diferença do grupo (soma dos valores no banco menos o saldo do sistema), a mesma em todas as

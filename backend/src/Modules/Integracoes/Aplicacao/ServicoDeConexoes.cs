@@ -380,14 +380,13 @@ internal sealed partial class ServicoDeConexoes(
     }
 
     /// <summary>
-    /// Por grupo (conta das aplicações): valor no banco = soma das aplicações, só se todas têm valor; diferença = a gravada
+    /// Por grupo (conta das aplicações): valor no banco = soma das ATIVA (D22), nulo se não dá para saber; diferença = a gravada
     /// na última sincronização (a mesma em todas as aplicações do grupo).
     /// </summary>
     private static Dictionary<Guid, GrupoNoBancoDto> Grupos(IEnumerable<Vinculo> vinculos) =>
         vinculos.Where(v => v.Tipo == TipoDeVinculo.Investimento && v.ContaId != null)
             .GroupBy(v => v.ContaId!.Value)
-            .ToDictionary(g => g.Key, g => new GrupoNoBancoDto(g.Key,
-                g.All(v => v.ValorBancoCentavos is not null) ? g.Sum(v => v.ValorBancoCentavos!.Value) : null,
+            .ToDictionary(g => g.Key, g => new GrupoNoBancoDto(g.Key, Vinculo.ValorDoGrupo(g),
                 g.Select(v => v.DiferencaCentavos).FirstOrDefault(d => d is not null)));
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Pluggy recusou o item no cadastro (slot {Slot}, status {Status}, código {Codigo}).")]
