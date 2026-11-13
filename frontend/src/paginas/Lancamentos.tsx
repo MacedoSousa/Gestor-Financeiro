@@ -5,6 +5,7 @@ import { useContas } from "../api/contas";
 import { n } from "../api/formulario";
 import { hojeIso, useCategorias, useExtrato, type FiltroDoExtrato, type Lancamento } from "../api/lancamentos";
 import { formatarReais } from "../lib/dinheiro";
+import { vemDoBanco } from "../lib/lancamentos";
 import { nomeDoMes, somarMeses } from "../lib/mes";
 import { EditarLancamento } from "./lancamentos/EditarLancamento";
 import { LancamentoRapido } from "./lancamentos/LancamentoRapido";
@@ -15,6 +16,7 @@ const ORIGENS: Record<string, { rotulo: string; classe: string }> = {
   MANUAL: { rotulo: "Manual", classe: "selo-manual" },
   OPEN_FINANCE: { rotulo: "Open Finance", classe: "selo-open-finance" },
   WHATSAPP: { rotulo: "WhatsApp", classe: "selo-whatsapp" },
+  SISTEMA: { rotulo: "Sistema", classe: "selo-manual" },
 };
 
 const diaEMes = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
@@ -33,6 +35,14 @@ function Valor({ l }: { l: Lancamento }) {
 
 function Categoria({ l }: { l: Lancamento }) {
   if (l.natureza === "TRANSFERENCIA") return <td className="texto-fraco">Transferência</td>;
+  // Veio do banco e o casal ainda não conferiu: fora do orçamento até revisar (D14).
+  if (l.revisao === "A_REVISAR")
+    return (
+      <td>
+        <span className="tom-alerta">A revisar</span>
+        {l.categoria && <span className="texto-fraco"> · {l.categoria.nome}?</span>}
+      </td>
+    );
   if (!l.categoria) return <td className="texto-fraco">—</td>;
   return (
     <td className="texto-2">
@@ -48,7 +58,7 @@ export function Lancamentos() {
   const categorias = useCategorias();
   const [mes, setMes] = useState(() => hojeIso().slice(0, 7));
   const [titular, setTitular] = useState<Titular>();
-  const [manual, setManual] = useState(false);
+  const [origem, setOrigem] = useState<"MANUAL" | "OPEN_FINANCE">();
   const [busca, setBusca] = useState("");
   const [q, setQ] = useState("");
   const [editando, setEditando] = useState<Lancamento | null>(null);
@@ -59,7 +69,8 @@ export function Lancamentos() {
     return () => clearTimeout(t);
   }, [busca]);
 
-  const extrato = useExtrato({ mes, titular, origem: manual ? "MANUAL" : undefined, q });
+  const extrato = useExtrato({ mes, titular, origem, q });
+  const alternarOrigem = (o: "MANUAL" | "OPEN_FINANCE") => setOrigem((atual) => (atual === o ? undefined : o));
   const total = extrato.data ? n(extrato.data.total) : null;
   const filtrosDeTitular: ReadonlyArray<{ valor: Titular; rotulo: string }> = [
     { valor: undefined, rotulo: "Todos" },
@@ -93,13 +104,13 @@ export function Lancamentos() {
             </button>
           ))}
           <span className="filtro-divisor" aria-hidden="true" />
-          <button type="button" className="filtro" disabled title="Em breve">
+          <button type="button" className="filtro" aria-pressed={origem === "OPEN_FINANCE"} onClick={() => alternarOrigem("OPEN_FINANCE")}>
             Open Finance
           </button>
           <button type="button" className="filtro" disabled title="Em breve">
             WhatsApp
           </button>
-          <button type="button" className="filtro" aria-pressed={manual} onClick={() => setManual((v) => !v)}>
+          <button type="button" className="filtro" aria-pressed={origem === "MANUAL"} onClick={() => alternarOrigem("MANUAL")}>
             Manual
           </button>
         </div>
@@ -150,6 +161,11 @@ export function Lancamentos() {
                         <button type="button" className="botao-linha" onClick={(e) => (e.stopPropagation(), setEditando(l))}>
                           {l.descricao}
                         </button>
+                        {l.confirmacao === "A_CONFIRMAR" && (
+                          <span className="selo selo-a-confirmar" title="Pendente no banco: pode mudar ou sumir até ser lançada.">
+                            a confirmar
+                          </span>
+                        )}
                         {l.parcela != null && (
                           <span className="texto-fraco nota-linha">
                             {" "}
@@ -194,7 +210,13 @@ export function Lancamentos() {
       </div>
 
       {editando && categorias.data && (
-        <EditarLancamento key={editando.id} lancamento={editando} categorias={categorias.data} aoFechar={() => setEditando(null)} />
+        <EditarLancamento
+          key={editando.id}
+          lancamento={editando}
+          categorias={categorias.data}
+          doBanco={vemDoBanco(editando, contas.data)}
+          aoFechar={() => setEditando(null)}
+        />
       )}
     </>
   );

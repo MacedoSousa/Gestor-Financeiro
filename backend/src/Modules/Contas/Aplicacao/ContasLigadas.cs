@@ -91,6 +91,15 @@ internal sealed class ContasLigadas(ContasDbContext db, IUsuarioAtual atual, Ser
         await db.SaveChangesAsync(ct);
     }
 
+    public async Task<bool> DesligarAsync(Guid contaId, CancellationToken ct)
+    {
+        var conta = await db.Contas.FirstOrDefaultAsync(c => c.Id == contaId, ct);
+        if (conta is not { Ligada: true }) return false;
+        conta.Desligar();
+        await db.SaveChangesAsync(ct);
+        return true;
+    }
+
     // Traduzido para lower() do Postgres dos dois lados, a mesma regra do índice ux_contas_apelido.
 #pragma warning disable CA1304, CA1311, CA1862
     private Task<bool> ApelidoUsadoAsync(string apelido, CancellationToken ct) =>

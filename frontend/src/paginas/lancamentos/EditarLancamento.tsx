@@ -3,18 +3,22 @@ import { useQueryClient } from "@tanstack/react-query";
 import { ErroDeApi } from "../../api/autenticacao";
 import { n } from "../../api/formulario";
 import { apagarLancamento, editarLancamento, type Categoria, type Escopo, type Lancamento } from "../../api/lancamentos";
-import { centavosDeTexto, textoDeCentavos } from "../../lib/dinheiro";
+import { centavosDeTexto, formatarReais, textoDeCentavos } from "../../lib/dinheiro";
 import { categoriasDoTipo, ehEstorno, type TipoDeEntrada } from "../../lib/lancamentos";
 import { Alerta, Campo, CampoSelecao } from "../Campo";
 
-type Props = { lancamento: Lancamento; categorias: Categoria[]; aoFechar: () => void };
+type Props = { lancamento: Lancamento; categorias: Categoria[]; doBanco?: boolean; aoFechar: () => void };
 
-/** Editor de um lançamento, num &lt;dialog&gt;. Parcelado pergunta o escopo; transferência muda as duas contas. */
-export function EditarLancamento({ lancamento: l, categorias, aoFechar }: Props) {
+/**
+ * Editor de um lançamento, num &lt;dialog&gt;. Parcelado pergunta o escopo; transferência muda as duas contas. Em conta ligada
+ * ao banco (`doBanco`) só descrição e categoria mudam e não há "Apagar": valor, data, tipo e contraparte são do banco.
+ */
+export function EditarLancamento({ lancamento: l, categorias, doBanco = false, aoFechar }: Props) {
   const ref = useRef<HTMLDialogElement>(null);
   const consultas = useQueryClient();
   const transferencia = l.natureza === "TRANSFERENCIA";
-  const parcelado = l.parcela != null && l.parcelas != null;
+  // Parcela do banco vem solta (D13): não há "esta e as próximas".
+  const parcelado = l.parcela != null && l.parcelas != null && !doBanco;
 
   const [tipo, setTipo] = useState<string>(() => (ehEstorno(l, categorias) ? "ESTORNO" : l.natureza));
   const natureza = tipo === "ESTORNO" ? "RECEITA" : tipo;
@@ -87,9 +91,16 @@ export function EditarLancamento({ lancamento: l, categorias, aoFechar }: Props)
         {transferencia ? "Editar transferência" : "Editar lançamento"}
       </h2>
       {transferencia && <p className="cartao-nota">A mudança vale para as duas contas da transferência.</p>}
+      {doBanco && (
+        <p className="cartao-nota">
+          Veio do banco: <span className="num">{formatarReais(Math.abs(n(l.valorCentavos)))}</span> em {l.data.slice(8, 10)}/{l.data.slice(5, 7)}
+          {l.confirmacao === "A_CONFIRMAR" ? ", ainda a confirmar no banco" : ""}. Aqui você escolhe a categoria e, se quiser, a descrição
+          {l.revisao === "A_REVISAR" ? "; salvar marca como revisado e o lançamento passa a contar no orçamento" : ""}.
+        </p>
+      )}
       <Alerta mensagem={erro} tentativa={tentativa} />
       <form className="bloco-form" onSubmit={salvar} noValidate>
-        {!transferencia && !parcelado && (
+        {!transferencia && !parcelado && !doBanco && (
           <CampoSelecao
             rotulo="Tipo"
             valor={tipo}
@@ -101,22 +112,26 @@ export function EditarLancamento({ lancamento: l, categorias, aoFechar }: Props)
             ]}
           />
         )}
-        <Campo
-          rotulo={parcelado ? "Valor da parcela" : "Valor"}
-          valor={valor}
-          aoMudar={setValor}
-          inputMode="decimal"
-          classeEntrada="num"
-          autoComplete="off"
-        />
+        {!doBanco && (
+          <Campo
+            rotulo={parcelado ? "Valor da parcela" : "Valor"}
+            valor={valor}
+            aoMudar={setValor}
+            inputMode="decimal"
+            classeEntrada="num"
+            autoComplete="off"
+          />
+        )}
         <Campo rotulo="Descrição" valor={descricao} aoMudar={setDescricao} maxLength={140} autoComplete="off" />
         {!transferencia && (
           <>
-            <Campo rotulo="Contraparte (opcional)" valor={contraparte} aoMudar={setContraparte} maxLength={140} autoComplete="off" />
+            {!doBanco && (
+              <Campo rotulo="Contraparte (opcional)" valor={contraparte} aoMudar={setContraparte} maxLength={140} autoComplete="off" />
+            )}
             <CampoSelecao rotulo="Categoria" valor={categoria} aoMudar={setCategoriaId} opcoes={opcoesDeCategoria} />
           </>
         )}
-        <Campo rotulo="Data" tipo="date" valor={data} aoMudar={setData} />
+        {!doBanco && <Campo rotulo="Data" tipo="date" valor={data} aoMudar={setData} />}
         {parcelado && (
           <fieldset className="escolha">
             <legend className="campo-rotulo">
@@ -140,9 +155,11 @@ export function EditarLancamento({ lancamento: l, categorias, aoFechar }: Props)
             <button type="button" className="botao-secundario" onClick={aoFechar}>
               Cancelar
             </button>
-            <button type="button" className="botao-perigo" disabled={enviando} onClick={() => setConfirmandoApagar(true)}>
-              Apagar
-            </button>
+            {!doBanco && (
+              <button type="button" className="botao-perigo" disabled={enviando} onClick={() => setConfirmandoApagar(true)}>
+                Apagar
+              </button>
+            )}
           </div>
         )}
       </form>

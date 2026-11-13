@@ -1,5 +1,8 @@
 /** Regras de exibição da tela Conexões (Open Finance pelo Meu Pluggy). Nada aqui calcula dinheiro. */
 
+import { formatarReais } from "./dinheiro";
+import { soNomeDoMes } from "./mes";
+
 export type Tom = "ok" | "alerta" | "erro" | "normal";
 export type AparenciaDoEstado = { rotulo: string; tom: Tom; explicacao: string | null };
 
@@ -113,4 +116,48 @@ export function validarCadastro(p: PedidoDeCadastro): ErrosDoCadastro {
 /** A conexão de quem está na sessão e a do outro cônjuge (cada um tem no máximo uma). */
 export function separarConexoes<T extends { ehSua: boolean }>(conexoes: readonly T[]): { sua: T | null; outra: T | null } {
   return { sua: conexoes.find((c) => c.ehSua) ?? null, outra: conexoes.find((c) => !c.ehSua) ?? null };
+}
+
+// ------------------------------------------------------------------ sincronização (Tarefa 4.5)
+
+/** "2026-03-15" → "Histórico desde 15/03" (dia do calendário, sem fuso). Nulo antes da primeira sincronização. */
+export function textoDoHistorico(dia: string | null | undefined): string | null {
+  if (!dia) return null;
+  return `Histórico desde ${dia.slice(8, 10)}/${dia.slice(5, 7)}`;
+}
+
+const reaisComSinal = (centavos: number) => `${centavos < 0 ? "−" : ""}${formatarReais(Math.abs(centavos))}`;
+
+/** Saldo do banco menos o do sistema, quando já persistiu 2 sincronizações (a API manda nulo antes). */
+export function textoDaDiferenca(centavos: number | null | undefined): string | null {
+  if (centavos == null) return null;
+  return `Diferença de ${reaisComSinal(centavos)} com o banco`;
+}
+
+/** Fatura do banco cujo total não bate com a soma das transações dela; o mês é o do vencimento. */
+export function textoDaFatura(f: { vencimento: string; diferencaCentavos: number }): string {
+  return `Fatura de ${soNomeDoMes(f.vencimento.slice(0, 7))}: diferença de ${reaisComSinal(f.diferencaCentavos)} com o banco`;
+}
+
+const plural = (n: number, um: string, varios: string) => `${n} ${n === 1 ? um : varios}`;
+
+/** O que a sincronização fez, em uma frase (só contagens). */
+type Contagem = number | string; // inteiros da API chegam como number | string no tipo gerado
+
+export function textoDaSincronizacao(resumo: {
+  contasSincronizadas: Contagem;
+  contasComFalha: Contagem;
+  lancamentosNovos: Contagem;
+  lancamentosAtualizados?: Contagem;
+}): string {
+  const r = {
+    contasSincronizadas: Number(resumo.contasSincronizadas),
+    contasComFalha: Number(resumo.contasComFalha),
+    lancamentosNovos: Number(resumo.lancamentosNovos),
+  };
+  if (r.contasSincronizadas === 0 && r.contasComFalha === 0) return "Nada para sincronizar: nenhuma conta ativa deste banco.";
+  const feito = `Sincronizado: ${plural(r.contasSincronizadas, "conta", "contas")}, ${plural(r.lancamentosNovos, "lançamento novo", "lançamentos novos")}.`;
+  if (r.contasComFalha === 0) return feito;
+  const falha = r.contasComFalha === 1 ? "1 conta não veio" : `${r.contasComFalha} contas não vieram`;
+  return `${feito} ${falha} do banco agora; a próxima sincronização tenta de novo.`;
 }

@@ -32,3 +32,11 @@ export function ehEstorno(l: Lancamento, categorias: Categoria[]): boolean {
   const id = l.categoria.id;
   return categorias.find((c) => c.id === id)?.tipo === "DESPESA";
 }
+
+/**
+ * Lançamento de conta ligada ao banco (opção B): valor, data, tipo e contraparte vêm do banco; o casal muda só a descrição e
+ * a categoria, e não apaga (a API recusa com 409). Sem a lista de contas, trata como manual (a API continua sendo a regra).
+ */
+export function vemDoBanco(l: Lancamento, contas: readonly Conta[] | undefined): boolean {
+  return contas?.find((c) => c.id === l.conta.id)?.ligada === true;
+}

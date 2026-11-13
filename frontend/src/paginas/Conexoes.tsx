@@ -3,7 +3,7 @@ import { Link } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { ErroDeApi } from "../api/autenticacao";
 import { n } from "../api/formulario";
-import { useAcoesDeConexoes, useConexoes, type Banco, type Conexao, type ItemDaConexao, type Slot } from "../api/conexoes";
+import { useAcoesDeConexoes, useConexoes, type Banco, type Conexao, type ContaDoItem, type ItemDaConexao, type Slot } from "../api/conexoes";
 import {
   avisoDoSlot,
   BANCO_MAXIMO,
@@ -15,7 +15,11 @@ import {
   OUTRO_BANCO,
   pedidoDoBanco,
   separarConexoes,
+  textoDaDiferenca,
+  textoDaFatura,
+  textoDaSincronizacao,
   textoDoConsentimento,
+  textoDoHistorico,
   validarBanco,
   validarCadastro,
   type ErrosDoBanco,
@@ -147,7 +151,41 @@ function EstadoDoBanco({ item, semBanco }: { item: ItemDaConexao; semBanco: stri
       </span>
       {aparencia.explicacao && <span className="cartao-nota">{aparencia.explicacao}</span>}
       {!item.codigoBanco && <span className="cartao-nota">{semBanco}</span>}
+      <ContasDoBanco contas={item.contas} />
     </div>
+  );
+}
+
+/**
+ * Contas e cartões que vêm do banco, com o início do histórico e as diferenças com o banco que já persistiram 2
+ * sincronizações (Tarefa 4.5). Nada é ajustado sozinho: a diferença só avisa.
+ */
+function ContasDoBanco({ contas }: { contas: readonly ContaDoItem[] }) {
+  if (contas.length === 0) return null;
+  return (
+    <ul className="contas-do-banco" aria-label="Contas que vêm deste banco">
+      {contas.map((c) => {
+        const historico = textoDoHistorico(c.historicoDesde);
+        const diferenca = textoDaDiferenca(c.diferencaCentavos == null ? null : n(c.diferencaCentavos));
+        return (
+          <li key={c.contaId}>
+            <span>{c.apelido}</span>
+            {c.arquivada && <span className="texto-suave"> · arquivada, não sincroniza</span>}
+            <span className="texto-suave"> · {historico ?? "aguardando a primeira sincronização"}</span>
+            {diferenca && (
+              <span className="cartao-nota tom-alerta num" style={{ display: "block" }}>
+                {diferenca}
+              </span>
+            )}
+            {c.faturasDivergentes.map((f) => (
+              <span key={f.vencimento} className="cartao-nota tom-alerta num" style={{ display: "block" }}>
+                {textoDaFatura({ vencimento: f.vencimento, diferencaCentavos: n(f.diferencaCentavos) })}
+              </span>
+            ))}
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 
@@ -419,6 +457,14 @@ function SuaConexao({
     aoVoltar();
   }
 
+  async function sincronizar(item: ItemDaConexao) {
+    let texto = "";
+    const ok = await tentar(async () => {
+      texto = textoDaSincronizacao(await acoes.sincronizar(item.id));
+    });
+    if (ok) aoAvisar(`${item.banco}: ${texto}`);
+  }
+
   async function confirmar() {
     const alvo = confirmando;
     if (!alvo) return;
@@ -445,6 +491,17 @@ function SuaConexao({
             <li key={item.id} className="item-linha">
               <EstadoDoBanco item={item} semBanco="Escolha o banco para ver as contas dele." />
               <div className="acoes-linha">
+                {item.codigoBanco && item.contas.length > 0 && (
+                  <button
+                    type="button"
+                    className="botao-secundario"
+                    disabled={ocupado}
+                    aria-label={`Sincronizar agora: ${item.banco}`}
+                    onClick={() => void sincronizar(item)}
+                  >
+                    {ocupado ? "Sincronizando…" : "Sincronizar agora"}
+                  </button>
+                )}
                 {item.codigoBanco ? (
                   <Link
                     to={`/conexoes/items/${item.id}/nascimento`}

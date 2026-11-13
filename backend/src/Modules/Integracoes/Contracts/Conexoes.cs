@@ -20,8 +20,11 @@ public sealed record ConexaoDto(Guid Id, Guid UsuarioId, string Apelido, int Slo
 /// <param name="Motivo">Só no ERRO: o código do status da Pluggy (ex.: LOGIN_ERROR).</param>
 /// <param name="ConsentimentoVenceEm">Dia, em São Paulo, em que o consentimento vence.</param>
 /// <param name="CodigoBanco">Código COMPE do banco (D18). Nulo nos items cadastrados antes dele: o titular escolhe o banco.</param>
+/// <param name="UltimaSincronizacaoEm">Última sincronização em que todas as contas do item vieram.</param>
+/// <param name="UltimaTentativaEm">Última sincronização tentada, com ou sem sucesso.</param>
+/// <param name="Contas">Contas e cartões que já nasceram deste banco, com o histórico e as diferenças (Tarefa 4.5).</param>
 public sealed record ItemDto(Guid Id, string Banco, string? CodigoBanco, string Estado, string? Motivo, DateOnly? ConsentimentoVenceEm,
-    DateTimeOffset? UltimaSincronizacaoEm);
+    DateTimeOffset? UltimaSincronizacaoEm, DateTimeOffset? UltimaTentativaEm, IReadOnlyList<ContaDoItemDto> Contas);
 
 /// <summary>Corpo de POST /api/v1/integracoes/conexoes: a conexão de quem está na sessão, já com o primeiro banco.</summary>
 /// <param name="Slot">1 ou 2: em quais arquivos (<c>pluggy_1_*</c> ou <c>pluggy_2_*</c>) estão as chaves deste cônjuge.</param>

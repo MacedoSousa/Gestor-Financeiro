@@ -45,4 +45,11 @@ public interface IContasLigadas
     /// <summary>Saldo inicial calculado pela importação (D3). Só conta ligada.</summary>
     /// <exception cref="InvalidOperationException">A conta não existe no casal ou não é ligada.</exception>
     Task DefinirSaldoInicialAsync(Guid contaId, long centavos, DateOnly em, CancellationToken ct);
+
+    /// <summary>
+    /// Reconciliação de conta ligada órfã (D18, E3 nota H): a conta deixa de vir do banco e volta a ser manual (pode ser
+    /// editada, recebe lançamentos à mão e pode ser apagada se não tiver uso). Quem chama garante que nenhum vínculo a
+    /// aponta. Falso se ela não existe no casal ou já não era ligada.
+    /// </summary>
+    Task<bool> DesligarAsync(Guid contaId, CancellationToken ct);
 }

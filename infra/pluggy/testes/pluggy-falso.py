@@ -116,6 +116,8 @@ class Pluggy(BaseHTTPRequestHandler):
             return self._json(200, {"results": todas[:2], "next": proximo})
         if url.path == "/bills":
             return self._json(200, {"results": FATURAS.get(q.get("accountId"), [])})
+        if url.path == "/investments" and q.get("itemId") == ITEM:
+            return self._json(200, {"results": [], "total": 0})
         if url.path == "/transactions":
             return self._json(410, {"message": "gone"})
         return self._json(404, {"message": "não existe"})

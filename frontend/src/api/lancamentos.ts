@@ -13,7 +13,7 @@ export type Escopo = "este" | "proximos";
 export type FiltroDoExtrato = {
   mes: string;
   titular?: "conjunta" | "eu" | "conjuge";
-  origem?: "MANUAL";
+  origem?: "MANUAL" | "OPEN_FINANCE";
   q?: string;
 };
 

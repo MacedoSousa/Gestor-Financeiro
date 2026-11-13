@@ -51,6 +51,9 @@ internal sealed class Conta : Entidade, ICasalScoped
     /// <summary>Passa a vir do banco. Repetir não muda a data da primeira marca.</summary>
     public void MarcarLigada(DateTimeOffset agora) => LigadaEm ??= agora;
 
+    /// <summary>Volta a ser manual: só para a conta ligada que nenhum vínculo aponta (D18, reconciliação de órfã).</summary>
+    public void Desligar() => LigadaEm = null;
+
     /// <summary>Saldo inicial calculado pela importação (D3); só em conta ligada.</summary>
     public void DefinirSaldoInicialDoBanco(Dinheiro saldo, DateOnly em)
     {

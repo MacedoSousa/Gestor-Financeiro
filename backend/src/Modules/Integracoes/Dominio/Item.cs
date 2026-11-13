@@ -94,6 +94,16 @@ internal sealed class Item : Entidade, ICasalScoped
         DefinirBanco(codigoBanco, banco);
     }
 
+    /// <summary>Toda sincronização tentada, com ou sem sucesso (Tarefa 4.5).</summary>
+    public void RegistrarTentativa(DateTimeOffset agora) => UltimaTentativaEm = agora;
+
+    /// <summary>Sincronização em que todas as contas do item foram importadas.</summary>
+    public void RegistrarSincronizacao(DateTimeOffset agora)
+    {
+        UltimaTentativaEm = agora;
+        UltimaSincronizacaoEm = agora;
+    }
+
     public static bool CodigoValido(string? codigo) => codigo is { Length: 3 } && codigo.All(char.IsAsciiDigit);
 
     private void DefinirBanco(string codigoBanco, string banco)

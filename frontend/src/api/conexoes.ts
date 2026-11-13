@@ -8,6 +8,8 @@ export type Conexao = components["schemas"]["ConexaoDto"];
 export type ItemDaConexao = components["schemas"]["ItemDto"];
 export type Slot = components["schemas"]["SlotDto"];
 export type Banco = components["schemas"]["BancoDto"];
+export type ContaDoItem = components["schemas"]["ContaDoItemDto"];
+export type ResultadoDaSincronizacao = components["schemas"]["SincronizacaoDto"];
 type CorpoDoBanco = { codigoBanco: string; banco: string | null };
 
 const NAO_EXISTE = "Esta conexão já não existe. Atualize a página.";
@@ -47,6 +49,24 @@ const apagar = (id: string) =>
     NAO_EXISTE,
   );
 
+/**
+ * Importa agora as contas e os cartões nascidos do item (Tarefa 4.5). Recarrega o que a importação muda: conexões (histórico
+ * e diferenças), contas, saldos, extrato e visão geral.
+ */
+export async function sincronizarItem(qc: ReturnType<typeof useQueryClient>, item: string): Promise<ResultadoDaSincronizacao> {
+  try {
+    return await chamarFormulario(
+      () => api.POST("/api/v1/integracoes/items/{id}/sincronizacao", { params: { path: { id: item } } }),
+      "Não foi possível sincronizar agora. Tente de novo mais tarde.",
+      "Este banco já não está na conexão. Atualize a página.",
+    );
+  } finally {
+    await Promise.all(
+      ["conexoes", "contas", "saldos", "lancamentos", "visao-geral"].map((chave) => qc.invalidateQueries({ queryKey: [chave] })),
+    );
+  }
+}
+
 /** Toda mutação recarrega a lista: o estado de cada banco vem do servidor. */
 export function useAcoesDeConexoes() {
   const qc = useQueryClient();
@@ -61,5 +81,6 @@ export function useAcoesDeConexoes() {
     escolherBanco: (item: string, banco: CorpoDoBanco) => depois(escolher(item, banco)),
     tirarBanco: (id: string, item: string) => depois(tirar(id, item)),
     apagarConexao: (id: string) => depois(apagar(id)),
+    sincronizar: (item: string) => sincronizarItem(qc, item),
   };
 }

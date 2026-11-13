@@ -8,7 +8,11 @@ import {
   pedidoDoBanco,
   rotuloDoSlot,
   separarConexoes,
+  textoDaDiferenca,
+  textoDaFatura,
+  textoDaSincronizacao,
   textoDoConsentimento,
+  textoDoHistorico,
   validarBanco,
   validarCadastro,
 } from "./conexoes";
@@ -181,5 +185,34 @@ describe("separarConexoes", () => {
 
   it("nenhuma conexão", () => {
     expect(separarConexoes([])).toEqual({ sua: null, outra: null });
+  });
+});
+
+describe("textos da sincronização (Tarefa 4.5)", () => {
+  it("histórico desde DD/MM, sem fuso; nulo antes da primeira sincronização", () => {
+    expect(textoDoHistorico("2026-03-15")).toBe("Histórico desde 15/03");
+    expect(textoDoHistorico(null)).toBeNull();
+  });
+
+  it("diferença de saldo com o banco, em reais; nula some", () => {
+    expect(textoDaDiferenca(1_000)).toBe("Diferença de R$\u00a010,00 com o banco");
+    expect(textoDaDiferenca(-250_050)).toBe("Diferença de −R$\u00a02.500,50 com o banco");
+    expect(textoDaDiferenca(null)).toBeNull();
+  });
+
+  it("fatura do banco diferente: mês por extenso do vencimento", () => {
+    expect(textoDaFatura({ vencimento: "2026-04-10", diferencaCentavos: 10_000 })).toBe("Fatura de abril: diferença de R$\u00a0100,00 com o banco");
+  });
+
+  it("resumo da sincronização fala de contas e lançamentos, e avisa a falha", () => {
+    expect(textoDaSincronizacao({ contasSincronizadas: 2, contasComFalha: 0, lancamentosNovos: 37, lancamentosAtualizados: 1 })).toBe(
+      "Sincronizado: 2 contas, 37 lançamentos novos.",
+    );
+    expect(textoDaSincronizacao({ contasSincronizadas: 1, contasComFalha: 1, lancamentosNovos: 1, lancamentosAtualizados: 0 })).toBe(
+      "Sincronizado: 1 conta, 1 lançamento novo. 1 conta não veio do banco agora; a próxima sincronização tenta de novo.",
+    );
+    expect(textoDaSincronizacao({ contasSincronizadas: 0, contasComFalha: 0, lancamentosNovos: 0, lancamentosAtualizados: 0 })).toBe(
+      "Nada para sincronizar: nenhuma conta ativa deste banco.",
+    );
   });
 });

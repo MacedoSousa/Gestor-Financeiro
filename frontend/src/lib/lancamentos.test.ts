@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Conta } from "../api/contas";
 import type { Categoria, Lancamento } from "../api/lancamentos";
-import { avisaAporteEmDobro, categoriasDoTipo, ehEstorno } from "./lancamentos";
+import { avisaAporteEmDobro, categoriasDoTipo, ehEstorno, vemDoBanco } from "./lancamentos";
 
 const cat = (id: string, tipo: string, papel: string | null = null, arquivada = false): Categoria => ({ id, nome: id, tipo, arquivada, papel });
 const conta = (tipo: string) => ({ id: "c", apelido: "c", tipo }) as Conta;
@@ -45,5 +45,16 @@ describe("ehEstorno", () => {
   it("receita em Salário não é", () => {
     expect(ehEstorno(lanc("RECEITA", "salario"), todas)).toBe(false);
     expect(ehEstorno(lanc("DESPESA", "mercado"), todas)).toBe(false);
+  });
+});
+
+describe("vemDoBanco (Tarefa 4.4)", () => {
+  const l = { conta: { id: "itau", apelido: "Itaú", tipo: "CORRENTE" } } as Lancamento;
+  it("lançamento de conta ligada só muda descrição e categoria", () => {
+    expect(vemDoBanco(l, [{ id: "itau", ligada: true } as Conta])).toBe(true);
+  });
+  it("conta manual, ou que a lista ainda não trouxe, edita tudo como antes", () => {
+    expect(vemDoBanco(l, [{ id: "itau", ligada: false } as Conta])).toBe(false);
+    expect(vemDoBanco(l, undefined)).toBe(false);
   });
 });
