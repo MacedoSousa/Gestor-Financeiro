@@ -24,6 +24,7 @@ public static class InvestimentosModule
 
         services.AddScoped<ServicoDeMetas>();
         services.AddScoped<IConsultaDeMetas, ConsultaDeMetas>();
+        services.AddScoped<IMetasDeContas, MetasDeContas>();
         return services;
     }
 

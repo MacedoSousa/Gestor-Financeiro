@@ -6,6 +6,7 @@ import { n } from "../api/formulario";
 import { hojeIso } from "../api/lancamentos";
 import { centavosDeTexto, formatarReais, textoDeCentavos } from "../lib/dinheiro";
 import { Alerta, Campo, CampoSelecao } from "./Campo";
+import { seloDaConta } from "../lib/nascimento";
 
 const formatarData = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
 
@@ -70,6 +71,12 @@ function ContaNaLista({ conta, saldo, aoEditar }: { conta: Conta; saldo?: { sald
         <span style={{ fontWeight: 500 }}>
           {conta.apelido}
           {conta.arquivada && <span className="texto-fraco"> (arquivada)</span>}
+          {seloDaConta(conta) && (
+            <>
+              {" "}
+              <span className="selo selo-open-finance selo-conta">{seloDaConta(conta)}</span>
+            </>
+          )}
         </span>
         <span className="cartao-nota">
           {rotuloDoTipo(conta.tipo)} · {conta.titular?.apelido ?? "Conjunta"}

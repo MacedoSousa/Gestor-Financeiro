@@ -26,6 +26,8 @@ public static class IntegracoesModule
                 sp.GetRequiredService<SoftDeleteInterceptor>(),
                 sp.GetRequiredService<ContextoAuditoriaInterceptor>()));
         services.AddScoped<ServicoDeConexoes>();
+        services.AddScoped<Descoberta>();
+        services.AddScoped<Nascimento>();
 
         // Pluggy, só de leitura (ADR-015). Url e PastaDeSegredos na seção "Pluggy" da configuração.
         services.AddOptions<OpcoesDaPluggy>().BindConfiguration("Pluggy");
@@ -43,5 +45,6 @@ public static class IntegracoesModule
         return services;
     }
 
-    public static IEndpointRouteBuilder MapIntegracoes(this IEndpointRouteBuilder api) => api.MapEndpointsDeConexoes();
+    public static IEndpointRouteBuilder MapIntegracoes(this IEndpointRouteBuilder api) =>
+        api.MapEndpointsDeConexoes().MapEndpointsDeNascimento();
 }

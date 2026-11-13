@@ -235,11 +235,27 @@ public class RegrasDeArquitetura
             .Where(x => Regex.IsMatch(x.l, @"\bUNIQUE\b", RegexOptions.IgnoreCase))
             .Where(x => !x.l.TrimStart().StartsWith("--", StringComparison.Ordinal))
             .Where(x => !x.l.Contains("WHERE NOT is_deleted", StringComparison.Ordinal))
+            .Where(x => !AlvoDeFkComposta.IsMatch(x.l))
             .Select(x => $"{Path.GetFileName(x.f)}:{x.i + 1}")
             .ToList();
 
         Assert.True(linhas.Count == 0, $"UNIQUE sem 'WHERE NOT is_deleted' em: {string.Join(", ", linhas)}");
     }
+
+    /// <summary>
+    /// Única exceção à regra 3 (FK composta, decisão do CEO na E3): <c>ADD CONSTRAINT … UNIQUE (casal_id, id)</c>. A
+    /// chave primária está nas colunas, então o soft delete não muda nada; e o Postgres não aceita FK para índice parcial.
+    /// </summary>
+    private static readonly Regex AlvoDeFkComposta =
+        new(@"^\s*ALTER TABLE [a-z_]+\.[a-z_]+ ADD CONSTRAINT [a-z_]+ UNIQUE \(casal_id, id\);\s*$", RegexOptions.IgnoreCase);
+
+    [Theory]
+    [InlineData("ALTER TABLE integracoes.items ADD CONSTRAINT uq_items_casal_id UNIQUE (casal_id, id);", true)]
+    [InlineData("ALTER TABLE integracoes.items ADD CONSTRAINT uq_items_nome UNIQUE (casal_id, nome);", false)]
+    [InlineData("ALTER TABLE integracoes.items ADD CONSTRAINT uq_items_x UNIQUE (casal_id, id, nome);", false)]
+    [InlineData("CREATE UNIQUE INDEX ux_items_casal_id ON integracoes.items (casal_id, id);", false)]
+    public void Excecao_da_FK_composta_e_estreita(string linha, bool aceita) =>
+        Assert.Equal(aceita, AlvoDeFkComposta.IsMatch(linha));
 
     // ---------------------------------------------------------------- Pluggy só de leitura (ADR-015)
 

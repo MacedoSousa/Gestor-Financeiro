@@ -13,6 +13,7 @@ internal sealed class IntegracoesDbContext(DbContextOptions<IntegracoesDbContext
 
     public DbSet<Conexao> Conexoes => Set<Conexao>();
     public DbSet<Item> Items => Set<Item>();
+    public DbSet<Vinculo> Vinculos => Set<Vinculo>();
 }
 
 internal sealed class ConexaoConfig : IEntityTypeConfiguration<Conexao>
@@ -31,6 +32,18 @@ internal sealed class ItemConfig : IEntityTypeConfiguration<Item>
         b.ToTable("items", "integracoes");
         b.HasKey(x => x.Id);
         b.Property(x => x.Banco).HasMaxLength(Item.BancoMaximo);
+        b.Property(x => x.CodigoBanco).HasColumnType("char(3)");
         b.Property(x => x.MotivoErro).HasMaxLength(Item.MotivoMaximo);
+    }
+}
+
+internal sealed class VinculoConfig : IEntityTypeConfiguration<Vinculo>
+{
+    public void Configure(EntityTypeBuilder<Vinculo> b)
+    {
+        b.ToTable("vinculos", "integracoes");
+        b.HasKey(x => x.Id);
+        b.Property(x => x.IdExterno).HasMaxLength(Vinculo.IdExternoMaximo);
+        b.Property(x => x.FaturasDivergentes).HasColumnType("jsonb");
     }
 }

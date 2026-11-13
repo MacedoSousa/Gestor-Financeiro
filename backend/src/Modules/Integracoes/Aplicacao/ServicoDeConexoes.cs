@@ -1,3 +1,4 @@
+using GestorFinanceiro.Modules.Contas.Contracts;
 using GestorFinanceiro.Modules.Identidade.Contracts;
 using GestorFinanceiro.Modules.Integracoes.Contracts;
 using GestorFinanceiro.Modules.Integracoes.Dominio;
@@ -35,6 +36,7 @@ internal sealed partial class ServicoDeConexoes(
     IClientePluggy pluggy,
     ICofre cofre,
     TimeProvider relogio,
+    IConsultaDeContas contas,
     ILogger<ServicoDeConexoes> log)
 {
     internal const string TituloSlotSemChaves = "As chaves deste slot não foram gravadas no servidor.";
@@ -43,13 +45,15 @@ internal sealed partial class ServicoDeConexoes(
     internal const string TituloItemRepetido = "Este item já está cadastrado.";
     internal const string TituloSoOTitular = "Só o titular pode alterar esta conexão.";
     internal const string TituloPluggyFora = "A Pluggy não respondeu. Tente de novo em alguns minutos.";
+    internal const string TituloArquiveAntes = "Arquive antes as contas que vêm deste banco.";
+    internal const string TituloBancoJaEscolhido = "O banco desta conexão já foi escolhido.";
     internal static string TituloRecusado(int slot) => $"O banco recusou este item com as chaves do slot {slot}.";
 
     private const string IndiceDoSlot = "ux_conexoes_slot";
     private const string IndiceDoUsuario = "ux_conexoes_usuario";
     private const string IndiceDoItem = "ux_items_item";
 
-    private sealed record ItemPedido(string ItemId, string Banco);
+    private sealed record ItemPedido(string ItemId, string CodigoBanco, string Banco);
 
     public async Task<ResultadoDeConexoes> ListarAsync(CancellationToken ct)
     {
@@ -62,7 +66,8 @@ internal sealed partial class ServicoDeConexoes(
 
         var dto = new ConexoesDto(
             conexoes.Select(c => Dto(c, apelidos, configurados[c.Slot], items.Where(i => i.ConexaoId == c.Id))).ToList(),
-            configurados.Select(s => new SlotDto(s.Key, s.Value, conexoes.Any(c => c.Slot == s.Key))).ToList());
+            configurados.Select(s => new SlotDto(s.Key, s.Value, conexoes.Any(c => c.Slot == s.Key))).ToList(),
+            BancosConhecidos.Lista);
         return new ResultadoDeConexoes.Lista(dto);
     }
 
@@ -73,7 +78,7 @@ internal sealed partial class ServicoDeConexoes(
 
         var erros = new Dictionary<string, string[]>();
         if (pedido.Slot is not { } slot || !Conexao.SlotValido(slot)) erros["slot"] = ["Escolha o slot 1 ou o slot 2."];
-        var item = ValidarItem(pedido.ItemId, pedido.Banco, erros);
+        var item = ValidarItem(pedido.ItemId, pedido.CodigoBanco, pedido.Banco, erros);
         if (erros.Count > 0 || item is null) return new ResultadoDeConexoes.Invalido(erros);
         var slotEscolhido = pedido.Slot!.Value;
 
@@ -105,7 +110,7 @@ internal sealed partial class ServicoDeConexoes(
         if (recusaDoTitular is not null) return recusaDoTitular;
 
         var erros = new Dictionary<string, string[]>();
-        var item = ValidarItem(pedido.ItemId, pedido.Banco, erros);
+        var item = ValidarItem(pedido.ItemId, pedido.CodigoBanco, pedido.Banco, erros);
         if (erros.Count > 0 || item is null) return new ResultadoDeConexoes.Invalido(erros);
 
         if (segredos.Ler(conexao!.Slot) is not { } chaves) return new ResultadoDeConexoes.Recusado(TituloSlotSemChaves, 400);
@@ -134,7 +139,34 @@ internal sealed partial class ServicoDeConexoes(
         {
             var item = await db.Items.FirstOrDefaultAsync(i => i.Id == itemId && i.ConexaoId == conexao!.Id, ct);
             if (item is null) return new ResultadoDeConexoes.NaoEncontrado();
+            if (await SoltarVinculosAsync([item.Id], ct) is { } recusa) return recusa;
             db.Items.Remove(item);
+            return new ResultadoDeConexoes.Feito();
+        }, ct);
+    }
+
+    /// <summary>
+    /// Escolha do banco de um item cadastrado antes do código (D18): só o titular, uma vez só (as identidades das contas
+    /// dependem dele). Nada muda na Pluggy.
+    /// </summary>
+    public async Task<ResultadoDeConexoes> EscolherBancoAsync(Guid itemId, BancoDoItemDto pedido, CancellationToken ct)
+    {
+        if (atual.CasalId is not { } casal) return new ResultadoDeConexoes.NaoEncontrado();
+        var item = await db.Items.AsNoTracking().FirstOrDefaultAsync(i => i.Id == itemId, ct);
+        if (item is null) return new ResultadoDeConexoes.NaoEncontrado();
+        var (_, recusa) = await DoTitularAsync(item.ConexaoId, ct);
+        if (recusa is not null) return recusa;
+
+        var erros = new Dictionary<string, string[]>();
+        var banco = ValidarBanco(pedido.CodigoBanco, pedido.Banco, erros);
+        if (erros.Count > 0 || banco is null) return new ResultadoDeConexoes.Invalido(erros);
+
+        return await NaTravaDoCasalAsync(casal, async () =>
+        {
+            var noBanco = await db.Items.FirstOrDefaultAsync(i => i.Id == itemId, ct);
+            if (noBanco is null) return new ResultadoDeConexoes.NaoEncontrado();
+            if (noBanco.CodigoBanco is not null) return new ResultadoDeConexoes.Recusado(TituloBancoJaEscolhido, 409);
+            noBanco.EscolherBanco(banco.Value.Codigo, banco.Value.Nome);
             return new ResultadoDeConexoes.Feito();
         }, ct);
     }
@@ -150,7 +182,9 @@ internal sealed partial class ServicoDeConexoes(
         {
             var conexao = await db.Conexoes.FirstOrDefaultAsync(c => c.Id == conexaoId, ct);
             if (conexao is null) return new ResultadoDeConexoes.NaoEncontrado();
-            db.Items.RemoveRange(await db.Items.Where(i => i.ConexaoId == conexaoId).ToListAsync(ct));
+            var items = await db.Items.Where(i => i.ConexaoId == conexaoId).ToListAsync(ct);
+            if (await SoltarVinculosAsync(items.Select(i => i.Id).ToList(), ct) is { } recusa) return recusa;
+            db.Items.RemoveRange(items);
             db.Conexoes.Remove(conexao);
             return new ResultadoDeConexoes.Feito();
         }, ct);
@@ -158,15 +192,51 @@ internal sealed partial class ServicoDeConexoes(
 
     // ------------------------------------------------------------------ regras
 
-    private static ItemPedido? ValidarItem(string? itemId, string? banco, Dictionary<string, string[]> erros)
+    /// <summary>
+    /// Decisão do CEO na E3: com conta não arquivada vindo destes items, recusa (409); a pessoa arquiva antes e o histórico
+    /// fica. Senão, os vínculos vão junto (soft delete) e as contas, já arquivadas, continuam como estão.
+    /// </summary>
+    private async Task<ResultadoDeConexoes?> SoltarVinculosAsync(IReadOnlyCollection<Guid> itemIds, CancellationToken ct)
+    {
+        var vinculos = await db.Vinculos.Where(v => itemIds.Contains(v.ItemId)).ToListAsync(ct);
+        foreach (var contaId in vinculos.Where(v => v.ContaId is not null).Select(v => v.ContaId!.Value).Distinct())
+            if (await contas.ObterAsync(contaId, ct) is { Arquivada: false })
+                return new ResultadoDeConexoes.Recusado(TituloArquiveAntes, 409);
+        db.Vinculos.RemoveRange(vinculos);
+        return null;
+    }
+
+    private static ItemPedido? ValidarItem(string? itemId, string? codigoBanco, string? banco, Dictionary<string, string[]> erros)
     {
         var id = itemId?.Trim() ?? "";
-        var nome = banco?.Trim() ?? "";
         if (id.Length == 0) erros["itemId"] = ["Cole o id do item, copiado do Meu Pluggy."];
         else if (id.Length > Item.ItemIdMaximo) erros["itemId"] = [$"O id do item tem no máximo {Item.ItemIdMaximo} caracteres."];
+        var escolhido = ValidarBanco(codigoBanco, banco, erros);
+        return id.Length is > 0 and <= Item.ItemIdMaximo && escolhido is { } b ? new ItemPedido(id, b.Codigo, b.Nome) : null;
+    }
+
+    /// <summary>
+    /// Código COMPE de 3 dígitos (D18). Da lista: o nome é o da lista e o digitado é ignorado. "Outro": o nome digitado,
+    /// de 1 a 60 caracteres.
+    /// </summary>
+    private static (string Codigo, string Nome)? ValidarBanco(string? codigoBanco, string? banco, Dictionary<string, string[]> erros)
+    {
+        var codigo = codigoBanco?.Trim() ?? "";
+        if (codigo.Length == 0)
+        {
+            erros["codigoBanco"] = ["Escolha o banco."];
+            return null;
+        }
+        if (!Item.CodigoValido(codigo))
+        {
+            erros["codigoBanco"] = ["O código do banco tem 3 dígitos."];
+            return null;
+        }
+        if (BancosConhecidos.NomeDe(codigo) is { } daLista) return (codigo, daLista);
+        var nome = banco?.Trim() ?? "";
         if (nome.Length == 0) erros["banco"] = ["Informe o nome do banco."];
         else if (nome.Length > Item.BancoMaximo) erros["banco"] = [$"O nome do banco tem no máximo {Item.BancoMaximo} caracteres."];
-        return id.Length is > 0 and <= Item.ItemIdMaximo && nome.Length is > 0 and <= Item.BancoMaximo ? new ItemPedido(id, nome) : null;
+        return nome.Length is > 0 and <= Item.BancoMaximo ? (codigo, nome) : null;
     }
 
     private async Task<ResultadoDeConexoes?> ConflitoDeConexaoAsync(Guid usuario, int slot, CancellationToken ct)
@@ -217,7 +287,7 @@ internal sealed partial class ServicoDeConexoes(
     private Item NovoItem(Guid casal, Guid conexaoId, ItemPedido pedido, ItemPluggy doBanco)
     {
         var (estado, motivo) = EstadoDoItem.Do(doBanco.Status, doBanco.ConsentimentoVenceEm, relogio.GetUtcNow());
-        return Item.Criar(casal, conexaoId, pedido.ItemId, pedido.Banco, estado, motivo, doBanco.ConsentimentoVenceEm, cofre);
+        return Item.Criar(casal, conexaoId, pedido.ItemId, pedido.CodigoBanco, pedido.Banco, estado, motivo, doBanco.ConsentimentoVenceEm, cofre);
     }
 
     /// <summary>
@@ -265,7 +335,7 @@ internal sealed partial class ServicoDeConexoes(
             c.UsuarioId == atual.UsuarioId, items.Select(Dto).ToList());
 
     private static ItemDto Dto(Item i) =>
-        new(i.Id, i.Banco, i.Estado, i.MotivoErro,
+        new(i.Id, i.Banco, i.CodigoBanco, i.Estado, i.MotivoErro,
             i.ConsentimentoVenceEm is { } vence ? ConversaoPluggy.DiaDeSaoPaulo(vence) : null, i.UltimaSincronizacaoEm);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Pluggy recusou o item no cadastro (slot {Slot}, status {Status}, código {Codigo}).")]

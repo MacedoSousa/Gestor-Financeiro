@@ -1,19 +1,28 @@
 import { useEffect, useId, useRef, useState, type FormEvent, type RefObject } from "react";
+import { Link } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { ErroDeApi } from "../api/autenticacao";
 import { n } from "../api/formulario";
-import { useAcoesDeConexoes, useConexoes, type Conexao, type ItemDaConexao, type Slot } from "../api/conexoes";
+import { useAcoesDeConexoes, useConexoes, type Banco, type Conexao, type ItemDaConexao, type Slot } from "../api/conexoes";
 import {
   avisoDoSlot,
   BANCO_MAXIMO,
+  ESCOLHA_DE_BANCO_VAZIA,
+  limparErrosDoBanco,
   estadoDoItem,
   ITEM_ID_MAXIMO,
+  nomeDoBancoEscolhido,
+  OUTRO_BANCO,
+  pedidoDoBanco,
   separarConexoes,
   textoDoConsentimento,
+  validarBanco,
   validarCadastro,
+  type ErrosDoBanco,
   type ErrosDoCadastro,
+  type EscolhaDeBanco,
 } from "../lib/conexoes";
-import { Alerta, Campo } from "./Campo";
+import { Alerta, Campo, CampoSelecao } from "./Campo";
 
 const NOTA_DO_ITEM = "No Meu Pluggy, abra o banco conectado e copie o id do item. Ele fica guardado cifrado e não aparece de novo.";
 
@@ -43,12 +52,75 @@ function useTentativa() {
   return { erro, tentativa, ocupado, tentar };
 }
 
-/** Depois de validar no navegador: o foco vai ao primeiro campo com erro (rádio do slot, id do item ou banco). */
+/** Depois de validar no navegador: o foco vai ao primeiro campo com erro (rádio do slot, id do item, banco ou código). */
 function focarPrimeiroErro(form: RefObject<HTMLFormElement | null>) {
   requestAnimationFrame(() =>
     form.current
-      ?.querySelector<HTMLElement>('fieldset[aria-invalid="true"] input:not(:disabled), input[aria-invalid="true"]')
+      ?.querySelector<HTMLElement>(
+        'fieldset[aria-invalid="true"] input:not(:disabled), input[aria-invalid="true"], select[aria-invalid="true"]',
+      )
       ?.focus(),
+  );
+}
+
+/**
+ * Banco do item pela lista fixa de códigos (D18); "Outro" abre o código de 3 dígitos e o nome. O código separa contas de
+ * bancos diferentes com a mesma agência e conta.
+ */
+function EscolhaDoBanco({
+  bancos,
+  valor,
+  aoMudar,
+  erros,
+  aoTrocarEscolha,
+}: {
+  bancos: readonly Banco[];
+  valor: EscolhaDeBanco;
+  aoMudar: (e: EscolhaDeBanco) => void;
+  erros: ErrosDoBanco;
+  /** Trocar o banco no select limpa os erros do banco (o do select não pode ir para o código do "Outro"). */
+  aoTrocarEscolha: () => void;
+}) {
+  const outro = valor.escolha === OUTRO_BANCO;
+  const opcoes = [
+    { valor: "", rotulo: "Escolha o banco" },
+    ...bancos.map((b) => ({ valor: b.codigo, rotulo: `${b.nome} (${b.codigo})` })),
+    { valor: OUTRO_BANCO, rotulo: "Outro" },
+  ];
+  return (
+    <>
+      <CampoSelecao
+        rotulo="Banco"
+        valor={valor.escolha}
+        aoMudar={(escolha) => {
+          aoTrocarEscolha();
+          aoMudar({ ...valor, escolha });
+        }}
+        opcoes={opcoes}
+        erro={outro ? undefined : erros.codigoBanco}
+      />
+      {outro && (
+        <>
+          <Campo
+            rotulo="Código do banco (3 dígitos)"
+            valor={valor.codigoOutro}
+            aoMudar={(codigoOutro) => aoMudar({ ...valor, codigoOutro })}
+            erro={erros.codigoBanco}
+            inputMode="numeric"
+            autoComplete="off"
+            maxLength={3}
+            classeEntrada="num"
+          />
+          <Campo
+            rotulo="Nome do banco"
+            valor={valor.nomeOutro}
+            aoMudar={(nomeOutro) => aoMudar({ ...valor, nomeOutro })}
+            erro={erros.banco}
+            maxLength={BANCO_MAXIMO}
+          />
+        </>
+      )}
+    </>
   );
 }
 
@@ -61,7 +133,7 @@ function ChavesNoSlot({ slot }: { slot: number }) {
   );
 }
 
-function EstadoDoBanco({ item }: { item: ItemDaConexao }) {
+function EstadoDoBanco({ item, semBanco }: { item: ItemDaConexao; semBanco: string }) {
   const aparencia = estadoDoItem(item.estado, item.motivo);
   const consentimento = textoDoConsentimento(item.consentimentoVenceEm, item.estado);
   const classeDoPonto = aparencia.tom === "normal" ? "ponto" : `ponto ${aparencia.tom}`;
@@ -74,6 +146,7 @@ function EstadoDoBanco({ item }: { item: ItemDaConexao }) {
         {consentimento ? <span className="texto-suave"> · {consentimento}</span> : null}
       </span>
       {aparencia.explicacao && <span className="cartao-nota">{aparencia.explicacao}</span>}
+      {!item.codigoBanco && <span className="cartao-nota">{semBanco}</span>}
     </div>
   );
 }
@@ -125,13 +198,13 @@ function EscolhaDoSlot({ slots, valor, aoMudar, erro }: { slots: Slot[]; valor: 
 }
 
 /** Cadastro da própria conexão com o primeiro banco. O servidor consulta o banco antes de gravar. */
-function NovaConexao({ slots, aoConcluir }: { slots: Slot[]; aoConcluir: (aviso: string) => void }) {
+function NovaConexao({ slots, bancos, aoConcluir }: { slots: Slot[]; bancos: readonly Banco[]; aoConcluir: (aviso: string) => void }) {
   const acoes = useAcoesDeConexoes();
   const { erro, tentativa, ocupado, tentar } = useTentativa();
   const form = useRef<HTMLFormElement>(null);
   const [slot, setSlot] = useState<number | null>(null);
   const [itemId, setItemId] = useState("");
-  const [banco, setBanco] = useState("");
+  const [banco, setBanco] = useState<EscolhaDeBanco>(ESCOLHA_DE_BANCO_VAZIA);
   const [erros, setErros] = useState<ErrosDoCadastro>({});
   const nenhumSlot = slots.every((s) => avisoDoSlot({ slot: n(s.slot), configurado: s.configurado, emUso: s.emUso }) !== null);
 
@@ -143,8 +216,9 @@ function NovaConexao({ slots, aoConcluir }: { slots: Slot[]; aoConcluir: (aviso:
       focarPrimeiroErro(form);
       return;
     }
-    const nome = banco.trim();
-    if (await tentar(async () => void (await acoes.conectar(slot, itemId, banco)))) aoConcluir(`Conexão criada. ${nome} foi aceito pelo banco.`);
+    const nome = nomeDoBancoEscolhido(banco, bancos);
+    if (await tentar(async () => void (await acoes.conectar(slot, itemId, pedidoDoBanco(banco)))))
+      aoConcluir(`Conexão criada. ${nome} foi aceito pelo banco.`);
   }
 
   return (
@@ -166,7 +240,7 @@ function NovaConexao({ slots, aoConcluir }: { slots: Slot[]; aoConcluir: (aviso:
         maxLength={ITEM_ID_MAXIMO}
         classeEntrada="num"
       />
-      <Campo rotulo="Banco" valor={banco} aoMudar={setBanco} erro={erros.banco} placeholder="Itaú" maxLength={BANCO_MAXIMO} />
+      <EscolhaDoBanco bancos={bancos} valor={banco} aoMudar={setBanco} erros={erros} aoTrocarEscolha={() => setErros(limparErrosDoBanco)} />
       <Alerta mensagem={erro} tentativa={tentativa} />
       <div>
         <button type="submit" className="botao-primario" disabled={ocupado || nenhumSlot}>
@@ -178,12 +252,22 @@ function NovaConexao({ slots, aoConcluir }: { slots: Slot[]; aoConcluir: (aviso:
 }
 
 /** Mais um banco na própria conexão. Ao abrir, o foco vai para o primeiro campo. */
-function NovoBanco({ conexao, aoConcluir, aoCancelar }: { conexao: Conexao; aoConcluir: (aviso: string) => void; aoCancelar: () => void }) {
+function NovoBanco({
+  conexao,
+  bancos,
+  aoConcluir,
+  aoCancelar,
+}: {
+  conexao: Conexao;
+  bancos: readonly Banco[];
+  aoConcluir: (aviso: string) => void;
+  aoCancelar: () => void;
+}) {
   const acoes = useAcoesDeConexoes();
   const { erro, tentativa, ocupado, tentar } = useTentativa();
   const form = useRef<HTMLFormElement>(null);
   const [itemId, setItemId] = useState("");
-  const [banco, setBanco] = useState("");
+  const [banco, setBanco] = useState<EscolhaDeBanco>(ESCOLHA_DE_BANCO_VAZIA);
   const [erros, setErros] = useState<ErrosDoCadastro>({});
 
   useEffect(() => {
@@ -198,8 +282,9 @@ function NovoBanco({ conexao, aoConcluir, aoCancelar }: { conexao: Conexao; aoCo
       focarPrimeiroErro(form);
       return;
     }
-    const nome = banco.trim();
-    if (await tentar(async () => void (await acoes.acrescentarBanco(conexao.id, itemId, banco)))) aoConcluir(`${nome} entrou na sua conexão.`);
+    const nome = nomeDoBancoEscolhido(banco, bancos);
+    if (await tentar(async () => void (await acoes.acrescentarBanco(conexao.id, itemId, pedidoDoBanco(banco)))))
+      aoConcluir(`${nome} entrou na sua conexão.`);
   }
 
   return (
@@ -223,11 +308,75 @@ function NovoBanco({ conexao, aoConcluir, aoCancelar }: { conexao: Conexao; aoCo
         maxLength={ITEM_ID_MAXIMO}
         classeEntrada="num"
       />
-      <Campo rotulo="Banco" valor={banco} aoMudar={setBanco} erro={erros.banco} placeholder="Nubank" maxLength={BANCO_MAXIMO} />
+      <EscolhaDoBanco bancos={bancos} valor={banco} aoMudar={setBanco} erros={erros} aoTrocarEscolha={() => setErros(limparErrosDoBanco)} />
       <Alerta mensagem={erro} tentativa={tentativa} />
       <div className="acoes-linha">
         <button type="submit" className="botao-primario" disabled={ocupado}>
           {ocupado ? "Consultando o banco…" : "Acrescentar"}
+        </button>
+        <button type="button" className="botao-secundario" disabled={ocupado} onClick={aoCancelar}>
+          Cancelar
+        </button>
+      </div>
+    </form>
+  );
+}
+
+/** Banco de um item cadastrado antes do código (D18): o titular escolhe uma vez; nada muda na Pluggy. */
+function EscolherBanco({
+  item,
+  bancos,
+  aoConcluir,
+  aoCancelar,
+}: {
+  item: ItemDaConexao;
+  bancos: readonly Banco[];
+  aoConcluir: (aviso: string) => void;
+  aoCancelar: () => void;
+}) {
+  const acoes = useAcoesDeConexoes();
+  const { erro, tentativa, ocupado, tentar } = useTentativa();
+  const form = useRef<HTMLFormElement>(null);
+  const [banco, setBanco] = useState<EscolhaDeBanco>(ESCOLHA_DE_BANCO_VAZIA);
+  const [erros, setErros] = useState<ErrosDoBanco>({});
+
+  useEffect(() => {
+    form.current?.querySelector<HTMLSelectElement>("select")?.focus();
+  }, []);
+
+  async function enviar(e: FormEvent) {
+    e.preventDefault();
+    const encontrados = validarBanco(banco);
+    setErros(encontrados);
+    if (Object.keys(encontrados).length > 0) {
+      focarPrimeiroErro(form);
+      return;
+    }
+    const nome = nomeDoBancoEscolhido(banco, bancos);
+    if (await tentar(async () => void (await acoes.escolherBanco(item.id, pedidoDoBanco(banco)))))
+      aoConcluir(`Banco escolhido: ${nome}. As contas dele já podem ser vistas.`);
+  }
+
+  return (
+    <form
+      ref={form}
+      className="confirmacao"
+      noValidate
+      onSubmit={(e) => void enviar(e)}
+      onKeyDown={(e) => {
+        if (e.key === "Escape" && !ocupado) aoCancelar();
+      }}
+      aria-label={`Escolher o banco de ${item.banco}`}
+    >
+      <p className="confirmacao-texto">
+        Qual é o banco de “{item.banco}”? O código separa contas de bancos diferentes com a mesma agência e conta. Escolhido uma
+        vez, não muda.
+      </p>
+      <EscolhaDoBanco bancos={bancos} valor={banco} aoMudar={setBanco} erros={erros} aoTrocarEscolha={() => setErros(limparErrosDoBanco)} />
+      <Alerta mensagem={erro} tentativa={tentativa} />
+      <div className="acoes-linha">
+        <button type="submit" className="botao-primario" disabled={ocupado}>
+          {ocupado ? "Guardando…" : "Guardar o banco"}
         </button>
         <button type="button" className="botao-secundario" disabled={ocupado} onClick={aoCancelar}>
           Cancelar
@@ -243,10 +392,21 @@ type Confirmando = { tipo: "banco"; item: ItemDaConexao } | { tipo: "conexao" } 
  * A conexão de quem está na sessão: bancos, acrescentar, tirar e apagar (só o titular; D21). A confirmação recebe o foco
  * quando aparece e fecha com Esc; concluir ou cancelar devolve o foco ao título da seção (`aoVoltar`).
  */
-function SuaConexao({ conexao, aoAvisar, aoVoltar }: { conexao: Conexao; aoAvisar: (texto: string) => void; aoVoltar: () => void }) {
+function SuaConexao({
+  conexao,
+  bancos,
+  aoAvisar,
+  aoVoltar,
+}: {
+  conexao: Conexao;
+  bancos: readonly Banco[];
+  aoAvisar: (texto: string) => void;
+  aoVoltar: () => void;
+}) {
   const acoes = useAcoesDeConexoes();
   const { erro, tentativa, ocupado, tentar } = useTentativa();
   const [acrescentando, setAcrescentando] = useState(false);
+  const [escolhendo, setEscolhendo] = useState<ItemDaConexao | null>(null);
   const [confirmando, setConfirmando] = useState<Confirmando>(null);
   const caixa = useRef<HTMLDivElement>(null);
 
@@ -283,16 +443,41 @@ function SuaConexao({ conexao, aoAvisar, aoVoltar }: { conexao: Conexao; aoAvisa
         <ul className="lista-itens">
           {conexao.items.map((item) => (
             <li key={item.id} className="item-linha">
-              <EstadoDoBanco item={item} />
-              <button
-                type="button"
-                className="botao-secundario"
-                disabled={ocupado}
-                aria-label={`Tirar ${item.banco} da conexão`}
-                onClick={() => setConfirmando({ tipo: "banco", item })}
-              >
-                Tirar
-              </button>
+              <EstadoDoBanco item={item} semBanco="Escolha o banco para ver as contas dele." />
+              <div className="acoes-linha">
+                {item.codigoBanco ? (
+                  <Link
+                    to={`/conexoes/items/${item.id}/nascimento`}
+                    className="botao-secundario link-botao"
+                    aria-label={`Contas do banco: ${item.banco}`}
+                  >
+                    Contas do banco
+                  </Link>
+                ) : (
+                  <button
+                    type="button"
+                    className="botao-secundario"
+                    disabled={ocupado || escolhendo !== null}
+                    aria-label={`Escolher o banco: ${item.banco}`}
+                    onClick={() => {
+                      setAcrescentando(false);
+                      setConfirmando(null);
+                      setEscolhendo(item);
+                    }}
+                  >
+                    Escolher o banco
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="botao-secundario"
+                  disabled={ocupado}
+                  aria-label={`Tirar ${item.banco} da conexão`}
+                  onClick={() => setConfirmando({ tipo: "banco", item })}
+                >
+                  Tirar
+                </button>
+              </div>
             </li>
           ))}
         </ul>
@@ -326,9 +511,26 @@ function SuaConexao({ conexao, aoAvisar, aoVoltar }: { conexao: Conexao; aoAvisa
         </div>
       )}
 
-      {acrescentando ? (
+      {escolhendo && (
+        <EscolherBanco
+          key={escolhendo.id}
+          item={escolhendo}
+          bancos={bancos}
+          aoCancelar={() => {
+            setEscolhendo(null);
+            aoVoltar();
+          }}
+          aoConcluir={(aviso) => {
+            setEscolhendo(null);
+            aoAvisar(aviso);
+          }}
+        />
+      )}
+
+      {escolhendo ? null : acrescentando ? (
         <NovoBanco
           conexao={conexao}
+          bancos={bancos}
           aoCancelar={() => {
             setAcrescentando(false);
             aoVoltar();
@@ -368,7 +570,7 @@ function ConexaoDoConjuge({ conexao }: { conexao: Conexao | null }) {
         <ul className="lista-itens">
           {conexao.items.map((item) => (
             <li key={item.id} className="item-linha">
-              <EstadoDoBanco item={item} />
+              <EstadoDoBanco item={item} semBanco={`Falta ${conexao.apelido} escolher o banco.`} />
             </li>
           ))}
         </ul>
@@ -438,9 +640,9 @@ export function Conexoes() {
               Sua conexão
             </h2>
             {sua ? (
-              <SuaConexao conexao={sua} aoAvisar={avisar} aoVoltar={voltar} />
+              <SuaConexao conexao={sua} bancos={conexoes.data.bancos} aoAvisar={avisar} aoVoltar={voltar} />
             ) : (
-              <NovaConexao slots={conexoes.data.slots} aoConcluir={avisar} />
+              <NovaConexao slots={conexoes.data.slots} bancos={conexoes.data.bancos} aoConcluir={avisar} />
             )}
           </section>
 

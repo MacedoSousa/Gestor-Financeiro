@@ -570,6 +570,7 @@ public interface IImportacaoDeLancamentos
   - Cada diferença é guardada por fatura no vínculo (coluna `faturas_divergentes jsonb NULL` em V0013: id da fatura → diferença e sincronizações seguidas). Ela aparece em Conexões ("Fatura de <mês>: diferença de R$ X com o banco") só se persistir em 2 sincronizações seguidas.
   - Nada muda no calendário nem na regra C7.
 - Aplicação nova num item já nascido: vira vínculo com `conta_id` nulo e aparece em Conexões para escolher o grupo, pelo mesmo `POST …/nascimento` (só `aplicacoes`). Até lá, não entra em nenhum grupo.
+- Reconciliação de conta ligada órfã (duas abas, E3 nota H), com teste (CEO, D18).
 
 - [ ] **Passo 1:** testes que falham:
   - `Primeira_sincronizacao_importa_2026_e_calcula_saldo_inicial_que_fecha`;

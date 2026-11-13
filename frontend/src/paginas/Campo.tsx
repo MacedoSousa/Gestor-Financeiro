@@ -55,10 +55,12 @@ type CampoSelecaoProps = {
   aoMudar: (v: string) => void;
   opcoes: ReadonlyArray<{ valor: string; rotulo: string }>;
   nota?: string;
+  erro?: string;
 };
 
-export function CampoSelecao({ rotulo, valor, aoMudar, opcoes, nota }: CampoSelecaoProps) {
+export function CampoSelecao({ rotulo, valor, aoMudar, opcoes, nota, erro }: CampoSelecaoProps) {
   const id = useId();
+  const descricao = [nota ? `${id}-nota` : null, erro ? `${id}-erro` : null].filter(Boolean).join(" ");
   return (
     <div className="campo">
       <label className="campo-rotulo" htmlFor={id}>
@@ -68,7 +70,8 @@ export function CampoSelecao({ rotulo, valor, aoMudar, opcoes, nota }: CampoSele
         id={id}
         className="entrada"
         value={valor}
-        aria-describedby={nota ? `${id}-nota` : undefined}
+        aria-invalid={erro ? true : undefined}
+        aria-describedby={descricao || undefined}
         onChange={(e) => aoMudar(e.target.value)}
       >
         {opcoes.map((o) => (
@@ -80,6 +83,11 @@ export function CampoSelecao({ rotulo, valor, aoMudar, opcoes, nota }: CampoSele
       {nota && (
         <span id={`${id}-nota`} className="cartao-nota">
           {nota}
+        </span>
+      )}
+      {erro && (
+        <span id={`${id}-erro`} className="campo-erro">
+          {erro}
         </span>
       )}
     </div>

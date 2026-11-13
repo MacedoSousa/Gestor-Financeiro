@@ -24,6 +24,7 @@ public static class ContasModule
 
         services.AddScoped<IConsultaDeContas, ConsultaDeContas>();
         services.AddScoped<ServicoDeContas>();
+        services.AddScoped<IContasLigadas, ContasLigadas>();
         return services;
     }
 

@@ -64,15 +64,34 @@ internal static class EndpointsDeConexoes
             Guid id, Guid item, ServicoDeConexoes servico, CancellationToken ct) =>
             Feito(await servico.ApagarItemAsync(id, item, ct)))
         .WithName("ApagarItem")
-        .WithSummary("Tira um banco da própria conexão (soft delete). Só o titular (senão 403).")
-        .ProducesProblem(StatusCodes.Status403Forbidden);
+        .WithSummary("Tira um banco da própria conexão (soft delete). Só o titular (senão 403). Com conta não arquivada vinda " +
+                     "deste banco dá 409: arquive antes.")
+        .ProducesProblem(StatusCodes.Status403Forbidden)
+        .ProducesProblem(StatusCodes.Status409Conflict);
 
         grupo.MapDelete("/{id:guid}", async Task<Results<NoContent, ValidationProblem, ProblemHttpResult, NotFound>> (
             Guid id, ServicoDeConexoes servico, CancellationToken ct) =>
             Feito(await servico.ApagarAsync(id, ct)))
         .WithName("ApagarConexao")
-        .WithSummary("Apaga a própria conexão e os bancos dela (soft delete); libera o slot. Só o titular (senão 403).")
-        .ProducesProblem(StatusCodes.Status403Forbidden);
+        .WithSummary("Apaga a própria conexão e os bancos dela (soft delete); libera o slot. Só o titular (senão 403). Com " +
+                     "conta não arquivada vinda destes bancos dá 409: arquive antes.")
+        .ProducesProblem(StatusCodes.Status403Forbidden)
+        .ProducesProblem(StatusCodes.Status409Conflict);
+
+        var items = api.MapGroup("/integracoes/items").WithTags("Integrações");
+        items.AddEndpointFilter(async (contexto, proximo) =>
+        {
+            contexto.HttpContext.Response.Headers.CacheControl = "no-store";
+            return await proximo(contexto);
+        });
+        items.MapPut("/{id:guid}/banco", async Task<Results<NoContent, ValidationProblem, ProblemHttpResult, NotFound>> (
+            Guid id, BancoDoItemDto pedido, ServicoDeConexoes servico, CancellationToken ct) =>
+            Feito(await servico.EscolherBancoAsync(id, pedido, ct)))
+        .WithName("EscolherBancoDoItem")
+        .WithSummary("Escolhe o banco (código COMPE) de um item cadastrado antes do código (D18). Só o titular (senão 403); " +
+                     "uma vez só (já escolhido dá 409). Nada muda na Pluggy.")
+        .ProducesProblem(StatusCodes.Status403Forbidden)
+        .ProducesProblem(StatusCodes.Status409Conflict);
 
         return api;
     }

@@ -92,6 +92,11 @@ checar_conteudo_de_migracao() {
 
   while read -r comando; do
     [ -z "$comando" ] && continue
+    # Única exceção (FK composta, decisão do CEO na E3): UNIQUE (casal_id, id) tem a chave primária nas colunas, então o
+    # soft delete não muda nada nela; e o Postgres não aceita FK para índice parcial.
+    if printf '%s' "$comando" | grep -qiE '^ALTER TABLE [a-z_]+\.[a-z_]+ ADD CONSTRAINT [a-z_]+ UNIQUE \(casal_id, id\)$'; then
+      continue
+    fi
     if ! printf '%s' "$comando" | grep -qF 'WHERE NOT is_deleted'; then
       echo "$(basename "$arquivo"): UNIQUE sem 'WHERE NOT is_deleted' (regra 3): ${comando:0:120}" >&2
       falhou=1

@@ -1104,7 +1104,7 @@
         "tags": [
           "Contas"
         ],
-        "summary": "Atualiza (e arquiva) uma conta. Agência e número nulos mantêm o que está guardado; texto vazio apaga.",
+        "summary": "Atualiza (e arquiva) uma conta. Agência e número nulos mantêm o que está guardado; texto vazio apaga. Em conta ligada ao banco, mudar o saldo inicial dá 409.",
         "operationId": "AtualizarConta",
         "parameters": [
           {
@@ -1160,7 +1160,7 @@
         "tags": [
           "Contas"
         ],
-        "summary": "Apaga (soft delete) uma conta sem lançamentos. Com lançamentos dá 409: arquive em vez de apagar.",
+        "summary": "Apaga (soft delete) uma conta sem lançamentos. Com lançamentos, ou ligada ao banco, dá 409: arquive em vez de apagar.",
         "operationId": "ApagarConta",
         "parameters": [
           {
@@ -2400,7 +2400,7 @@
         "tags": [
           "Integrações"
         ],
-        "summary": "Tira um banco da própria conexão (soft delete). Só o titular (senão 403).",
+        "summary": "Tira um banco da própria conexão (soft delete). Só o titular (senão 403). Com conta não arquivada vinda deste banco dá 409: arquive antes.",
         "operationId": "ApagarItem",
         "parameters": [
           {
@@ -2448,6 +2448,16 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       }
@@ -2457,7 +2467,7 @@
         "tags": [
           "Integrações"
         ],
-        "summary": "Apaga a própria conexão e os bancos dela (soft delete); libera o slot. Só o titular (senão 403).",
+        "summary": "Apaga a própria conexão e os bancos dela (soft delete); libera o slot. Só o titular (senão 403). Com conta não arquivada vinda destes bancos dá 409: arquive antes.",
         "operationId": "ApagarConexao",
         "parameters": [
           {
@@ -2489,6 +2499,305 @@
           },
           "403": {
             "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/integracoes/items/{id}/banco": {
+      "put": {
+        "tags": [
+          "Integrações"
+        ],
+        "summary": "Escolhe o banco (código COMPE) de um item cadastrado antes do código (D18). Só o titular (senão 403); uma vez só (já escolhido dá 409). Nada muda na Pluggy.",
+        "operationId": "EscolherBancoDoItem",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BancoDoItemDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/integracoes/items/{id}/descoberta": {
+      "get": {
+        "tags": [
+          "Integrações"
+        ],
+        "summary": "O que o banco tem neste item e o sistema ainda não: contas, cartões (com dias e limite sugeridos), aplicações e as contas marcadas \"não importar\". Só lê. Só o titular (senão 403); banco recusou dá 502, Pluggy fora do ar dá 503.",
+        "operationId": "DescobrirContas",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DescobertaDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Bad Gateway",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/integracoes/items/{id}/nascimento": {
+      "post": {
+        "tags": [
+          "Integrações"
+        ],
+        "summary": "Cria as contas confirmadas, já ligadas ao banco (CRIAR), liga a contas que já existem (LIGAR) ou registra \"não importar\". Cada grupo de aplicações vira uma conta INVESTIMENTO, opcionalmente numa meta. Repetir o pedido não duplica. Só o titular (senão 403); apelido repetido ou conta que já vem de outra conexão dão 409.",
+        "operationId": "ConfirmarNascimento",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NascimentoDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Bad Gateway",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/integracoes/vinculos/{id}/inclusao": {
+      "post": {
+        "tags": [
+          "Integrações"
+        ],
+        "summary": "Inclui uma conta marcada \"não importar\": CRIAR ou LIGAR, como na confirmação. Só o titular (senão 403); conta que não está marcada dá 409.",
+        "operationId": "IncluirContaNaoImportada",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InclusaoDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -2570,6 +2879,59 @@
             "pattern": "^-?(?:0|[1-9]\\d*)$",
             "type": [
               "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          }
+        }
+      },
+      "AplicacaoConfirmadaDto": {
+        "required": [
+          "idExterno",
+          "grupo"
+        ],
+        "type": "object",
+        "properties": {
+          "idExterno": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "grupo": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/GrupoDeInvestimentoDto"
+              }
+            ]
+          }
+        }
+      },
+      "AplicacaoEncontradaDto": {
+        "required": [
+          "idExterno",
+          "nome",
+          "tipo",
+          "saldoCentavos"
+        ],
+        "type": "object",
+        "properties": {
+          "idExterno": {
+            "type": "string"
+          },
+          "nome": {
+            "type": "string"
+          },
+          "tipo": {
+            "type": "string"
+          },
+          "saldoCentavos": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
               "integer",
               "string"
             ],
@@ -2697,6 +3059,42 @@
             "format": "uuid"
           },
           "texto": {
+            "type": "string"
+          }
+        }
+      },
+      "BancoDoItemDto": {
+        "required": [
+          "codigoBanco",
+          "banco"
+        ],
+        "type": "object",
+        "properties": {
+          "codigoBanco": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "banco": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "BancoDto": {
+        "required": [
+          "codigo",
+          "nome"
+        ],
+        "type": "object",
+        "properties": {
+          "codigo": {
+            "type": "string"
+          },
+          "nome": {
             "type": "string"
           }
         }
@@ -2974,7 +3372,8 @@
       "ConexoesDto": {
         "required": [
           "conexoes",
-          "slots"
+          "slots",
+          "bancos"
         ],
         "type": "object",
         "properties": {
@@ -2988,6 +3387,12 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/SlotDto"
+            }
+          },
+          "bancos": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BancoDto"
             }
           }
         }
@@ -3049,6 +3454,70 @@
           },
           "senha": {
             "type": "string"
+          }
+        }
+      },
+      "ContaConfirmadaDto": {
+        "required": [
+          "idExterno",
+          "acao",
+          "contaExistenteId",
+          "apelido",
+          "titularUsuarioId",
+          "diaFechamento",
+          "diaVencimento"
+        ],
+        "type": "object",
+        "properties": {
+          "idExterno": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "acao": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "contaExistenteId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "apelido": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "titularUsuarioId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "diaFechamento": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "diaVencimento": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
           }
         }
       },
@@ -3174,7 +3643,8 @@
           "diaFechamento",
           "diaVencimento",
           "limiteCentavos",
-          "arquivada"
+          "arquivada",
+          "ligada"
         ],
         "type": "object",
         "properties": {
@@ -3257,6 +3727,102 @@
           },
           "arquivada": {
             "type": "boolean"
+          },
+          "ligada": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ContaEncontradaDto": {
+        "required": [
+          "idExterno",
+          "tipo",
+          "nomeNoBanco",
+          "apelidoSugerido",
+          "titularSugeridoUsuarioId",
+          "diaFechamentoSugerido",
+          "diaVencimentoSugerido",
+          "limiteCentavos",
+          "jaVemDe"
+        ],
+        "type": "object",
+        "properties": {
+          "idExterno": {
+            "type": "string"
+          },
+          "tipo": {
+            "type": "string"
+          },
+          "nomeNoBanco": {
+            "type": "string"
+          },
+          "apelidoSugerido": {
+            "type": "string"
+          },
+          "titularSugeridoUsuarioId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "diaFechamentoSugerido": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "diaVencimentoSugerido": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "limiteCentavos": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "jaVemDe": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "ContaNaoImportadaDto": {
+        "required": [
+          "vinculoId",
+          "idExterno",
+          "tipo",
+          "nomeNoBanco",
+          "apelidoSugerido"
+        ],
+        "type": "object",
+        "properties": {
+          "vinculoId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "idExterno": {
+            "type": "string"
+          },
+          "tipo": {
+            "type": "string"
+          },
+          "nomeNoBanco": {
+            "type": "string"
+          },
+          "apelidoSugerido": {
+            "type": "string"
           }
         }
       },
@@ -3338,6 +3904,38 @@
               "string"
             ],
             "format": "date-time"
+          }
+        }
+      },
+      "DescobertaDto": {
+        "required": [
+          "banco",
+          "contas",
+          "aplicacoes",
+          "naoImportadas"
+        ],
+        "type": "object",
+        "properties": {
+          "banco": {
+            "type": "string"
+          },
+          "contas": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ContaEncontradaDto"
+            }
+          },
+          "aplicacoes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AplicacaoEncontradaDto"
+            }
+          },
+          "naoImportadas": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ContaNaoImportadaDto"
+            }
           }
         }
       },
@@ -3616,6 +4214,28 @@
           }
         }
       },
+      "GrupoDeInvestimentoDto": {
+        "required": [
+          "nome",
+          "metaId"
+        ],
+        "type": "object",
+        "properties": {
+          "nome": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "metaId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          }
+        }
+      },
       "HttpValidationProblemDetails": {
         "type": "object",
         "properties": {
@@ -3663,10 +4283,68 @@
           }
         }
       },
+      "InclusaoDto": {
+        "required": [
+          "acao",
+          "contaExistenteId",
+          "apelido",
+          "titularUsuarioId",
+          "diaFechamento",
+          "diaVencimento"
+        ],
+        "type": "object",
+        "properties": {
+          "acao": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "contaExistenteId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "apelido": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "titularUsuarioId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "diaFechamento": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "diaVencimento": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        }
+      },
       "ItemDto": {
         "required": [
           "id",
           "banco",
+          "codigoBanco",
           "estado",
           "motivo",
           "consentimentoVenceEm",
@@ -3680,6 +4358,12 @@
           },
           "banco": {
             "type": "string"
+          },
+          "codigoBanco": {
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "estado": {
             "type": "string"
@@ -3991,6 +4675,33 @@
           }
         }
       },
+      "NascimentoDto": {
+        "required": [
+          "contas",
+          "aplicacoes"
+        ],
+        "type": "object",
+        "properties": {
+          "contas": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/ContaConfirmadaDto"
+            }
+          },
+          "aplicacoes": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/AplicacaoConfirmadaDto"
+            }
+          }
+        }
+      },
       "NovaCategoriaDto": {
         "required": [
           "nome",
@@ -4016,6 +4727,7 @@
         "required": [
           "slot",
           "itemId",
+          "codigoBanco",
           "banco"
         ],
         "type": "object",
@@ -4030,6 +4742,12 @@
             "format": "int32"
           },
           "itemId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "codigoBanco": {
             "type": [
               "null",
               "string"
@@ -4257,11 +4975,18 @@
       "NovoItemDto": {
         "required": [
           "itemId",
+          "codigoBanco",
           "banco"
         ],
         "type": "object",
         "properties": {
           "itemId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "codigoBanco": {
             "type": [
               "null",
               "string"

@@ -508,10 +508,10 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Atualiza (e arquiva) uma conta. Agência e número nulos mantêm o que está guardado; texto vazio apaga. */
+        /** Atualiza (e arquiva) uma conta. Agência e número nulos mantêm o que está guardado; texto vazio apaga. Em conta ligada ao banco, mudar o saldo inicial dá 409. */
         put: operations["AtualizarConta"];
         post?: never;
-        /** Apaga (soft delete) uma conta sem lançamentos. Com lançamentos dá 409: arquive em vez de apagar. */
+        /** Apaga (soft delete) uma conta sem lançamentos. Com lançamentos, ou ligada ao banco, dá 409: arquive em vez de apagar. */
         delete: operations["ApagarConta"];
         options?: never;
         head?: never;
@@ -776,7 +776,7 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Tira um banco da própria conexão (soft delete). Só o titular (senão 403). */
+        /** Tira um banco da própria conexão (soft delete). Só o titular (senão 403). Com conta não arquivada vinda deste banco dá 409: arquive antes. */
         delete: operations["ApagarItem"];
         options?: never;
         head?: never;
@@ -793,8 +793,76 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Apaga a própria conexão e os bancos dela (soft delete); libera o slot. Só o titular (senão 403). */
+        /** Apaga a própria conexão e os bancos dela (soft delete); libera o slot. Só o titular (senão 403). Com conta não arquivada vinda destes bancos dá 409: arquive antes. */
         delete: operations["ApagarConexao"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/integracoes/items/{id}/banco": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Escolhe o banco (código COMPE) de um item cadastrado antes do código (D18). Só o titular (senão 403); uma vez só (já escolhido dá 409). Nada muda na Pluggy. */
+        put: operations["EscolherBancoDoItem"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/integracoes/items/{id}/descoberta": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** O que o banco tem neste item e o sistema ainda não: contas, cartões (com dias e limite sugeridos), aplicações e as contas marcadas "não importar". Só lê. Só o titular (senão 403); banco recusou dá 502, Pluggy fora do ar dá 503. */
+        get: operations["DescobrirContas"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/integracoes/items/{id}/nascimento": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cria as contas confirmadas, já ligadas ao banco (CRIAR), liga a contas que já existem (LIGAR) ou registra "não importar". Cada grupo de aplicações vira uma conta INVESTIMENTO, opcionalmente numa meta. Repetir o pedido não duplica. Só o titular (senão 403); apelido repetido ou conta que já vem de outra conexão dão 409. */
+        post: operations["ConfirmarNascimento"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/integracoes/vinculos/{id}/inclusao": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Inclui uma conta marcada "não importar": CRIAR ou LIGAR, como na confirmação. Só o titular (senão 403); conta que não está marcada dá 409. */
+        post: operations["IncluirContaNaoImportada"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -820,6 +888,17 @@ export interface components {
             fimDoMes: string;
             /** Format: int64 */
             faturaVencidaCentavos?: null | number | string;
+        };
+        AplicacaoConfirmadaDto: {
+            idExterno: null | string;
+            grupo: null | components["schemas"]["GrupoDeInvestimentoDto"];
+        };
+        AplicacaoEncontradaDto: {
+            idExterno: string;
+            nome: string;
+            tipo: string;
+            /** Format: int64 */
+            saldoCentavos: number | string;
         };
         AporteDaMetaDto: {
             /** Format: uuid */
@@ -850,6 +929,14 @@ export interface components {
             /** Format: uuid */
             contaId: string;
             texto: string;
+        };
+        BancoDoItemDto: {
+            codigoBanco: null | string;
+            banco: null | string;
+        };
+        BancoDto: {
+            codigo: string;
+            nome: string;
         };
         CadastroDoCasalDto: {
             codigoInstalacao: string;
@@ -923,6 +1010,7 @@ export interface components {
         ConexoesDto: {
             conexoes: components["schemas"]["ConexaoDto"][];
             slots: components["schemas"]["SlotDto"][];
+            bancos: components["schemas"]["BancoDto"][];
         };
         ConfirmacaoDeIdentidadeDto: {
             codigoTotp: null | string;
@@ -937,6 +1025,19 @@ export interface components {
             nomeCompleto: string;
             cpf: string;
             senha: string;
+        };
+        ContaConfirmadaDto: {
+            idExterno: null | string;
+            acao: null | string;
+            /** Format: uuid */
+            contaExistenteId: null | string;
+            apelido: null | string;
+            /** Format: uuid */
+            titularUsuarioId: null | string;
+            /** Format: int32 */
+            diaFechamento: null | number | string;
+            /** Format: int32 */
+            diaVencimento: null | number | string;
         };
         ContaDaMetaDto: {
             /** Format: uuid */
@@ -986,6 +1087,30 @@ export interface components {
             /** Format: int64 */
             limiteCentavos: null | number | string;
             arquivada: boolean;
+            ligada: boolean;
+        };
+        ContaEncontradaDto: {
+            idExterno: string;
+            tipo: string;
+            nomeNoBanco: string;
+            apelidoSugerido: string;
+            /** Format: uuid */
+            titularSugeridoUsuarioId: string;
+            /** Format: int32 */
+            diaFechamentoSugerido: null | number | string;
+            /** Format: int32 */
+            diaVencimentoSugerido: null | number | string;
+            /** Format: int64 */
+            limiteCentavos: null | number | string;
+            jaVemDe: null | string;
+        };
+        ContaNaoImportadaDto: {
+            /** Format: uuid */
+            vinculoId: string;
+            idExterno: string;
+            tipo: string;
+            nomeNoBanco: string;
+            apelidoSugerido: string;
         };
         ContaNoSaldoDto: {
             /** Format: uuid */
@@ -1008,6 +1133,12 @@ export interface components {
             criadaEm: string;
             /** Format: date-time */
             ultimoUsoEm: null | string;
+        };
+        DescobertaDto: {
+            banco: string;
+            contas: components["schemas"]["ContaEncontradaDto"][];
+            aplicacoes: components["schemas"]["AplicacaoEncontradaDto"][];
+            naoImportadas: components["schemas"]["ContaNaoImportadaDto"][];
         };
         DescritorDeCredencialDto: {
             id: string;
@@ -1079,6 +1210,11 @@ export interface components {
             /** Format: int64 */
             totalCentavos: number | string;
         };
+        GrupoDeInvestimentoDto: {
+            nome: null | string;
+            /** Format: uuid */
+            metaId: null | string;
+        };
         HttpValidationProblemDetails: {
             type?: null | string;
             title?: null | string;
@@ -1090,10 +1226,23 @@ export interface components {
                 [key: string]: string[];
             };
         };
+        InclusaoDto: {
+            acao: null | string;
+            /** Format: uuid */
+            contaExistenteId: null | string;
+            apelido: null | string;
+            /** Format: uuid */
+            titularUsuarioId: null | string;
+            /** Format: int32 */
+            diaFechamento: null | number | string;
+            /** Format: int32 */
+            diaVencimento: null | number | string;
+        };
         ItemDto: {
             /** Format: uuid */
             id: string;
             banco: string;
+            codigoBanco: null | string;
             estado: string;
             motivo: null | string;
             /** Format: date */
@@ -1168,6 +1317,10 @@ export interface components {
             /** Format: int32 */
             total: number | string;
         };
+        NascimentoDto: {
+            contas: null | components["schemas"]["ContaConfirmadaDto"][];
+            aplicacoes: null | components["schemas"]["AplicacaoConfirmadaDto"][];
+        };
         NovaCategoriaDto: {
             nome: string;
             tipo: string;
@@ -1177,6 +1330,7 @@ export interface components {
             /** Format: int32 */
             slot: null | number | string;
             itemId: null | string;
+            codigoBanco: null | string;
             banco: null | string;
         };
         NovaContaDto: {
@@ -1229,6 +1383,7 @@ export interface components {
         };
         NovoItemDto: {
             itemId: null | string;
+            codigoBanco: null | string;
             banco: null | string;
         };
         NovoLancamentoDto: {
@@ -3723,6 +3878,15 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
         };
     };
     ApagarConexao: {
@@ -3767,6 +3931,263 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    EscolherBancoDoItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BancoDoItemDto"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    DescobrirContas: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DescobertaDto"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Gateway */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    ConfirmarNascimento: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NascimentoDto"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Bad Gateway */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    IncluirContaNaoImportada: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InclusaoDto"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
             };
         };
     };

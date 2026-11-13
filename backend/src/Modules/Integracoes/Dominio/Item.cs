@@ -52,6 +52,9 @@ internal sealed class Item : Entidade, ICasalScoped
     public byte[] ItemIdCifrado { get; private set; } = [];
     public byte[] ItemIdHmac { get; private set; } = [];
     public string Banco { get; private set; } = "";
+
+    /// <summary>Código COMPE (3 dígitos), escolhido pela pessoa (D18). Nulo só nos items cadastrados antes dele.</summary>
+    public string? CodigoBanco { get; private set; }
     public string Estado { get; private set; } = EstadoDoItem.Ativo;
     public string? MotivoErro { get; private set; }
     public DateTimeOffset? ConsentimentoVenceEm { get; private set; }
@@ -65,7 +68,7 @@ internal sealed class Item : Entidade, ICasalScoped
 
     public static byte[] Indice(string itemId, ICofre cofre) => cofre.IndiceCego(NormalizarItemId(itemId), PropositoItemId);
 
-    public static Item Criar(Guid casalId, Guid conexaoId, string itemId, string banco, string estado, string? motivo,
+    public static Item Criar(Guid casalId, Guid conexaoId, string itemId, string codigoBanco, string banco, string estado, string? motivo,
         DateTimeOffset? consentimentoVenceEm, ICofre cofre)
     {
         if (casalId == Guid.Empty) throw new ArgumentException("Casal vazio.", nameof(casalId));
@@ -75,7 +78,7 @@ internal sealed class Item : Entidade, ICasalScoped
         ArgumentOutOfRangeException.ThrowIfGreaterThan(normalizado.Length, ItemIdMaximo);
 
         var item = new Item { CasalId = casalId, ConexaoId = conexaoId };
-        item.DefinirBanco(banco);
+        item.DefinirBanco(codigoBanco, banco);
         item.DefinirEstado(estado, motivo, consentimentoVenceEm);
         item.ItemIdCifrado = cofre.Cifrar(normalizado, Cofre.Aad(Tabela, "item_id_cifrado", item.Id));
         item.ItemIdHmac = cofre.IndiceCego(normalizado, PropositoItemId);
@@ -84,11 +87,22 @@ internal sealed class Item : Entidade, ICasalScoped
 
     public string LerItemId(ICofre cofre) => cofre.Decifrar(ItemIdCifrado, Cofre.Aad(Tabela, "item_id_cifrado", Id));
 
-    private void DefinirBanco(string banco)
+    /// <summary>Escolha do banco num item cadastrado antes do código (D18). Uma vez só: as identidades dependem dele.</summary>
+    public void EscolherBanco(string codigoBanco, string banco)
     {
+        if (CodigoBanco is not null) throw new InvalidOperationException("O banco do item já foi escolhido.");
+        DefinirBanco(codigoBanco, banco);
+    }
+
+    public static bool CodigoValido(string? codigo) => codigo is { Length: 3 } && codigo.All(char.IsAsciiDigit);
+
+    private void DefinirBanco(string codigoBanco, string banco)
+    {
+        if (!CodigoValido(codigoBanco)) throw new ArgumentException("Código de banco com 3 dígitos.", nameof(codigoBanco));
         ArgumentException.ThrowIfNullOrWhiteSpace(banco);
         if (banco != banco.Trim()) throw new ArgumentException("Banco não aparado.", nameof(banco));
         ArgumentOutOfRangeException.ThrowIfGreaterThan(banco.Length, BancoMaximo);
+        CodigoBanco = codigoBanco;
         Banco = banco;
     }
 

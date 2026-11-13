@@ -30,6 +30,7 @@ Leia também o `CLAUDE.md`, a regra da área (`.claude/rules/`) e a spec ou o pl
 Confira, citando arquivo e linha de cada achado:
 1. **Regras 1 a 10** do `CLAUDE.md`, uma por uma.
 2. **Vazamento:** id externo, `itemId`, conta, CPF, telefone, descrição, valor, chave ou token em log (inclusive o log automático de frameworks como o `HttpClientFactory`), mensagem de exceção, URL de log, resposta de erro ou linha de comando.
+   - Exceção única (CEO, D18): o id opaco da conta na Pluggy pode aparecer só nas respostas autenticadas de descoberta e confirmação (E3); nunca em log, erro ou outra rota. Fora dessas duas rotas, ou em log ou erro, continua sendo achado.
 3. **Cifra:** coluna sensível sem `*_cifrado`/`*_hmac`; AAD diferente de `tabela|coluna|id`.
 4. **Dinheiro:** `double`/`float` em qualquer caminho de valor; arredondamento silencioso.
 5. **Fronteiras:** módulo usando tipo `internal` ou schema de outro; escrita entre módulos fora de `Contracts`.
