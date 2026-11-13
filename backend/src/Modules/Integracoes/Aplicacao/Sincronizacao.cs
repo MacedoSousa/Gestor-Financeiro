@@ -164,7 +164,7 @@ internal sealed partial class Sincronizacao(
         var lote = transacoes
             .Where(t => t.Data >= janela)
             .Select(t => new LancamentoImportado(t.Id, t.Data, ConversaoPluggy.ValorNoSistema(doBanco.Tipo, t.ValorCentavos), t.Descricao,
-                t.Status == "PENDING", t.Parcela, t.Parcelas, t.CategoriaId, t.FaturaId))
+                t.Status == "PENDING", t.Parcela, t.Parcelas, t.CategoriaId, t.FaturaId, t.Categoria))
             .ToList();
         var resumo = await importacao.ImportarAsync(conta.Id, janela, lote, apagarAusentes, ct);
 

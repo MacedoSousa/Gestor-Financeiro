@@ -8,8 +8,12 @@ namespace GestorFinanceiro.Modules.Lancamentos.Contracts;
 /// <param name="AConfirmar">PENDING no banco.</param>
 /// <param name="CategoriaExterna">Código da categoria da Pluggy (só guardado; as etapas 5 e 6 usam).</param>
 /// <param name="FaturaIdExterno">billId da Pluggy, só para conferência; a fatura é a do calendário do sistema (D2).</param>
+/// <param name="NomeDaCategoriaExterna">
+/// Nome da categoria da Pluggy (ex.: "Groceries"), para o botão "sempre que o banco disser &lt;categoria&gt;" (etapa 5).
+/// Genérico, não é dado pessoal.
+/// </param>
 public sealed record LancamentoImportado(string IdExterno, DateOnly Data, long ValorCentavos, string? Descricao,
-    bool AConfirmar, int? Parcela, int? Parcelas, string? CategoriaExterna, string? FaturaIdExterno)
+    bool AConfirmar, int? Parcela, int? Parcelas, string? CategoriaExterna, string? FaturaIdExterno, string? NomeDaCategoriaExterna = null)
 {
     // Descrição e valor não vão para log nem para ToString (regra 5).
     public override string ToString() => "LancamentoImportado { }";

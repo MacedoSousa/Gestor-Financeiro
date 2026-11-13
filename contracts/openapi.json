@@ -1688,6 +1688,155 @@
         }
       }
     },
+    "/api/v1/lancamentos/a-revisar": {
+      "get": {
+        "tags": [
+          "Lancamentos"
+        ],
+        "summary": "Lançamentos do banco a revisar, agrupados pela descrição do banco e pela natureza, com a categoria sugerida (regra ou mapa).",
+        "operationId": "ListarARevisar",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/GrupoARevisarDto"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/lancamentos/revisao": {
+      "post": {
+        "tags": [
+          "Lancamentos"
+        ],
+        "summary": "Revisa o lote inteiro ou nada: marca REVISADA com a categoria. SEMPRE cria ou atualiza a regra pela descrição do banco; SEMPRE_DO_BANCO grava o mapa pela categoria do banco. Id que não é do casal dá 404; lançamento já revisado no lote dá 409.",
+        "operationId": "RevisarEmLote",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PedidoDeRevisaoDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/lancamentos/categorias-externas": {
+      "get": {
+        "tags": [
+          "Lancamentos"
+        ],
+        "summary": "O mapa \"sempre que o banco disser <categoria>\": categoria do banco para categoria do casal.",
+        "operationId": "ListarCategoriasExternas",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CategoriaExternaDto"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/lancamentos/categorias-externas/{id}": {
+      "put": {
+        "tags": [
+          "Lancamentos"
+        ],
+        "summary": "Troca a categoria do casal de uma entrada do mapa.",
+        "operationId": "EditarCategoriaExterna",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MudancaDeCategoriaExternaDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
     "/api/v1/transferencias": {
       "post": {
         "tags": [
@@ -3359,6 +3508,34 @@
           }
         }
       },
+      "CategoriaExternaDto": {
+        "required": [
+          "id",
+          "categoriaExterna",
+          "nome",
+          "categoriaId"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "categoriaExterna": {
+            "type": "string"
+          },
+          "nome": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "categoriaId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
       "CodigoRecuperacaoDto": {
         "required": [
           "codigoRecuperacao"
@@ -4398,6 +4575,69 @@
           }
         }
       },
+      "GrupoARevisarDto": {
+        "required": [
+          "descricao",
+          "natureza",
+          "quantidade",
+          "totalCentavos",
+          "categoriaSugeridaId",
+          "categoriaDoBanco",
+          "nomeDaCategoriaDoBanco",
+          "ids"
+        ],
+        "type": "object",
+        "properties": {
+          "descricao": {
+            "type": "string"
+          },
+          "natureza": {
+            "type": "string"
+          },
+          "quantidade": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "totalCentavos": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "categoriaSugeridaId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "categoriaDoBanco": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "nomeDaCategoriaDoBanco": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        }
+      },
       "GrupoDeInvestimentoDto": {
         "required": [
           "nome",
@@ -4911,6 +5151,21 @@
               "string"
             ],
             "format": "int32"
+          }
+        }
+      },
+      "MudancaDeCategoriaExternaDto": {
+        "required": [
+          "categoriaId"
+        ],
+        "type": "object",
+        "properties": {
+          "categoriaId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
           }
         }
       },
@@ -5622,6 +5877,39 @@
         "properties": {
           "codigo": {
             "type": "string"
+          }
+        }
+      },
+      "PedidoDeRevisaoDto": {
+        "required": [
+          "ids",
+          "categoriaId",
+          "aplicar"
+        ],
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "categoriaId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "aplicar": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },

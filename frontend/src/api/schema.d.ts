@@ -608,6 +608,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/lancamentos/a-revisar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Lançamentos do banco a revisar, agrupados pela descrição do banco e pela natureza, com a categoria sugerida (regra ou mapa). */
+        get: operations["ListarARevisar"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lancamentos/revisao": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Revisa o lote inteiro ou nada: marca REVISADA com a categoria. SEMPRE cria ou atualiza a regra pela descrição do banco; SEMPRE_DO_BANCO grava o mapa pela categoria do banco. Id que não é do casal dá 404; lançamento já revisado no lote dá 409. */
+        post: operations["RevisarEmLote"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lancamentos/categorias-externas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** O mapa "sempre que o banco disser <categoria>": categoria do banco para categoria do casal. */
+        get: operations["ListarCategoriasExternas"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lancamentos/categorias-externas/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Troca a categoria do casal de uma entrada do mapa. */
+        put: operations["EditarCategoriaExterna"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/transferencias": {
         parameters: {
             query?: never;
@@ -1015,6 +1083,14 @@ export interface components {
             arquivada: boolean;
             papel: null | string;
         };
+        CategoriaExternaDto: {
+            /** Format: uuid */
+            id: string;
+            categoriaExterna: string;
+            nome: null | string;
+            /** Format: uuid */
+            categoriaId: string;
+        };
         CodigoRecuperacaoDto: {
             codigoRecuperacao: string;
         };
@@ -1265,6 +1341,19 @@ export interface components {
             /** Format: int64 */
             totalCentavos: number | string;
         };
+        GrupoARevisarDto: {
+            descricao: string;
+            natureza: string;
+            /** Format: int32 */
+            quantidade: number | string;
+            /** Format: int64 */
+            totalCentavos: number | string;
+            /** Format: uuid */
+            categoriaSugeridaId: null | string;
+            categoriaDoBanco: null | string;
+            nomeDaCategoriaDoBanco: null | string;
+            ids: string[];
+        };
         GrupoDeInvestimentoDto: {
             nome: null | string;
             /** Format: uuid */
@@ -1386,6 +1475,10 @@ export interface components {
             metas: components["schemas"]["MetaDoPainelDto"][];
             /** Format: int32 */
             total: number | string;
+        };
+        MudancaDeCategoriaExternaDto: {
+            /** Format: uuid */
+            categoriaId: null | string;
         };
         NascimentoDto: {
             contas: null | components["schemas"]["ContaConfirmadaDto"][];
@@ -1549,6 +1642,12 @@ export interface components {
         };
         PedidoCriadoDto: {
             codigo: string;
+        };
+        PedidoDeRevisaoDto: {
+            ids: null | string[];
+            /** Format: uuid */
+            categoriaId: null | string;
+            aplicar: null | string;
         };
         PedidoPendenteDto: {
             /** Format: uuid */
@@ -3288,6 +3387,147 @@ export interface operations {
                 content: {
                     "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
+            };
+        };
+    };
+    ListarARevisar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GrupoARevisarDto"][];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    RevisarEmLote: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PedidoDeRevisaoDto"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    ListarCategoriasExternas: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategoriaExternaDto"][];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    EditarCategoriaExterna: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MudancaDeCategoriaExternaDto"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

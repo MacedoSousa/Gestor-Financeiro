@@ -18,7 +18,8 @@ namespace GestorFinanceiro.Modules.Lancamentos.Aplicacao;
 /// promovida) ou para trazê-las de volta (a apagada por ausência no banco, D19); nada da linha apagada sai daqui. Nenhum
 /// valor, descrição ou id do banco vai para log ou exceção.
 /// </summary>
-internal sealed class Importacao(LancamentosDbContext db, IUsuarioAtual atual, IConsultaDeContas contas, ICofre cofre)
+internal sealed class Importacao(LancamentosDbContext db, IUsuarioAtual atual, IConsultaDeContas contas, ICofre cofre,
+    SugestaoDeCategoria sugestao)
     : IImportacaoDeLancamentos
 {
     /// <summary>Pendente → definitiva: a data da definitiva fica até 3 dias da pendente (spec, números da Fase 2).</summary>
@@ -92,18 +93,21 @@ internal sealed class Importacao(LancamentosDbContext db, IUsuarioAtual atual, I
                 if (voltou) existente.VoltarDoBanco();
                 existente.ZerarAusencias();
                 var mudou = existente.AtualizarDoBanco(linha.Data, linha.ValorCentavos, linha.Descricao, linha.AConfirmar, linha.Parcela,
-                    linha.Parcelas, linha.CategoriaExterna, linha.FaturaIdExterno, fatura, cofre);
+                    linha.Parcelas, linha.CategoriaExterna, linha.FaturaIdExterno, fatura, cofre, linha.NomeDaCategoriaExterna);
                 if (voltou) restaurados++;
                 else if (mudou) atualizados++;
                 continue;
             }
 
             var nova = Transacao.Importar(casalId, conta.Id, linha.Data, linha.ValorCentavos, linha.Descricao, linha.IdExterno, linha.AConfirmar,
-                linha.Parcela, linha.Parcelas, linha.CategoriaExterna, linha.FaturaIdExterno, fatura, cofre);
+                linha.Parcela, linha.Parcelas, linha.CategoriaExterna, linha.FaturaIdExterno, fatura, cofre, linha.NomeDaCategoriaExterna);
             db.Transacoes.Add(nova);
             novas.Add(nova);
             criados++;
         }
+
+        // Regra e mapa só sugerem para as linhas novas (a revisar, sem categoria); a revisão continua do casal (Tarefa 5.1).
+        await sugestao.SugerirAsync(casalId, novas, ct);
 
         // Janela: o que o banco tinha na conta desde "desde" e não mandou agora.
         var naJanela = await db.Transacoes
