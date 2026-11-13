@@ -543,6 +543,27 @@ public class NascimentoTests(PostgresFixture pg)
         Assert.Equal(0L, await EscalarAsync<long>(c.Banco, "SELECT count(*) FROM integracoes.vinculos WHERE id_externo = 'cdb-sintetico-2'"));
     }
 
+    /// <summary>
+    /// Revisão da D22 (Deveria 1): sem o status do banco, a aplicação aparece como DESCONHECIDA e não pode ir para grupo
+    /// (não nasce grupo com saldo 0 por falta de informação); sem grupo, fica aguardando.
+    /// </summary>
+    [Fact]
+    public async Task Aplicacao_sem_status_nao_entra_em_grupo()
+    {
+        await using var c = await IniciarAsync();
+        var (item, itemPluggy) = await ConectarAsync(c, c.Ana, 1);
+        c.Pluggy.CadastrarInvestimento(itemPluggy, new InvestimentoPluggy("cdb-sintetico-1", "FIXED_INCOME", "CDB", "CDB", 2_000_000, null));
+
+        var aplicacao = (await DescobertaAsync(c.Ana, item)).GetProperty("aplicacoes").EnumerateArray().Single();
+        Assert.Equal("DESCONHECIDA", aplicacao.GetProperty("situacao").GetString());
+        Assert.Equal(HttpStatusCode.BadRequest, (await NascerAsync(c.Ana, item, [], [Grupo("cdb-sintetico-1", "Reserva")])).StatusCode);
+
+        await EsperarAsync(NascerAsync(c.Ana, item, [], [Grupo("cdb-sintetico-1", null)]), HttpStatusCode.NoContent);
+        Assert.Equal(0L, await EscalarAsync<long>(c.Banco, "SELECT count(*) FROM contas.contas WHERE tipo = 'INVESTIMENTO'"));
+        Assert.Equal(1L, await EscalarAsync<long>(c.Banco,
+            "SELECT count(*) FROM integracoes.vinculos WHERE id_externo = 'cdb-sintetico-1' AND conta_id IS NULL"));
+    }
+
     [Fact]
     public async Task Aplicacao_sem_grupo_fica_aguardando()
     {

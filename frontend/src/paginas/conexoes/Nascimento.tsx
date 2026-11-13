@@ -13,7 +13,7 @@ import {
   contasCompativeis,
   gruposDistintos,
   linhasDeAplicacao,
-  aplicacoesResgatadas,
+  aplicacoesForaDeGrupo,
   linhasIniciais,
   montarPedido,
   resumoDaDescoberta,
@@ -22,7 +22,7 @@ import {
   type Acao,
   type ErroDaLinha,
   type LinhaDeAplicacao,
-  type AplicacaoResgatada,
+  type AplicacaoForaDeGrupo,
   type LinhaDeConta,
 } from "../../lib/nascimento";
 import { Alerta, Campo, CampoSelecao } from "../Campo";
@@ -142,7 +142,7 @@ function ContaEncontrada({
 
 function Investimentos({
   linhas,
-  resgatadas,
+  foraDeGrupo,
   metaPorGrupo,
   metas,
   erros,
@@ -151,7 +151,7 @@ function Investimentos({
   aoMudarMeta,
 }: {
   linhas: LinhaDeAplicacao[];
-  resgatadas: AplicacaoResgatada[];
+  foraDeGrupo: AplicacaoForaDeGrupo[];
   metaPorGrupo: Record<string, string>;
   metas: { id: string; nome: string }[];
   erros: Record<string, ErroDaLinha>;
@@ -163,39 +163,50 @@ function Investimentos({
   return (
     <fieldset className="escolha" disabled={ocupado}>
       <legend className="cartao-rotulo">Investimentos</legend>
-      <p className="cartao-nota" style={{ margin: 0 }}>
-        Cada grupo vira uma conta de investimento, com o saldo somado das aplicações ativas. Deixe o grupo vazio para decidir depois.
-      </p>
-      <ul className="lista-itens">
-        {linhas.map((a) => (
-          <li key={a.idExterno} className="item-linha aplicacao-linha">
-            <div className="item-texto">
-              <span style={{ fontWeight: 500 }}>{a.nome}</span>
-              <span className="cartao-nota">
-                {a.tipo} ·{" "}
-                {a.saldoCentavos == null ? (
-                  <span className="tom-alerta">o banco não informou o valor; ela entra no grupo sem valor até o banco informar</span>
-                ) : (
-                  <span className="num">{formatarReais(a.saldoCentavos)}</span>
-                )}
-                {a.situacao === "PENDENTE" && " · em validação no banco; fica fora do saldo até o banco confirmar"}
-              </span>
-            </div>
-            <Campo rotulo={`Grupo de ${a.nome}`} valor={a.grupo} aoMudar={(v) => aoMudarLinha({ ...a, grupo: v })} erro={erros[a.idExterno]?.mensagem} maxLength={APELIDO_MAXIMO + 10} autoComplete="off" />
-          </li>
-        ))}
-      </ul>
-      {resgatadas.length > 0 && (
-        <ul className="lista-itens" aria-label="Aplicações resgatadas">
-          {resgatadas.map((r) => (
-            <li key={r.idExterno} className="item-linha aplicacao-linha">
-              <div className="item-texto">
-                <span style={{ fontWeight: 500 }}>{r.nome}</span>
-                <span className="cartao-nota">{r.tipo} · resgatada no banco; não entra em grupo</span>
-              </div>
-            </li>
-          ))}
-        </ul>
+      {linhas.length > 0 && (
+        <>
+          <p className="cartao-nota" style={{ margin: 0 }}>
+            Cada grupo vira uma conta de investimento, com o saldo somado das aplicações ativas. Deixe o grupo vazio para decidir depois.
+          </p>
+          <ul className="lista-itens">
+            {linhas.map((a) => (
+              <li key={a.idExterno} className="item-linha aplicacao-linha">
+                <div className="item-texto">
+                  <span style={{ fontWeight: 500 }}>{a.nome}</span>
+                  <span className="cartao-nota">
+                    {a.tipo} ·{" "}
+                    {a.saldoCentavos == null ? (
+                      <span className="tom-alerta">o banco não informou o valor; ela entra no grupo sem valor até o banco informar</span>
+                    ) : (
+                      <span className="num">{formatarReais(a.saldoCentavos)}</span>
+                    )}
+                    {a.situacao === "PENDENTE" && " · em validação no banco; fica fora do saldo até o banco confirmar"}
+                  </span>
+                </div>
+                <Campo rotulo={`Grupo de ${a.nome}`} valor={a.grupo} aoMudar={(v) => aoMudarLinha({ ...a, grupo: v })} erro={erros[a.idExterno]?.mensagem} maxLength={APELIDO_MAXIMO + 10} autoComplete="off" />
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+      {foraDeGrupo.length > 0 && (
+        <>
+          <p className="cartao-rotulo" id="titulo-fora-de-grupo" style={{ margin: 0 }}>
+            Fora dos grupos
+          </p>
+          <ul className="lista-itens" aria-labelledby="titulo-fora-de-grupo">
+            {foraDeGrupo.map((r) => (
+              <li key={r.idExterno} className="item-linha aplicacao-linha">
+                <div className="item-texto">
+                  <span style={{ fontWeight: 500 }}>{r.nome}</span>
+                  <span className="cartao-nota">
+                    {r.tipo} · {r.motivo}
+                  </span>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </>
       )}
       {grupos.length > 0 && metas.length > 0 && (
         <div className="grade-form">
@@ -317,7 +328,7 @@ function Confirmacao({ itemId, descoberta, aoAvisar }: { itemId: string; descobe
   const servidor = useErroDoServidor();
   const [linhas, setLinhas] = useState(() => linhasIniciais(descoberta));
   const [aplicacoes, setAplicacoes] = useState(() => linhasDeAplicacao(descoberta));
-  const resgatadas = aplicacoesResgatadas(descoberta);
+  const foraDeGrupo = aplicacoesForaDeGrupo(descoberta);
   const [metaPorGrupo, setMetaPorGrupo] = useState<Record<string, string>>({});
   const [erros, setErros] = useState<Record<string, ErroDaLinha>>({});
   const [ocupado, setOcupado] = useState(false);
@@ -389,11 +400,11 @@ function Confirmacao({ itemId, descoberta, aoAvisar }: { itemId: string; descobe
           <p className="cartao-nota" style={{ margin: 0 }}>
             As contas deste banco já estão no sistema. <Link to="/contas">Ver as contas</Link>
           </p>
-          {resgatadas.length > 0 && (
+          {foraDeGrupo.length > 0 && (
             <p className="cartao-nota" style={{ margin: 0 }}>
-              {resgatadas.length === 1
-                ? "1 aplicação resgatada no banco não entra no sistema."
-                : `${resgatadas.length} aplicações resgatadas no banco não entram no sistema.`}
+              {foraDeGrupo.length === 1
+                ? "1 aplicação do banco fica fora dos grupos (resgatada ou sem a situação informada)."
+                : `${foraDeGrupo.length} aplicações do banco ficam fora dos grupos (resgatadas ou sem a situação informada).`}
             </p>
           )}
         </section>
@@ -415,10 +426,10 @@ function Confirmacao({ itemId, descoberta, aoAvisar }: { itemId: string; descobe
               aoMudar={(nova) => setLinhas((ls) => ls.map((x) => (x.idExterno === nova.idExterno ? nova : x)))}
             />
           ))}
-          {(aplicacoes.length > 0 || resgatadas.length > 0) && (
+          {(aplicacoes.length > 0 || foraDeGrupo.length > 0) && (
             <Investimentos
               linhas={aplicacoes}
-              resgatadas={resgatadas}
+              foraDeGrupo={foraDeGrupo}
               metaPorGrupo={metaPorGrupo}
               metas={(metas.data?.metas ?? []).map((m) => ({ id: m.id, nome: m.nome }))}
               erros={erros}

@@ -3,7 +3,7 @@ import {
   apelidoSugerido,
   contasCompativeis,
   linhasDeAplicacao,
-  aplicacoesResgatadas,
+  aplicacoesForaDeGrupo,
   linhasIniciais,
   montarPedido,
   resumoDaDescoberta,
@@ -55,6 +55,21 @@ describe("resumoDaDescoberta", () => {
   it("conta contas, cartões e investimentos no singular", () => {
     const d = descoberta([encontrada("c", "CORRENTE"), encontrada("k", "CARTAO")], [{ idExterno: "a", nome: "CDB", tipo: "CDB", saldoCentavos: 1 }]);
     expect(resumoDaDescoberta(d)).toBe("Encontramos 1 conta, 1 cartão e 1 investimento no Itaú. Criar?");
+  });
+
+  it("não conta as aplicações que não vão para grupo (resgatada ou sem situação, D22)", () => {
+    const d = descoberta(
+      [],
+      [
+        { idExterno: "a1", nome: "CDB", tipo: "CDB", saldoCentavos: 1, situacao: "ATIVA" },
+        { idExterno: "a2", nome: "CDB antigo", tipo: "CDB", saldoCentavos: 1, situacao: "RESGATADA" },
+        { idExterno: "a3", nome: "Fundo", tipo: "FUNDO", saldoCentavos: 1, situacao: "DESCONHECIDA" },
+      ],
+    );
+    expect(resumoDaDescoberta(d)).toBe("Encontramos 1 investimento no Itaú. Criar?");
+    expect(resumoDaDescoberta(descoberta([], [{ idExterno: "a2", nome: "CDB", tipo: "CDB", saldoCentavos: 1, situacao: "RESGATADA" }]))).toBe(
+      "Nada novo no Itaú: o que o banco mostra já está no sistema.",
+    );
   });
 
   it("usa o plural e omite o que não veio", () => {
@@ -161,17 +176,21 @@ describe("linhasDeAplicacao e montarPedido", () => {
     expect(primeira(linhas)).toMatchObject({ idExterno: "a", grupo: "Investimentos Itaú" });
   });
 
-  it("resgatada não vira linha de grupo; fica na lista das resgatadas (D22)", () => {
+  it("resgatada e sem situação não viram linha de grupo; ficam à parte, com o motivo (D22)", () => {
     const d = descoberta([], [
       { idExterno: "a1", nome: "CDB", tipo: "CDB", saldoCentavos: 1, situacao: "ATIVA" },
       { idExterno: "a2", nome: "CDB antigo", tipo: "CDB", saldoCentavos: 300_000, situacao: "RESGATADA" },
       { idExterno: "a3", nome: "CDB novo", tipo: "CDB", saldoCentavos: 1, situacao: "PENDENTE" },
+      { idExterno: "a4", nome: "Fundo", tipo: "FUNDO", saldoCentavos: 1, situacao: "DESCONHECIDA" },
     ]);
     expect(linhasDeAplicacao(d).map((l) => [l.idExterno, l.situacao])).toEqual([
       ["a1", "ATIVA"],
       ["a3", "PENDENTE"],
     ]);
-    expect(aplicacoesResgatadas(d)).toEqual([{ idExterno: "a2", nome: "CDB antigo", tipo: "CDB" }]);
+    expect(aplicacoesForaDeGrupo(d)).toEqual([
+      { idExterno: "a2", nome: "CDB antigo", tipo: "CDB", motivo: "resgatada no banco; não entra em grupo" },
+      { idExterno: "a4", nome: "Fundo", tipo: "FUNDO", motivo: "o banco não informou a situação; fica aguardando, sem grupo" },
+    ]);
   });
 
   it("aplicação sem valor no banco continua sem valor, não vira R$ 0,00 (D21)", () => {

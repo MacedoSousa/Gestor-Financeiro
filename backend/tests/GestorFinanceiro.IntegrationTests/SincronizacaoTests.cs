@@ -577,8 +577,9 @@ public class SincronizacaoTests(PostgresFixture pg)
         Assert.Equal($"2000000|{em:yyyy-MM-dd}|false", await EscalarAsync<string>(c.Banco,
             $"SELECT saldo_inicial_centavos || '|' || saldo_inicial_em || '|' || arquivada FROM contas.contas WHERE id = '{grupo}'"));
         Assert.Equal(0L, await EscalarAsync<long>(c.Banco, "SELECT count(*) FROM integracoes.vinculos WHERE refazer_saldo_inicial"));
-        Assert.True(await EscalarAsync<long>(c.Banco,
-            $"SELECT count(*) FROM audit.eventos WHERE tabela = 'contas.contas' AND entidade_id = '{grupo}' AND acao = 'UPDATE'") >= 1);
+        Assert.Equal(1L, await EscalarAsync<long>(c.Banco,
+            "SELECT count(*) FROM audit.eventos WHERE tabela = 'contas.contas' AND " +
+            $"entidade_id = '{grupo}' AND acao = 'UPDATE' AND alteracoes -> 'saldo_inicial_centavos' = '{{\"de\": 2500050, \"para\": 2000000}}'::jsonb"));
         Assert.Equal(JsonValueKind.Null, (await GrupoNasConexoesAsync(c, grupo)).GetProperty("diferencaCentavos").ValueKind);
         Assert.Equal(0L, await EscalarAsync<long>(c.Banco, $"SELECT count(*) FROM lancamentos.transacoes WHERE conta_id = '{grupo}'"));
 
@@ -620,6 +621,52 @@ public class SincronizacaoTests(PostgresFixture pg)
         Assert.Equal("2500050|false", await EscalarAsync<string>(c.Banco,
             $"SELECT saldo_inicial_centavos || '|' || arquivada FROM contas.contas WHERE id = '{grupo}'"));
         Assert.Equal(2L, await EscalarAsync<long>(c.Banco, "SELECT count(*) FROM integracoes.vinculos WHERE refazer_saldo_inicial"));
+    }
+
+    /// <summary>
+    /// Revisão da D22 (Deveria 2): grupo que já tem lançamento (a E6 lança rendimento) não tem o saldo inicial refeito, para
+    /// não contar o rendimento duas vezes; a marca sai assim mesmo.
+    /// </summary>
+    [Fact]
+    public async Task Grupo_ja_nascido_com_lancamento_nao_refaz_o_saldo_inicial()
+    {
+        await using var c = await IniciarAsync();
+        var (item, itemPluggy, grupo) = await NascerComGrupoAsync(c);
+        var casal = await EscalarAsync<Guid>(c.Banco, $"SELECT casal_id FROM contas.contas WHERE id = '{grupo}'");
+        await EscalarAsync<int>(c.Banco,
+            "INSERT INTO lancamentos.transacoes (id, casal_id, conta_id, data, valor_centavos, natureza, descricao_cifrada, origem, id_externo, revisao) " +
+            $"VALUES ('{Guid.NewGuid()}', '{casal}', '{grupo}', '2026-11-04', 1000, 'RECEITA', '\\x01', 'SISTEMA', 'rendimento:sintetico', 'A_REVISAR') RETURNING 1");
+        c.Pluggy.AtualizarInvestimento(itemPluggy, new InvestimentoPluggy("cdb-sintetico-2", "FIXED_INCOME", "CDB", "CDB 120%", 500_050, "TOTAL_WITHDRAWAL"));
+        await EscalarAsync<int>(c.Banco, "UPDATE integracoes.vinculos SET refazer_saldo_inicial = true WHERE tipo = 'INVESTIMENTO' RETURNING 1");
+
+        await SincronizarOkAsync(c, item);
+
+        Assert.Equal(2_500_050, await EscalarAsync<long>(c.Banco, $"SELECT saldo_inicial_centavos FROM contas.contas WHERE id = '{grupo}'"));
+        Assert.Equal(0L, await EscalarAsync<long>(c.Banco, "SELECT count(*) FROM integracoes.vinculos WHERE refazer_saldo_inicial"));
+    }
+
+    /// <summary>Revisão da D22 (Deveria 3): aplicação do grupo vinda de outro item ainda não lida: a correção espera.</summary>
+    [Fact]
+    public async Task Grupo_com_aplicacao_de_outro_item_ainda_nao_lida_espera()
+    {
+        await using var c = await IniciarAsync();
+        var (item, itemPluggy, grupo) = await NascerComGrupoAsync(c);
+        var casal = await EscalarAsync<Guid>(c.Banco, $"SELECT casal_id FROM contas.contas WHERE id = '{grupo}'");
+        var conexao = Guid.NewGuid();
+        var outroItem = Guid.NewGuid();
+        await EscalarAsync<int>(c.Banco,
+            $"INSERT INTO integracoes.conexoes (id, casal_id, usuario_id, slot) VALUES ('{conexao}', '{casal}', '{Guid.NewGuid()}', 2) RETURNING 1");
+        await EscalarAsync<int>(c.Banco, "INSERT INTO integracoes.items (id, casal_id, conexao_id, item_id_cifrado, item_id_hmac, banco, estado) " +
+                                         $"VALUES ('{outroItem}', '{casal}', '{conexao}', '\\x01', '\\x02', 'Outro banco', 'ATIVO') RETURNING 1");
+        await EscalarAsync<int>(c.Banco, "INSERT INTO integracoes.vinculos (id, casal_id, item_id, tipo, id_externo, conta_id) " +
+                                         $"VALUES ('{Guid.NewGuid()}', '{casal}', '{outroItem}', 'INVESTIMENTO', 'cdb-de-outro-banco', '{grupo}') RETURNING 1");
+        c.Pluggy.AtualizarInvestimento(itemPluggy, new InvestimentoPluggy("cdb-sintetico-2", "FIXED_INCOME", "CDB", "CDB 120%", 500_050, "TOTAL_WITHDRAWAL"));
+        await EscalarAsync<int>(c.Banco, "UPDATE integracoes.vinculos SET refazer_saldo_inicial = true WHERE tipo = 'INVESTIMENTO' RETURNING 1");
+
+        await SincronizarOkAsync(c, item);
+
+        Assert.Equal(2_500_050, await EscalarAsync<long>(c.Banco, $"SELECT saldo_inicial_centavos FROM contas.contas WHERE id = '{grupo}'"));
+        Assert.Equal(3L, await EscalarAsync<long>(c.Banco, "SELECT count(*) FROM integracoes.vinculos WHERE refazer_saldo_inicial"));
     }
 
     /// <summary>"valor de cada aplicação (ordem do id externo)|diferença do grupo".</summary>

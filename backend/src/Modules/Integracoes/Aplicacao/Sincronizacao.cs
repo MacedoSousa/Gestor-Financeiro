@@ -36,6 +36,7 @@ internal sealed partial class Sincronizacao(
     IContasLigadas contasLigadas,
     IConsultaDeContas contas,
     IConsultaDeSaldos saldos,
+    IEnumerable<IVerificadorDeUsoDaConta> verificadoresDeUso,
     TimeProvider relogio,
     ILogger<Sincronizacao> log)
 {
@@ -236,17 +237,27 @@ internal sealed partial class Sincronizacao(
             var arquivado = grupo.Arquivada;
             // D22: grupo nascido antes da regra "só ACTIVE" (marcado pela V0019) refaz o saldo inicial com as ativas, uma vez,
             // pelo contrato do Contas (auditado); sem nenhuma ativa, saldo 0 e arquivado. Sem saber a situação de todas, espera.
+            // O Contas grava noutra conexão e confirma sozinho: nada do Integracoes pode ter sido gravado antes disto nesta
+            // transação (a trava de auditoria do casal ficaria presa aqui, e a conexão do Contas esperaria por ela).
             if (lista.Any(m => m.RefazerSaldoInicial) && valor is { } ativas)
             {
-                await contasLigadas.DefinirSaldoInicialAsync(grupo.Id, ativas, grupo.SaldoInicialEm, ct);
-                saldoDoSistema += ativas - grupo.SaldoInicialCentavos;
-                if (ativas == 0 && !lista.Any(m => m.SituacaoBanco == SituacaoDaAplicacao.Ativa))
+                if (await EmUsoAsync(grupo.Id, ct))
                 {
-                    await contasLigadas.ArquivarAsync(grupo.Id, ct);
-                    arquivado = true;
+                    // Grupo com lançamento (rendimento da E6): refazer o saldo inicial contaria o rendimento duas vezes.
+                    GrupoNaoRefeito(log, grupo.Id);
+                }
+                else
+                {
+                    await contasLigadas.DefinirSaldoInicialAsync(grupo.Id, ativas, grupo.SaldoInicialEm, ct);
+                    saldoDoSistema += ativas - grupo.SaldoInicialCentavos;
+                    if (ativas == 0 && !lista.Any(m => m.SituacaoBanco == SituacaoDaAplicacao.Ativa))
+                    {
+                        await contasLigadas.ArquivarAsync(grupo.Id, ct);
+                        arquivado = true;
+                    }
+                    GrupoRefeito(log, grupo.Id, arquivado);
                 }
                 foreach (var m in lista) m.SaldoInicialRefeito();
-                GrupoRefeito(log, grupo.Id, arquivado);
             }
 
             foreach (var m in lista) m.ConferirGrupo(!arquivado && valor is { } v ? v - saldoDoSistema : null);
@@ -321,6 +332,14 @@ internal sealed partial class Sincronizacao(
     /// <summary>Um mês: a primeira transação até 01/02 ainda é histórico completo.</summary>
     internal const int ToleranciaDoHistorico = 31;
 
+    private async Task<bool> EmUsoAsync(Guid contaId, CancellationToken ct)
+    {
+        foreach (var verificador in verificadoresDeUso)
+            if (await verificador.EstaEmUsoAsync(contaId, ct))
+                return true;
+        return false;
+    }
+
     private static DateOnly Maior(DateOnly a, DateOnly b) => a > b ? a : b;
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Sincronização: a conta do vínculo {Vinculo} falhou (slot {Slot}, status {Status}, {Tipo}).")]
@@ -328,6 +347,9 @@ internal sealed partial class Sincronizacao(
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Sincronização: a conferência dos investimentos do item {Item} falhou (slot {Slot}, {Tipo}).")]
     private static partial void InvestimentosFalharam(ILogger logger, int slot, Guid item, string tipo);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Sincronização: o grupo {Conta} já tem lançamentos; o saldo inicial não foi refeito (D22).")]
+    private static partial void GrupoNaoRefeito(ILogger logger, Guid conta);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Sincronização: o saldo inicial do grupo {Conta} foi refeito só com as aplicações ativas (arquivado: {Arquivado}; D22).")]
     private static partial void GrupoRefeito(ILogger logger, Guid conta, bool arquivado);
