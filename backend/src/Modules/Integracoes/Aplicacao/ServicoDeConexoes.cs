@@ -347,22 +347,48 @@ internal sealed partial class ServicoDeConexoes(
     /// </summary>
     private async Task<Dictionary<Guid, List<ContaDoItemDto>>> ContasPorItemAsync(CancellationToken ct)
     {
-        var vinculos = await db.Vinculos.AsNoTracking()
-            .Where(v => v.ContaId != null && (v.Tipo == TipoDeVinculo.Conta || v.Tipo == TipoDeVinculo.Cartao))
-            .ToListAsync(ct);
+        var vinculos = await db.Vinculos.AsNoTracking().Where(v => v.ContaId != null).ToListAsync(ct);
         if (vinculos.Count == 0) return [];
         var doCasal = (await contas.ListarAsync(ct)).ToDictionary(k => k.Id);
+        var grupos = Grupos(vinculos);
         return vinculos
             .Where(v => doCasal.ContainsKey(v.ContaId!.Value))
             .GroupBy(v => v.ItemId)
             .ToDictionary(g => g.Key, g => g
+                // Um grupo aparece uma vez por item, pela primeira aplicação dele.
+                .DistinctBy(v => (v.Tipo == TipoDeVinculo.Investimento, v.Tipo == TipoDeVinculo.Investimento ? v.ContaId : v.Id))
                 .Select(v => (Vinculo: v, Conta: doCasal[v.ContaId!.Value]))
                 .OrderBy(x => x.Conta.Apelido, StringComparer.CurrentCulture)
-                .Select(x => new ContaDoItemDto(x.Conta.Id, x.Conta.Apelido, x.Conta.Tipo, x.Conta.Arquivada, x.Vinculo.HistoricoDesde,
-                    x.Vinculo.Tipo == TipoDeVinculo.Conta ? x.Vinculo.DiferencaVisivel : null,
-                    x.Vinculo.FaturasVisiveis.Select(f => new FaturaDivergenteDto(f.Vencimento, f.DiferencaCentavos)).ToList()))
+                .Select(x => x.Vinculo.Tipo == TipoDeVinculo.Investimento
+                    ? new ContaDoItemDto(x.Conta.Id, x.Conta.Apelido, x.Conta.Tipo, x.Conta.Arquivada, null, grupos[x.Conta.Id].DiferencaCentavos, [],
+                        grupos[x.Conta.Id].ValorNoBancoCentavos)
+                    : new ContaDoItemDto(x.Conta.Id, x.Conta.Apelido, x.Conta.Tipo, x.Conta.Arquivada, x.Vinculo.HistoricoDesde,
+                        x.Vinculo.Tipo == TipoDeVinculo.Conta ? x.Vinculo.DiferencaVisivel : null,
+                        x.Vinculo.FaturasVisiveis.Select(f => new FaturaDivergenteDto(f.Vencimento, f.DiferencaCentavos)).ToList()))
                 .ToList());
     }
+
+    /// <summary>Grupos de investimento do casal e o que o banco diz deles na última sincronização (D21), para a tela de Contas.</summary>
+    public async Task<IReadOnlyList<GrupoNoBancoDto>> GruposDeInvestimentoAsync(CancellationToken ct)
+    {
+        var vinculos = await db.Vinculos.AsNoTracking()
+            .Where(v => v.ContaId != null && v.Tipo == TipoDeVinculo.Investimento)
+            .ToListAsync(ct);
+        if (vinculos.Count == 0) return [];
+        var doCasal = (await contas.ListarAsync(ct)).Select(k => k.Id).ToHashSet();
+        return Grupos(vinculos).Values.Where(g => doCasal.Contains(g.ContaId)).OrderBy(g => g.ContaId).ToList();
+    }
+
+    /// <summary>
+    /// Por grupo (conta das aplicações): valor no banco = soma das aplicações, só se todas têm valor; diferença = a gravada
+    /// na última sincronização (a mesma em todas as aplicações do grupo).
+    /// </summary>
+    private static Dictionary<Guid, GrupoNoBancoDto> Grupos(IEnumerable<Vinculo> vinculos) =>
+        vinculos.Where(v => v.Tipo == TipoDeVinculo.Investimento && v.ContaId != null)
+            .GroupBy(v => v.ContaId!.Value)
+            .ToDictionary(g => g.Key, g => new GrupoNoBancoDto(g.Key,
+                g.All(v => v.ValorBancoCentavos is not null) ? g.Sum(v => v.ValorBancoCentavos!.Value) : null,
+                g.Select(v => v.DiferencaCentavos).FirstOrDefault(d => d is not null)));
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Pluggy recusou o item no cadastro (slot {Slot}, status {Status}, código {Codigo}).")]
     private static partial void ItemRecusado(ILogger logger, int slot, int status, string codigo);

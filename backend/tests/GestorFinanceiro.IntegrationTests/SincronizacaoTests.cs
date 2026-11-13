@@ -383,6 +383,89 @@ public class SincronizacaoTests(PostgresFixture pg)
             $"SELECT diferenca_centavos IS NULL AND diferencas_seguidas = 0 FROM integracoes.vinculos WHERE id_externo = '{Cartao.Id}'"));
     }
 
+    /// <summary>Corrente e um grupo "Reserva" com dois CDBs (R$ 20.000,00 e R$ 5.000,50), confirmados juntos.</summary>
+    private static async Task<(Guid Item, string ItemPluggy, Guid Grupo)> NascerComGrupoAsync(Ctx c)
+    {
+        var itemPluggy = $"item-sintetico-{Guid.NewGuid():N}";
+        c.Pluggy.Cadastrar(IdSlot1, itemPluggy);
+        c.Pluggy.CadastrarConta(itemPluggy, Corrente);
+        c.Pluggy.CadastrarInvestimento(itemPluggy, new InvestimentoPluggy("cdb-sintetico-1", "FIXED_INCOME", "CDB", "CDB 110%", 2_000_000));
+        c.Pluggy.CadastrarInvestimento(itemPluggy, new InvestimentoPluggy("cdb-sintetico-2", "FIXED_INCOME", "CDB", "CDB 120%", 500_050));
+        var r = await c.Ana.PostAsJsonAsync("/api/v1/integracoes/conexoes", new { slot = 1, itemId = itemPluggy, codigoBanco = "341" });
+        Assert.Equal(HttpStatusCode.Created, r.StatusCode);
+        var item = (await JsonAsync(r)).GetProperty("items")[0].GetProperty("id").GetGuid();
+        await EsperarAsync(c.Ana.PostAsJsonAsync($"/api/v1/integracoes/items/{item}/nascimento", new
+        {
+            contas = new[] { new { idExterno = Corrente.Id, acao = "CRIAR", apelido = "Itaú Corrente · Ana", titularUsuarioId = c.AnaId } },
+            aplicacoes = new[]
+            {
+                new { idExterno = "cdb-sintetico-1", grupo = new { nome = "Reserva" } },
+                new { idExterno = "cdb-sintetico-2", grupo = new { nome = "Reserva" } },
+            },
+        }), HttpStatusCode.NoContent);
+        var grupo = await EscalarAsync<Guid>(c.Banco, "SELECT id FROM contas.contas WHERE tipo = 'INVESTIMENTO'");
+        return (item, itemPluggy, grupo);
+    }
+
+    private static async Task<JsonElement> GrupoNasConexoesAsync(Ctx c, Guid grupo) =>
+        (await JsonAsync(await c.Ana.GetAsync("/api/v1/integracoes/conexoes"))).GetProperty("conexoes").EnumerateArray()
+            .SelectMany(x => x.GetProperty("items").EnumerateArray()).SelectMany(i => i.GetProperty("contas").EnumerateArray())
+            .Single(k => k.GetProperty("contaId").GetGuid() == grupo);
+
+    /// <summary>
+    /// D21, item 2: a cada sincronização o grupo guarda o valor no banco (soma dos balance) e a diferença para o saldo do
+    /// sistema, sem lançar nada. Conexões e a rota dos grupos mostram os dois.
+    /// </summary>
+    [Fact]
+    public async Task Grupo_guarda_valor_no_banco_e_diferenca_sem_lancar()
+    {
+        await using var c = await IniciarAsync();
+        var (item, itemPluggy, grupo) = await NascerComGrupoAsync(c);
+        await SincronizarOkAsync(c, item);
+        Assert.Equal("2000000;500050|-", await EstadoDoGrupoAsync(c));
+        Assert.Equal(JsonValueKind.Null, (await GrupoNasConexoesAsync(c, grupo)).GetProperty("diferencaCentavos").ValueKind);
+
+        // O CDB rendeu R$ 100,00 no banco.
+        c.Pluggy.AtualizarInvestimento(itemPluggy, new InvestimentoPluggy("cdb-sintetico-1", "FIXED_INCOME", "CDB", "CDB 110%", 2_010_000));
+        await SincronizarOkAsync(c, item);
+
+        Assert.Equal("2010000;500050|10000", await EstadoDoGrupoAsync(c));
+        Assert.Equal(0L, await EscalarAsync<long>(c.Banco, $"SELECT count(*) FROM lancamentos.transacoes WHERE conta_id = '{grupo}'"));
+        Assert.Equal(2_500_050, await EscalarAsync<long>(c.Banco, $"SELECT saldo_inicial_centavos FROM contas.contas WHERE id = '{grupo}'"));
+        var naTela = await GrupoNasConexoesAsync(c, grupo);
+        Assert.Equal("INVESTIMENTO", naTela.GetProperty("tipo").GetString());
+        Assert.Equal(2_510_050, naTela.GetProperty("valorNoBancoCentavos").GetInt64());
+        Assert.Equal(10_000, naTela.GetProperty("diferencaCentavos").GetInt64());
+        var grupos = await JsonAsync(await c.Bruno.GetAsync("/api/v1/integracoes/grupos-de-investimento"));
+        var doGrupo = grupos.EnumerateArray().Single();
+        Assert.Equal(grupo, doGrupo.GetProperty("contaId").GetGuid());
+        Assert.Equal(2_510_050, doGrupo.GetProperty("valorNoBancoCentavos").GetInt64());
+        Assert.Equal(10_000, doGrupo.GetProperty("diferencaCentavos").GetInt64());
+    }
+
+    /// <summary>D21, item 4: balance sem valor numa aplicação não derruba a sincronização; o grupo fica sem conferência.</summary>
+    [Fact]
+    public async Task Aplicacao_sem_valor_no_banco_nao_derruba_a_sincronizacao()
+    {
+        await using var c = await IniciarAsync();
+        var (item, itemPluggy, grupo) = await NascerComGrupoAsync(c);
+        c.Pluggy.CadastrarTransacao(Corrente.Id, Tx("tx-mercado", "2026-11-03", -30_000));
+        c.Pluggy.AtualizarInvestimento(itemPluggy, new InvestimentoPluggy("cdb-sintetico-2", "FIXED_INCOME", "CDB", "CDB 120%", null));
+
+        var r = await SincronizarOkAsync(c, item);
+
+        Assert.Equal(1, r.GetProperty("lancamentosNovos").GetInt32());
+        Assert.Equal("2000000;-|-", await EstadoDoGrupoAsync(c));
+        var naTela = await GrupoNasConexoesAsync(c, grupo);
+        Assert.Equal(JsonValueKind.Null, naTela.GetProperty("valorNoBancoCentavos").ValueKind);
+        Assert.Equal(JsonValueKind.Null, naTela.GetProperty("diferencaCentavos").ValueKind);
+    }
+
+    /// <summary>"valor de cada aplicação (ordem do id externo)|diferença do grupo".</summary>
+    private static Task<string> EstadoDoGrupoAsync(Ctx c) => EscalarAsync<string>(c.Banco,
+        "SELECT string_agg(coalesce(valor_banco_centavos::text, '-'), ';' ORDER BY id_externo) || '|' || " +
+        "coalesce(max(diferenca_centavos)::text, '-') FROM integracoes.vinculos WHERE tipo = 'INVESTIMENTO'");
+
     [Fact]
     public async Task Aplicacao_nova_espera_o_grupo()
     {

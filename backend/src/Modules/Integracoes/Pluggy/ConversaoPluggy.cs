@@ -32,6 +32,23 @@ internal static class ConversaoPluggy
     }
 
     /// <summary>
+    /// Como <see cref="Centavos"/>, mas nulo em vez de exceção (ausente, nulo, não numérico, mais de 2 casas ou fora da
+    /// faixa). Só para o balance da aplicação, que não pode derrubar a leitura do item (D21, item 4).
+    /// </summary>
+    public static long? CentavosOuNulo(JsonElement? valor)
+    {
+        if (valor is not { ValueKind: JsonValueKind.Number } numero) return null;
+        try
+        {
+            return Centavos(numero);
+        }
+        catch (FormatException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
     /// Valor da transação no sinal do sistema (negativo = saída ou gasto, positivo = entrada), pelo tipo da conta na Pluggy
     /// (medição de 11/11; CEO 11/11 21h): na corrente (BANK) o sinal da Pluggy já é esse; no cartão (CREDIT) a compra
     /// vem positiva e o pagamento ou estorno negativo, então inverte.

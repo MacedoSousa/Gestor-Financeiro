@@ -28,7 +28,11 @@ internal sealed record TransacaoPluggy(string Id, DateOnly Data, long ValorCenta
 /// <param name="Vencimento">Dia do calendário de <c>dueDate</c> (não convertido de fuso).</param>
 internal sealed record FaturaPluggy(string Id, DateOnly Vencimento, DateOnly? Fechamento, long TotalCentavos);
 
-internal sealed record InvestimentoPluggy(string Id, string Tipo, string? Subtipo, string Nome, long SaldoCentavos);
+/// <param name="SaldoCentavos">
+/// <c>balance</c> (valor líquido atual). Nulo quando o banco não mandou um valor que o sistema aceite: ausente, nulo, não
+/// numérico ou com mais de 2 casas (D21, item 4). A aplicação continua listada.
+/// </param>
+internal sealed record InvestimentoPluggy(string Id, string Tipo, string? Subtipo, string Nome, long? SaldoCentavos);
 
 /// <summary>
 /// Resposta de erro da Pluggy. Guarda só o status HTTP, o campo <c>code</c> e o <c>Retry-After</c>; nunca o corpo (D26).

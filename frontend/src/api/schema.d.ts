@@ -72,6 +72,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/integracoes/grupos-de-investimento": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Grupos de investimento do casal com o valor no banco e a diferença para o sistema na última sincronização (D21). Nada é lançado: o rendimento entra no sistema na próxima etapa. */
+        get: operations["ListarGruposDeInvestimento"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/visao-geral": {
         parameters: {
             query?: never;
@@ -915,7 +932,7 @@ export interface components {
             nome: string;
             tipo: string;
             /** Format: int64 */
-            saldoCentavos: number | string;
+            saldoCentavos: null | number | string;
         };
         AporteDaMetaDto: {
             /** Format: uuid */
@@ -1089,6 +1106,8 @@ export interface components {
             /** Format: int64 */
             diferencaCentavos: null | number | string;
             faturasDivergentes: components["schemas"]["FaturaDivergenteDto"][];
+            /** Format: int64 */
+            valorNoBancoCentavos?: null | number | string;
         };
         ContaDoLancamentoDto: {
             /** Format: uuid */
@@ -1249,6 +1268,14 @@ export interface components {
             nome: null | string;
             /** Format: uuid */
             metaId: null | string;
+        };
+        GrupoNoBancoDto: {
+            /** Format: uuid */
+            contaId: string;
+            /** Format: int64 */
+            valorNoBancoCentavos: null | number | string;
+            /** Format: int64 */
+            diferencaCentavos: null | number | string;
         };
         HttpValidationProblemDetails: {
             type?: null | string;
@@ -1858,6 +1885,26 @@ export interface operations {
                 };
                 content: {
                     "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    ListarGruposDeInvestimento: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GrupoNoBancoDto"][];
                 };
             };
         };

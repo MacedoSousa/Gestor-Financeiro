@@ -33,6 +33,16 @@ internal static class EndpointsDeConexoes
         .WithName("ListarConexoes")
         .WithSummary("Conexões dos dois cônjuges, com o estado de cada banco, e os dois slots de chaves do servidor.");
 
+        api.MapGet("/integracoes/grupos-de-investimento", async (ServicoDeConexoes servico, HttpContext http, CancellationToken ct) =>
+            {
+                http.Response.Headers.CacheControl = "no-store";
+                return TypedResults.Ok(await servico.GruposDeInvestimentoAsync(ct));
+            })
+        .WithTags("Integrações")
+        .WithName("ListarGruposDeInvestimento")
+        .WithSummary("Grupos de investimento do casal com o valor no banco e a diferença para o sistema na última sincronização (D21). " +
+                     "Nada é lançado: o rendimento entra no sistema na próxima etapa.");
+
         grupo.MapPost("/", async Task<Results<Created<ConexaoDto>, ValidationProblem, ProblemHttpResult, NotFound>> (
             NovaConexaoDto pedido, ServicoDeConexoes servico, CancellationToken ct) =>
             await servico.CriarAsync(pedido, ct) switch

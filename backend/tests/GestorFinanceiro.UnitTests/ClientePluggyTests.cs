@@ -235,6 +235,30 @@ public class ClientePluggyTests
         Assert.Contains(m.Pluggy.Pedidos, p => p.Caminho == "/investments?itemId=item-sintetico");
     }
 
+    /// <summary>
+    /// D21, item 4: balance ausente, nulo, não numérico ou com mais de 2 casas numa aplicação não derruba a leitura; a
+    /// aplicação vem sem valor (nulo) e as outras vêm normais.
+    /// </summary>
+    [Fact]
+    public async Task Investimento_com_balance_invalido_vem_sem_valor_e_nao_derruba_a_leitura()
+    {
+        var m = Montar();
+        m.Pluggy.Responder = _ => Json(200, """
+            {"results":[
+              {"id":"i1","type":"FIXED_INCOME","subtype":"CDB","name":"A","balance":10.5},
+              {"id":"i2","type":"FIXED_INCOME","subtype":"CDB","name":"B"},
+              {"id":"i3","type":"MUTUAL_FUND","subtype":null,"name":"C","balance":null},
+              {"id":"i4","type":"MUTUAL_FUND","name":"D","balance":1234.5678},
+              {"id":"i5","type":"EQUITY","name":"E","balance":"12,30"},
+              {"id":"i6","type":"EQUITY","name":"F","balance":0}
+            ]}
+            """);
+
+        var investimentos = await m.Cliente.ListarInvestimentosAsync(Credenciais, "item-sintetico", default);
+
+        Assert.Equal([1050, null, null, null, null, 0], investimentos.Select(i => i.SaldoCentavos).ToArray());
+    }
+
     [Fact]
     public async Task Erro_401_vira_ErroDaPluggy_sem_corpo()
     {

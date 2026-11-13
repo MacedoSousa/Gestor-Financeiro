@@ -220,7 +220,8 @@ internal sealed class Nascimento(
                 doGrupo.Add(vinculo.Id);
             }
 
-            var saldo = membros.Sum(m => doBanco[m.IdExterno!].SaldoCentavos);
+            // Aplicação sem valor no banco (D21, item 4) entra com 0: o grupo nasce, e a conferência mostra quando o valor vier.
+            var saldo = membros.Sum(m => doBanco[m.IdExterno!].SaldoCentavos ?? 0);
             var pedido = new NovaContaLigada(contaId, "INVESTIMENTO", nome, a.Item.Banco, a.Conexao.UsuarioId, saldo,
                 ConversaoPluggy.DiaDeSaoPaulo(relogio.GetUtcNow()), null, null, null);
             tarefas.Add(new Tarefa.CriarGrupo(nome, pedido, membros.Select(m => m.Grupo!.MetaId).FirstOrDefault(id => id is not null), doGrupo));

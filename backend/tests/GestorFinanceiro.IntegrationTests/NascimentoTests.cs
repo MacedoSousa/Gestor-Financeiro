@@ -488,6 +488,29 @@ public class NascimentoTests(PostgresFixture pg)
         Assert.Equal(2L, await EscalarAsync<long>(c.Banco, "SELECT count(*) FROM integracoes.vinculos WHERE tipo = 'INVESTIMENTO'"));
     }
 
+    /// <summary>
+    /// D21, item 4: aplicação cujo balance o banco não mandou (ou mandou inválido) não derruba a descoberta nem a
+    /// confirmação: aparece sem valor, e o grupo nasce com a soma das que vieram.
+    /// </summary>
+    [Fact]
+    public async Task Aplicacao_sem_valor_no_banco_nao_derruba_descoberta_nem_confirmacao()
+    {
+        await using var c = await IniciarAsync();
+        var (item, itemPluggy) = await ConectarAsync(c, c.Ana, 1);
+        c.Pluggy.CadastrarInvestimento(itemPluggy, new InvestimentoPluggy("cdb-sintetico-1", "FIXED_INCOME", "CDB", "CDB 110%", 2_000_000));
+        c.Pluggy.CadastrarInvestimento(itemPluggy, new InvestimentoPluggy("fundo-sintetico-2", "MUTUAL_FUND", null, "Fundo", null));
+
+        var aplicacoes = (await DescobertaAsync(c.Ana, item)).GetProperty("aplicacoes").EnumerateArray().ToList();
+        Assert.Equal(JsonValueKind.Null, aplicacoes.Single(a => a.GetProperty("idExterno").GetString() == "fundo-sintetico-2")
+            .GetProperty("saldoCentavos").ValueKind);
+
+        await EsperarAsync(NascerAsync(c.Ana, item, [], [Grupo("cdb-sintetico-1", "Reserva"), Grupo("fundo-sintetico-2", "Reserva")]),
+            HttpStatusCode.NoContent);
+
+        Assert.Equal("Reserva|2000000", await EscalarAsync<string>(c.Banco,
+            "SELECT apelido || '|' || saldo_inicial_centavos FROM contas.contas WHERE tipo = 'INVESTIMENTO'"));
+    }
+
     [Fact]
     public async Task Aplicacao_sem_grupo_fica_aguardando()
     {

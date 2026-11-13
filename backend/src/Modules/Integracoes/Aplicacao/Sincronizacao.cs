@@ -126,6 +126,17 @@ internal sealed partial class Sincronizacao(
             }
         }
 
+        try
+        {
+            await ConferirInvestimentosAsync(a, leitura!, doCasal, hoje, ct);
+        }
+        catch (Exception e) when (e is not OperationCanceledException || !ct.IsCancellationRequested)
+        {
+            // Conferência só informa: a falha dela não desfaz nem marca como falha o que as contas importaram.
+            db.ChangeTracker.Clear();
+            InvestimentosFalharam(log, a.Chaves.Slot, a.Item.Id, e.GetType().Name);
+        }
+
         await RegistrarNoItemAsync(a.Item.Id, sucesso: comFalha == 0, ct);
         return new ResultadoDaSincronizacao.Feita(new SincronizacaoDto(sincronizadas, comFalha, novos, atualizados));
     }
@@ -175,6 +186,39 @@ internal sealed partial class Sincronizacao(
         vinculo.RegistrarImportacao(historico, hoje);
         await db.SaveChangesAsync(ct);
         return new Importada(resumo.Criados, resumo.Atualizados);
+    }
+
+    /// <summary>
+    /// D21: cada aplicação nascida (num grupo) guarda o balance que o banco mandou agora (nulo se sem valor válido, ou se a
+    /// aplicação não veio); cada grupo com aplicação deste item guarda a diferença entre a soma das aplicações dele (de
+    /// qualquer item) e o saldo do sistema. Grupo arquivado, ou com alguma aplicação sem valor, fica sem conferência. Nada
+    /// é lançado: o rendimento entra no sistema na E6.
+    /// </summary>
+    private async Task ConferirInvestimentosAsync(AcessoAoItem a, LeituraDoBanco leitura, IReadOnlyDictionary<Guid, ContaResumo> doCasal,
+        DateOnly hoje, CancellationToken ct)
+    {
+        db.ChangeTracker.Clear();
+        var desteItem = await db.Vinculos
+            .Where(v => v.ItemId == a.Item.Id && v.Tipo == TipoDeVinculo.Investimento && v.ContaId != null)
+            .ToListAsync(ct);
+        if (desteItem.Count == 0) return;
+
+        var doBanco = leitura.Aplicacoes.GroupBy(ap => ap.Id, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
+        foreach (var v in desteItem) v.RegistrarValorNoBanco(doBanco.GetValueOrDefault(v.IdExterno)?.SaldoCentavos);
+
+        var grupos = desteItem.Select(v => v.ContaId!.Value).Distinct().ToList();
+        var deOutrosItems = await db.Vinculos
+            .Where(v => v.ItemId != a.Item.Id && v.Tipo == TipoDeVinculo.Investimento && v.ContaId != null && grupos.Contains(v.ContaId.Value))
+            .ToListAsync(ct);
+        var sistema = (await saldos.SaldosAsync(hoje, ct)).ToDictionary(s => s.ContaId, s => s.SaldoCentavos);
+        foreach (var membros in desteItem.Concat(deOutrosItems).GroupBy(v => v.ContaId!.Value))
+        {
+            long? diferenca = doCasal.TryGetValue(membros.Key, out var grupo) && !grupo.Arquivada && membros.All(m => m.ValorBancoCentavos is not null)
+                ? membros.Sum(m => m.ValorBancoCentavos!.Value) - sistema.GetValueOrDefault(membros.Key)
+                : null;
+            foreach (var m in membros) m.ConferirGrupo(diferenca);
+        }
+        await db.SaveChangesAsync(ct);
     }
 
     /// <summary>
@@ -246,6 +290,9 @@ internal sealed partial class Sincronizacao(
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Sincronização: a conta do vínculo {Vinculo} falhou (slot {Slot}, status {Status}, {Tipo}).")]
     private static partial void ContaFalhou(ILogger logger, int slot, Guid vinculo, int status, string tipo);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Sincronização: a conferência dos investimentos do item {Item} falhou (slot {Slot}, {Tipo}).")]
+    private static partial void InvestimentosFalharam(ILogger logger, int slot, Guid item, string tipo);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Sincronização: conta ligada {Conta} sem vínculo foi desligada ({Resultado}; D18, D19).")]
     private static partial void ContaOrfaDesligada(ILogger logger, Guid conta, ResultadoDoDesligar resultado);

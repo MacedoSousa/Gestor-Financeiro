@@ -60,6 +60,13 @@ internal sealed class ClientePluggyFalso : IClientePluggy
     public void CadastrarInvestimento(string itemId, InvestimentoPluggy investimento) =>
         _investimentos.GetOrAdd(itemId, _ => []).Add(investimento);
 
+    /// <summary>O banco mudou a aplicação (rendimento, resgate ou um balance que veio sem valor).</summary>
+    public void AtualizarInvestimento(string itemId, InvestimentoPluggy investimento)
+    {
+        var lista = _investimentos[itemId];
+        lista[lista.FindIndex(i => i.Id == investimento.Id)] = investimento;
+    }
+
     public Task<ItemPluggy> ObterItemAsync(CredenciaisPluggy c, string itemId, CancellationToken ct)
     {
         Consultas.Enqueue((c.Slot, c.ClientId, itemId));
