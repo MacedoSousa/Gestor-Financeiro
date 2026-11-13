@@ -154,7 +154,7 @@ internal sealed partial class Sincronizacao(
             .Select(t => new LancamentoImportado(t.Id, t.Data, ConversaoPluggy.ValorNoSistema(doBanco.Tipo, t.ValorCentavos), t.Descricao,
                 t.Status == "PENDING", t.Parcela, t.Parcelas, t.CategoriaId, t.FaturaId))
             .ToList();
-        var resumo = await importacao.ImportarAsync(conta.Id, janela, lote, ct, apagarAusentes);
+        var resumo = await importacao.ImportarAsync(conta.Id, janela, lote, apagarAusentes, ct);
 
         if (primeira)
             await contasLigadas.DefinirSaldoInicialAsync(conta.Id, SaldoInicial(cartao, doBanco, lote, leitura, historico, hoje), historico, ct);

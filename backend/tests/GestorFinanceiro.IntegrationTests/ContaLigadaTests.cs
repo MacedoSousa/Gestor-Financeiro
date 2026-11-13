@@ -105,7 +105,7 @@ public class ContaLigadaTests(PostgresFixture pg)
     }
 
     private static Task ImportarAsync(Ctx c, params LancamentoImportado[] lote) =>
-        c.ComAsync<IImportacaoDeLancamentos, ResumoDaImportacao>(i => i.ImportarAsync(c.Ligada, Desde, lote, CancellationToken.None));
+        c.ComAsync<IImportacaoDeLancamentos, ResumoDaImportacao>(i => i.ImportarAsync(c.Ligada, Desde, lote, apagarAusentes: true, CancellationToken.None));
 
     private static LancamentoImportado Linha(string id, long valor, bool aConfirmar = false) =>
         new(id, new DateOnly(2026, 11, 3), valor, "MERCADO SINTETICO", aConfirmar, null, null, null, null);
@@ -305,7 +305,8 @@ public class ContaLigadaTests(PostgresFixture pg)
 
     /// <summary>
     /// Revisão da E4 (achado 1): o que o casal digitou antes de ligar a conta (LIGAR, decisão 3.3) continua dele: edita e
-    /// apaga, para limpar o que o banco trouxe em dobro. Lançar coisa nova na conta continua recusado.
+    /// apaga (para limpar o que o banco trouxe em dobro) e muda descrição e categoria; valor, data e contraparte, não. Lançar coisa
+    /// nova na conta continua recusado.
     /// </summary>
     [Fact]
     public async Task Lancamento_manual_de_antes_de_ligar_continua_do_casal()
@@ -321,8 +322,16 @@ public class ContaLigadaTests(PostgresFixture pg)
         var id = (await JsonAsync(r)).GetProperty("id").GetGuid();
         await ExecutarAsync(c.Banco, $"UPDATE contas.contas SET ligada_em = now() WHERE id = '{c.Manual}'");
 
+        // Valor, data e contraparte não mudam à mão numa conta do banco (opção B, revisão da E4, rodada 2).
+        foreach (var corpo in new[]
+                 {
+                     Edicao(3_000, "2026-11-03", "Padaria", mercado), Edicao(2_500, "2026-11-04", "Padaria", mercado),
+                     Edicao(2_500, "2026-11-03", "Padaria", mercado, contraparte: "Padaria Sintética"),
+                 })
+            Assert.Equal(HttpStatusCode.Conflict, (await c.Cliente.PutAsJsonAsync($"/api/v1/lancamentos/{id}", corpo)).StatusCode);
         Assert.Equal(HttpStatusCode.NoContent, (await c.Cliente.PutAsJsonAsync($"/api/v1/lancamentos/{id}",
-            Edicao(3_000, "2026-11-04", "Padaria", mercado, contraparte: "Padaria Sintética"))).StatusCode);
+            Edicao(2_500, "2026-11-03", "Pão da semana", mercado))).StatusCode);
+        // Apagar pode: é como o casal limpa o que o banco trouxe em dobro.
         Assert.Equal(HttpStatusCode.NoContent, (await c.Cliente.DeleteAsync($"/api/v1/lancamentos/{id}")).StatusCode);
         var novo = await c.Cliente.PostAsJsonAsync("/api/v1/lancamentos", new
         {

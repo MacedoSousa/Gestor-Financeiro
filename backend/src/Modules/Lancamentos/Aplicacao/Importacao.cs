@@ -25,8 +25,8 @@ internal sealed class Importacao(LancamentosDbContext db, IUsuarioAtual atual, I
 
     private const int IdExternoMaximo = 100;
 
-    public async Task<ResumoDaImportacao> ImportarAsync(Guid contaId, DateOnly desde, IReadOnlyList<LancamentoImportado> lote, CancellationToken ct,
-        bool apagarAusentes = true)
+    public async Task<ResumoDaImportacao> ImportarAsync(Guid contaId, DateOnly desde, IReadOnlyList<LancamentoImportado> lote, bool apagarAusentes,
+        CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(lote);
         var casalId = atual.CasalId ?? throw new InvalidOperationException("Importação sem casal.");

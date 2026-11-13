@@ -5,7 +5,7 @@ import { useContas } from "../api/contas";
 import { n } from "../api/formulario";
 import { hojeIso, useCategorias, useExtrato, type FiltroDoExtrato, type Lancamento } from "../api/lancamentos";
 import { formatarReais } from "../lib/dinheiro";
-import { contasParaLancar, vemDoBanco } from "../lib/lancamentos";
+import { contasParaLancar, edicaoEmContaLigada } from "../lib/lancamentos";
 import { nomeDoMes, somarMeses } from "../lib/mes";
 import { EditarLancamento } from "./lancamentos/EditarLancamento";
 import { LancamentoRapido } from "./lancamentos/LancamentoRapido";
@@ -217,7 +217,7 @@ export function Lancamentos() {
           key={editando.id}
           lancamento={editando}
           categorias={categorias.data}
-          doBanco={vemDoBanco(editando, contas.data)}
+          emContaLigada={edicaoEmContaLigada(editando, contas.data)}
           aoFechar={() => setEditando(null)}
         />
       )}

@@ -129,9 +129,9 @@ internal sealed class ServicoDeLancamentos(LancamentosDbContext db, IUsuarioAtua
         if (p.CategoriaId is not { } categoriaId) return Invalido("categoriaId", "Informe a categoria.");
         var natureza = LerNatureza(p.Natureza);
         var conta = await contas.ObterAsync(alvo.ContaId, ct);
-        // Conta ligada (opção B): na linha que veio do banco (ou que o sistema criou), valor, data, natureza e contraparte são
-        // do banco; só descrição e categoria mudam. O que o casal digitou antes de ligar continua dele (revisão da E4, achado 1).
-        if (conta is { Ligada: true } && DoBanco(alvo) && (p.Data != alvo.Data || natureza != alvo.Natureza
+        // Conta ligada (opção B): valor, data, natureza e contraparte não mudam à mão, nem na linha que o casal digitou antes de
+        // ligar (mudar o valor dela seria lançar à mão numa conta do banco; revisão da E4, rodada 2). Descrição e categoria, sim.
+        if (conta is { Ligada: true } && (p.Data != alvo.Data || natureza != alvo.Natureza
                 || (natureza == NaturezaDaTransacao.Despesa ? -p.ValorCentavos : p.ValorCentavos) != alvo.ValorCentavos
                 || Texto(p.Contraparte) != Texto(alvo.LerContraparte(cofre))))
             return new ResultadoDeLancamento.Recusado(TituloContaLigada, 409);
@@ -188,7 +188,7 @@ internal sealed class ServicoDeLancamentos(LancamentosDbContext db, IUsuarioAtua
         var pernas = alvo.GrupoId is { } grupo ? await db.Transacoes.Where(t => t.GrupoId == grupo).ToListAsync(ct) : [alvo];
         await TravaDeConta.TomarAsync(db, pernas.Select(t => t.ContaId), ct);
         foreach (var perna in pernas)
-            if (DoBanco(perna) && (await contas.ObterAsync(perna.ContaId, ct)) is { Ligada: true } && (p.Data != perna.Data || p.ValorCentavos != Math.Abs(perna.ValorCentavos)))
+            if ((await contas.ObterAsync(perna.ContaId, ct)) is { Ligada: true } && (p.Data != perna.Data || p.ValorCentavos != Math.Abs(perna.ValorCentavos)))
                 return new ResultadoDeLancamento.Recusado(TituloContaLigada, 409);
         foreach (var t in pernas) t.EditarTransferencia(new Dinheiro(p.ValorCentavos), p.Data, p.Descricao, cofre);
 
@@ -296,7 +296,7 @@ internal sealed class ServicoDeLancamentos(LancamentosDbContext db, IUsuarioAtua
         return erros;
     }
 
-    /// <summary>Veio do banco ou foi criada pelo sistema (D12): em conta ligada, valor e data não mudam à mão.</summary>
+    /// <summary>Veio do banco ou foi criada pelo sistema (D12): em conta ligada, só some quando o banco diz.</summary>
     private static bool DoBanco(Transacao t) => t.Origem is OrigemDaTransacao.OpenFinance or OrigemDaTransacao.Sistema;
 
     private static string? Texto(string? texto) => string.IsNullOrWhiteSpace(texto) ? null : texto.Trim();

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Conta } from "../api/contas";
 import type { Categoria, Lancamento } from "../api/lancamentos";
-import { avisaAporteEmDobro, categoriasDoTipo, contasParaLancar, ehEstorno, exigeEscolhaDeCategoria, vemDoBanco } from "./lancamentos";
+import { avisaAporteEmDobro, categoriasDoTipo, contasParaLancar, edicaoEmContaLigada, ehEstorno, exigeEscolhaDeCategoria } from "./lancamentos";
 
 const cat = (id: string, tipo: string, papel: string | null = null, arquivada = false): Categoria => ({ id, nome: id, tipo, arquivada, papel });
 const conta = (tipo: string) => ({ id: "c", apelido: "c", tipo }) as Conta;
@@ -48,14 +48,22 @@ describe("ehEstorno", () => {
   });
 });
 
-describe("vemDoBanco (Tarefa 4.4)", () => {
-  const l = { conta: { id: "itau", apelido: "Itaú", tipo: "CORRENTE" } } as Lancamento;
-  it("lançamento de conta ligada só muda descrição e categoria", () => {
-    expect(vemDoBanco(l, [{ id: "itau", ligada: true } as Conta])).toBe(true);
+describe("edicaoEmContaLigada (Tarefa 4.4; revisão da E4, rodada 2)", () => {
+  const conta = { id: "itau", apelido: "Itaú", tipo: "CORRENTE" };
+  const doBanco = { conta, origem: "OPEN_FINANCE" } as Lancamento;
+  const manual = { conta, origem: "MANUAL" } as Lancamento;
+  const ligada = [{ id: "itau", ligada: true } as Conta];
+
+  it("linha do banco em conta ligada: só descrição e categoria, sem apagar", () => {
+    expect(edicaoEmContaLigada(doBanco, ligada)).toEqual({ travada: true, apagavel: false });
+    expect(edicaoEmContaLigada({ ...doBanco, origem: "SISTEMA" }, ligada)).toEqual({ travada: true, apagavel: false });
   });
-  it("conta manual, ou que a lista ainda não trouxe, edita tudo como antes", () => {
-    expect(vemDoBanco(l, [{ id: "itau", ligada: false } as Conta])).toBe(false);
-    expect(vemDoBanco(l, undefined)).toBe(false);
+  it("manual de antes de ligar: só descrição e categoria, mas apaga (limpar o que veio em dobro)", () => {
+    expect(edicaoEmContaLigada(manual, ligada)).toEqual({ travada: true, apagavel: true });
+  });
+  it("conta manual, ou que a lista ainda não trouxe, edita e apaga como antes", () => {
+    expect(edicaoEmContaLigada(doBanco, [{ id: "itau", ligada: false }])).toEqual({ travada: false, apagavel: true });
+    expect(edicaoEmContaLigada(manual, undefined)).toEqual({ travada: false, apagavel: true });
   });
 });
 

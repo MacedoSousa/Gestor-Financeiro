@@ -20,6 +20,14 @@ internal sealed class ClientePluggyFalso : IClientePluggy
     /// <summary>Cada leitura de transações: a conta e o "desde" pedido.</summary>
     public ConcurrentQueue<(string ContaId, DateOnly Desde)> LeiturasDeTransacoes { get; } = new();
 
+    /// <summary>Espera dentro de cada leitura de transações, para os testes de concorrência.</summary>
+    public TimeSpan AtrasoNasTransacoes { get; set; }
+
+    private int _leiturasJuntas;
+
+    /// <summary>Quantas leituras de transações chegaram a estar em andamento ao mesmo tempo.</summary>
+    public int MaximoDeLeiturasJuntas { get; private set; }
+
     /// <summary>Contas cuja leitura de transações falha (como um 500 da Pluggy só naquela conta).</summary>
     public ConcurrentDictionary<string, bool> ContasComFalha { get; } = new();
 
@@ -72,9 +80,19 @@ internal sealed class ClientePluggyFalso : IClientePluggy
         if (!_items.Any(i => i.Value.ClientId == c.ClientId && _contas.TryGetValue(i.Key, out var l) && l.Any(x => x.Id == contaId)))
             throw new ErroDaPluggy(404, "ACCOUNT_NOT_FOUND", null);
         LeiturasDeTransacoes.Enqueue((contaId, desde));
-        if (ContasComFalha.ContainsKey(contaId)) throw new ErroDaPluggy(500, "INTERNAL_ERROR", null);
-        foreach (var t in _transacoes.TryGetValue(contaId, out var l2) ? l2.ToList() : [])
-            if (t.Data >= desde) yield return t;
+        var juntas = Interlocked.Increment(ref _leiturasJuntas);
+        lock (LeiturasDeTransacoes) MaximoDeLeiturasJuntas = Math.Max(MaximoDeLeiturasJuntas, juntas);
+        try
+        {
+            if (AtrasoNasTransacoes > TimeSpan.Zero) await Task.Delay(AtrasoNasTransacoes, ct);
+            if (ContasComFalha.ContainsKey(contaId)) throw new ErroDaPluggy(500, "INTERNAL_ERROR", null);
+            foreach (var t in _transacoes.TryGetValue(contaId, out var l2) ? l2.ToList() : [])
+                if (t.Data >= desde) yield return t;
+        }
+        finally
+        {
+            Interlocked.Decrement(ref _leiturasJuntas);
+        }
     }
 
     public Task<IReadOnlyList<FaturaPluggy>> ListarFaturasAsync(CredenciaisPluggy c, string contaId, CancellationToken ct)

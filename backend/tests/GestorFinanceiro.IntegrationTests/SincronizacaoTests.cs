@@ -596,6 +596,8 @@ public class SincronizacaoTests(PostgresFixture pg)
         c.Pluggy.CadastrarTransacao(Corrente.Id, Tx("tx-janeiro", "2026-01-05", -1_000));
         c.Pluggy.CadastrarTransacao(Corrente.Id, Tx("tx-mercado", "2026-11-03", -30_000));
 
+        // Leitura lenta: sem a trava, as duas se sobreporiam na Pluggy (revisão da E4, rodada 2, nota 5).
+        c.Pluggy.AtrasoNasTransacoes = TimeSpan.FromMilliseconds(300);
         var primeiras = await Task.WhenAll(SincronizarAsync(c.Ana, item), SincronizarAsync(c.Ana, item));
         Assert.All(primeiras, r => Assert.Equal(HttpStatusCode.OK, r.StatusCode));
         var conta = await ContaAsync(c, Corrente.Id);
@@ -606,6 +608,8 @@ public class SincronizacaoTests(PostgresFixture pg)
         var seguintes = await Task.WhenAll(SincronizarAsync(c.Ana, item), SincronizarAsync(c.Ana, item));
         Assert.All(seguintes, r => Assert.Equal(HttpStatusCode.OK, r.StatusCode));
         Assert.Equal(2, await EscalarAsync<short>(c.Banco, $"SELECT diferencas_seguidas FROM integracoes.vinculos WHERE id_externo = '{Corrente.Id}'"));
+        Assert.Equal(4, c.Pluggy.LeiturasDeTransacoes.Count);
+        Assert.Equal(1, c.Pluggy.MaximoDeLeiturasJuntas);
     }
 
     /// <summary>Revisão da E4 (achado 4): com o item ainda atualizando no banco, o que sumiu do lote não é apagado.</summary>

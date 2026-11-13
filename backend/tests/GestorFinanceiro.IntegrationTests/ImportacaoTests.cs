@@ -82,7 +82,7 @@ public class ImportacaoTests(PostgresFixture pg)
     private static async Task<ResumoDaImportacao> ImportarAsync(Ctx c, Guid conta, params LancamentoImportado[] lote)
     {
         await using var escopo = c.Api.Services.CreateAsyncScope();
-        return await escopo.ServiceProvider.GetRequiredService<IImportacaoDeLancamentos>().ImportarAsync(conta, Desde, lote, CancellationToken.None);
+        return await escopo.ServiceProvider.GetRequiredService<IImportacaoDeLancamentos>().ImportarAsync(conta, Desde, lote, apagarAusentes: true, CancellationToken.None);
     }
 
     private static LancamentoImportado Linha(string id, long valor, string data = "2026-11-03", string? descricao = "PADARIA SINTETICA",
@@ -240,7 +240,7 @@ public class ImportacaoTests(PostgresFixture pg)
 
         await using (var escopo = c.Api.Services.CreateAsyncScope())
             await escopo.ServiceProvider.GetRequiredService<IImportacaoDeLancamentos>()
-                .ImportarAsync(c.Corrente, new DateOnly(2026, 10, 26), [Linha("tx-recente", -1_000)], CancellationToken.None);
+                .ImportarAsync(c.Corrente, new DateOnly(2026, 10, 26), [Linha("tx-recente", -1_000)], apagarAusentes: true, CancellationToken.None);
 
         Assert.Equal(2L, await AtivasAsync(c));
     }
@@ -352,13 +352,13 @@ public class ImportacaoTests(PostgresFixture pg)
         var importacao = escopo.ServiceProvider.GetRequiredService<IImportacaoDeLancamentos>();
         await Assert.ThrowsAsync<ArgumentException>(() => importacao.ImportarAsync(c.Corrente, Desde,
             [Linha("tx-sintetica-1", -2_550), Linha("tx-sintetica-2", -1_000), Linha("tx-invalida", -300, parcela: 5, parcelas: 3), Linha("tx-sintetica-4", -10)],
-            CancellationToken.None));
+            apagarAusentes: true, CancellationToken.None));
 
         Assert.Equal(1L, await AtivasAsync(c));
         Assert.Equal(1L, await EscalarAsync<long>(c.Banco, "SELECT count(*) FROM lancamentos.transacoes"));
         // O mesmo escopo (o job importa vínculo por vínculo) continua utilizável e não regrava o lote que falhou.
         var resumo = await importacao.ImportarAsync(c.Corrente, Desde, [Linha("tx-ja-existia", -500, data: "2026-11-01"), Linha("tx-outra", -700)],
-            CancellationToken.None);
+            apagarAusentes: true, CancellationToken.None);
         Assert.Equal(new ResumoDaImportacao(1, 0, 0, 0, 0, 0), resumo);
         Assert.Equal(2L, await AtivasAsync(c));
     }
@@ -426,7 +426,7 @@ public class ImportacaoTests(PostgresFixture pg)
 
         await using var escopo = c.Api.Services.CreateAsyncScope();
         var resumo = await escopo.ServiceProvider.GetRequiredService<IImportacaoDeLancamentos>()
-            .ImportarAsync(c.Corrente, Desde, [Linha("tx-sintetica-1", -2_550)], CancellationToken.None, apagarAusentes: false);
+            .ImportarAsync(c.Corrente, Desde, [Linha("tx-sintetica-1", -2_550)], apagarAusentes: false, CancellationToken.None);
 
         Assert.Equal(new ResumoDaImportacao(0, 0, 0, 0, 0, 0), resumo);
         Assert.Equal(2L, await AtivasAsync(c));
