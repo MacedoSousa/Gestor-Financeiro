@@ -654,9 +654,18 @@ public class SincronizacaoTests(PostgresFixture pg)
         await SincronizarOkAsync(c, item);
         Assert.Equal(3L, await LancamentosAsync(c, conta));
 
+        // D19: com o item atualizado, só a segunda sincronização seguida sem a linha apaga.
         c.Pluggy.Cadastrar(IdSlot1, itemPluggy);
         await SincronizarOkAsync(c, item);
+        Assert.Equal(3L, await LancamentosAsync(c, conta));
+        await SincronizarOkAsync(c, item);
         Assert.Equal(2L, await LancamentosAsync(c, conta));
+
+        // Apagada por ausência: se o banco manda de novo, ela volta (a mesma linha, sem duplicar).
+        c.Pluggy.CadastrarTransacao(Corrente.Id, Tx("tx-padaria", "2026-11-04", -2_000));
+        await SincronizarOkAsync(c, item);
+        Assert.Equal(3L, await LancamentosAsync(c, conta));
+        Assert.Equal(3L, await EscalarAsync<long>(c.Banco, $"SELECT count(*) FROM lancamentos.transacoes WHERE conta_id = '{conta}'"));
     }
 
     /// <summary>Revisão da E4 (achado 4): lote vazio com a janela cheia é resposta suspeita; nada é apagado.</summary>

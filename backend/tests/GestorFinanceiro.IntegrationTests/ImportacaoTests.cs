@@ -16,7 +16,8 @@ namespace GestorFinanceiro.IntegrationTests;
 
 /// <summary>
 /// Fase 2, Tarefa 4.3: importação "criar ou atualizar pela chave natural" (OPEN_FINANCE, id da Pluggy). Os testes de risco
-/// da etapa: importar de novo não duplica; categoria e descrição revisadas pelo casal ficam; linha apagada não volta;
+/// da etapa: importar de novo não duplica; categoria e descrição revisadas pelo casal ficam; linha apagada pelo casal não volta
+/// (a apagada por ausência, sim, D19);
 /// pendente vira definitiva mantendo a categoria; falha no meio não deixa nada visível. Dados sintéticos; relógio em
 /// 05/11/2026.
 /// </summary>
@@ -203,8 +204,15 @@ public class ImportacaoTests(PostgresFixture pg)
         Assert.Equal("2026-11-04", l.GetProperty("data").GetString());
     }
 
+    private static Task<string> EstadoAsync(Ctx c, Guid id) => EscalarAsync<string>(c.Banco,
+        $"SELECT is_deleted || '|' || ausencias || '|' || coalesce(apagada_por, '-') FROM lancamentos.transacoes WHERE id = '{id}'");
+
+    private static Task<long> AuditoriaAsync(Ctx c, Guid id, string acao) => EscalarAsync<long>(c.Banco,
+        $"SELECT count(*) FROM audit.eventos WHERE tabela = 'lancamentos.transacoes' AND entidade_id = '{id}' AND acao = '{acao}'");
+
+    /// <summary>D19 (a): um lote sem a linha não apaga; só conta uma ausência.</summary>
     [Fact]
-    public async Task Apagada_pelo_banco_vira_soft_delete_com_auditoria()
+    public async Task Lote_incompleto_uma_vez_nao_apaga()
     {
         await using var c = await IniciarAsync();
         await ImportarAsync(c, c.Corrente, Linha("tx-sintetica-1", -2_550), Linha("tx-sintetica-2", -1_000));
@@ -212,24 +220,102 @@ public class ImportacaoTests(PostgresFixture pg)
 
         var resumo = await ImportarAsync(c, c.Corrente, Linha("tx-sintetica-1", -2_550));
 
-        Assert.Equal(new ResumoDaImportacao(0, 0, 0, 1, 0, 0), resumo);
-        Assert.True(await EscalarAsync<bool>(c.Banco, $"SELECT is_deleted FROM lancamentos.transacoes WHERE id = '{id}'"));
-        Assert.Equal(1L, await EscalarAsync<long>(c.Banco,
-            $"SELECT count(*) FROM audit.eventos WHERE tabela = 'lancamentos.transacoes' AND entidade_id = '{id}' AND acao = 'SOFT_DELETE'"));
+        Assert.Equal(new ResumoDaImportacao(0, 0, 0, 0, 0, 0), resumo);
+        Assert.Equal(2L, await AtivasAsync(c));
+        Assert.Equal("false|1|-", await EstadoAsync(c, id));
     }
 
+    /// <summary>D19 (b): duas sincronizações seguidas sem a linha apagam, com o motivo e a auditoria.</summary>
     [Fact]
-    public async Task Linha_apagada_nao_e_recriada()
+    public async Task Duas_seguidas_sem_a_linha_apagam()
     {
         await using var c = await IniciarAsync();
         await ImportarAsync(c, c.Corrente, Linha("tx-sintetica-1", -2_550), Linha("tx-sintetica-2", -1_000));
+        var id = await IdAsync(c, "tx-sintetica-2");
         await ImportarAsync(c, c.Corrente, Linha("tx-sintetica-1", -2_550));
+
+        var resumo = await ImportarAsync(c, c.Corrente, Linha("tx-sintetica-1", -2_550));
+
+        Assert.Equal(new ResumoDaImportacao(0, 0, 0, 1, 0, 0), resumo);
+        Assert.Equal("true|2|AUSENCIA_NO_BANCO", await EstadoAsync(c, id));
+        Assert.Equal(1L, await AuditoriaAsync(c, id, "SOFT_DELETE"));
+    }
+
+    /// <summary>D19: "seguidas". A linha que volta no meio zera a conta.</summary>
+    [Fact]
+    public async Task Ausencia_interrompida_recomeca_a_conta()
+    {
+        await using var c = await IniciarAsync();
+        await ImportarAsync(c, c.Corrente, Linha("tx-sintetica-1", -2_550), Linha("tx-sintetica-2", -1_000));
+        var id = await IdAsync(c, "tx-sintetica-2");
+        await ImportarAsync(c, c.Corrente, Linha("tx-sintetica-1", -2_550));
+        await ImportarAsync(c, c.Corrente, Linha("tx-sintetica-1", -2_550), Linha("tx-sintetica-2", -1_000));
+
+        await ImportarAsync(c, c.Corrente, Linha("tx-sintetica-1", -2_550));
+
+        Assert.Equal("false|1|-", await EstadoAsync(c, id));
+    }
+
+    /// <summary>D19 (c): apagada por ausência que o banco manda de novo volta, com a categoria e a descrição do casal.</summary>
+    [Fact]
+    public async Task Apagada_por_ausencia_reaparece_e_volta_com_a_categoria()
+    {
+        await using var c = await IniciarAsync();
+        await ImportarAsync(c, c.Corrente, Linha("tx-sintetica-1", -2_550), Linha("tx-sintetica-2", -1_000));
+        var id = await IdAsync(c, "tx-sintetica-2");
+        var mercado = await CategoriaAsync(c.Cliente, "Mercado");
+        await RevisarAsync(c, id, "Pão da semana", mercado, 1_000);
+        await ImportarAsync(c, c.Corrente, Linha("tx-sintetica-1", -2_550));
+        await ImportarAsync(c, c.Corrente, Linha("tx-sintetica-1", -2_550));
+        Assert.StartsWith("true|", await EstadoAsync(c, id));
+
+        var resumo = await ImportarAsync(c, c.Corrente, Linha("tx-sintetica-1", -2_550), Linha("tx-sintetica-2", -1_000));
+
+        Assert.Equal(new ResumoDaImportacao(0, 0, 0, 0, 0, 0, Restaurados: 1), resumo);
+        Assert.Equal("false|0|-", await EstadoAsync(c, id));
+        var l = await LancamentoAsync(c, id);
+        Assert.Equal(mercado, l.GetProperty("categoria").GetProperty("id").GetGuid());
+        Assert.Equal("Pão da semana", l.GetProperty("descricao").GetString());
+        Assert.Equal("REVISADA", l.GetProperty("revisao").GetString());
+        Assert.Equal(1L, await AuditoriaAsync(c, id, "RESTORE"));
+        Assert.Equal(2L, await EscalarAsync<long>(c.Banco, "SELECT count(*) FROM lancamentos.transacoes"));
+    }
+
+    /// <summary>D19 (d): apagada pelo casal (aqui, com a conta ainda manual) e reenviada pelo banco continua apagada.</summary>
+    [Fact]
+    public async Task Apagada_pelo_casal_e_reenviada_continua_apagada()
+    {
+        await using var c = await IniciarAsync();
+        await ImportarAsync(c, c.Corrente, Linha("tx-sintetica-1", -2_550), Linha("tx-sintetica-2", -1_000));
+        var id = await IdAsync(c, "tx-sintetica-2");
+        await using (var escopo = c.Api.Services.CreateAsyncScope())
+            Assert.Equal(ResultadoDoDesligar.Manual,
+                await escopo.ServiceProvider.GetRequiredService<IContasLigadas>().DesligarAsync(c.Corrente, CancellationToken.None));
+        Assert.Equal(HttpStatusCode.NoContent, (await c.Cliente.DeleteAsync($"/api/v1/lancamentos/{id}")).StatusCode);
+        Assert.Equal("true|0|CASAL", await EstadoAsync(c, id));
+        await using (var escopo = c.Api.Services.CreateAsyncScope())
+            Assert.True(await escopo.ServiceProvider.GetRequiredService<IContasLigadas>().MarcarLigadaAsync(c.Corrente, CancellationToken.None));
 
         var resumo = await ImportarAsync(c, c.Corrente, Linha("tx-sintetica-1", -2_550), Linha("tx-sintetica-2", -1_000));
 
         Assert.Equal(new ResumoDaImportacao(0, 0, 1, 0, 0, 0), resumo);
+        Assert.Equal("true|0|CASAL", await EstadoAsync(c, id));
         Assert.Equal(1L, await AtivasAsync(c));
-        Assert.Equal(2L, await EscalarAsync<long>(c.Banco, "SELECT count(*) FROM lancamentos.transacoes"));
+    }
+
+    /// <summary>Pendente promovida não volta: a definitiva já é ela.</summary>
+    [Fact]
+    public async Task Pendente_promovida_fica_apagada_com_o_motivo()
+    {
+        await using var c = await IniciarAsync();
+        await ImportarAsync(c, c.Corrente, Linha("tx-pendente", -2_550, aConfirmar: true));
+        var id = await IdAsync(c, "tx-pendente");
+        await ImportarAsync(c, c.Corrente, Linha("tx-definitiva", -2_550, data: "2026-11-04"));
+
+        var resumo = await ImportarAsync(c, c.Corrente, Linha("tx-definitiva", -2_550, data: "2026-11-04"), Linha("tx-pendente", -2_550, aConfirmar: true));
+
+        Assert.Equal(1, resumo.Ignorados);
+        Assert.Equal("true|0|PENDENTE_PROMOVIDA", await EstadoAsync(c, id));
     }
 
     [Fact]
@@ -433,5 +519,7 @@ public class ImportacaoTests(PostgresFixture pg)
 
         Assert.Equal(new ResumoDaImportacao(0, 0, 0, 0, 0, 0), resumo);
         Assert.Equal(2L, await AtivasAsync(c));
+        // Lote que pode estar incompleto também não conta ausência (D19).
+        Assert.Equal("false|0|-", await EstadoAsync(c, await IdAsync(c, "tx-sintetica-2")));
     }
 }

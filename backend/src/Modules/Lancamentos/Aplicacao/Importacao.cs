@@ -14,8 +14,9 @@ namespace GestorFinanceiro.Modules.Lancamentos.Aplicacao;
 /// <summary>
 /// Importação do banco (Fase 2, Tarefa 4.3): "criar ou atualizar pela chave natural" (OPEN_FINANCE, id da Pluggy), numa
 /// transação, sob a trava do casal (a mesma da conciliação) e da conta (a mesma do apagar conta). Única exceção à regra 9
-/// para o filtro SoftDelete (D6): a chave é procurada também entre as apagadas, para não recriá-las; nada da linha apagada
-/// sai daqui. Nenhum valor, descrição ou id do banco vai para log ou exceção.
+/// para o filtro SoftDelete (D6): a chave é procurada também entre as apagadas, para não recriá-las (a apagada pelo casal ou
+/// promovida) ou para trazê-las de volta (a apagada por ausência no banco, D19); nada da linha apagada sai daqui. Nenhum
+/// valor, descrição ou id do banco vai para log ou exceção.
 /// </summary>
 internal sealed class Importacao(LancamentosDbContext db, IUsuarioAtual atual, IConsultaDeContas contas, ICofre cofre)
     : IImportacaoDeLancamentos
@@ -56,7 +57,7 @@ internal sealed class Importacao(LancamentosDbContext db, IUsuarioAtual atual, I
     private async Task<ResumoDaImportacao> AplicarAsync(Guid casalId, ContaResumo conta, DateOnly desde, IReadOnlyList<LancamentoImportado> lote,
         bool apagarAusentes, CancellationToken ct)
     {
-        int criados = 0, atualizados = 0, ignorados = 0, apagados = 0, promovidas = 0, semPar = 0;
+        int criados = 0, atualizados = 0, ignorados = 0, apagados = 0, promovidas = 0, semPar = 0, restaurados = 0;
         var chaves = lote.Select(l => l.IdExterno).ToArray();
 
         // D6: também as apagadas, para não recriar; o filtro Casal continua ligado.
@@ -65,7 +66,8 @@ internal sealed class Importacao(LancamentosDbContext db, IUsuarioAtual atual, I
                 .ToListAsync(ct))
             .GroupBy(t => t.IdExterno, StringComparer.Ordinal)
             // Uma chave pode ter uma apagada e (de antes desta regra) uma ativa: a ativa vale.
-            .ToDictionary(g => g.Key, g => g.OrderBy(t => t.IsDeleted).First(), StringComparer.Ordinal);
+            // Duas apagadas: a que não volta vale (a do casal ganha da ausência).
+            .ToDictionary(g => g.Key, g => g.OrderBy(t => t.IsDeleted).ThenBy(t => t.PodeVoltarDoBanco).First(), StringComparer.Ordinal);
 
         var novas = new List<Transacao>();
         foreach (var linha in lote)
@@ -79,15 +81,20 @@ internal sealed class Importacao(LancamentosDbContext db, IUsuarioAtual atual, I
             var fatura = contas.VencimentoDaFatura(conta, linha.Data);
             if (existentes.TryGetValue(linha.IdExterno, out var existente))
             {
-                // Apagada (pelo banco antes) ou de outra conta do casal: não se recria nem se move.
-                if (existente.IsDeleted || existente.ContaId != conta.Id)
+                // De outra conta do casal não se move; apagada pelo casal (ou promovida) não se recria (D6, D19).
+                if (existente.ContaId != conta.Id || (existente.IsDeleted && !existente.PodeVoltarDoBanco))
                 {
                     ignorados++;
                     continue;
                 }
-                if (existente.AtualizarDoBanco(linha.Data, linha.ValorCentavos, linha.Descricao, linha.AConfirmar, linha.Parcela, linha.Parcelas,
-                        linha.CategoriaExterna, linha.FaturaIdExterno, fatura, cofre))
-                    atualizados++;
+                // Apagada por ausência e o banco mandou de novo: volta, com a revisão do casal (D19).
+                var voltou = existente.IsDeleted;
+                if (voltou) existente.VoltarDoBanco();
+                existente.ZerarAusencias();
+                var mudou = existente.AtualizarDoBanco(linha.Data, linha.ValorCentavos, linha.Descricao, linha.AConfirmar, linha.Parcela,
+                    linha.Parcelas, linha.CategoriaExterna, linha.FaturaIdExterno, fatura, cofre);
+                if (voltou) restaurados++;
+                else if (mudou) atualizados++;
                 continue;
             }
 
@@ -105,12 +112,14 @@ internal sealed class Importacao(LancamentosDbContext db, IUsuarioAtual atual, I
         var sumidas = naJanela.Where(t => t.Confirmacao == ConfirmacaoDaTransacao.Confirmada).ToList();
         var pendentes = naJanela.Where(t => t.Confirmacao == ConfirmacaoDaTransacao.AConfirmar).ToList();
 
-        // Apagar é para sempre (D6: apagada não volta). Lote vazio com a janela cheia é resposta suspeita do banco, e quem
-        // chama pode saber que o lote veio incompleto: nesses casos nada some por ausência (revisão da E4, achado 4).
+        // D19: só a segunda sincronização completa seguida sem a linha a apaga, e ela volta se o banco a mandar de novo. Lote
+        // vazio com a janela cheia é resposta suspeita do banco, e quem chama pode saber que o lote veio incompleto: nesses
+        // casos nem a ausência conta (revisão da E4, achado 4).
         if (!apagarAusentes || lote.Count == 0) sumidas.Clear();
         foreach (var t in sumidas)
         {
-            db.Transacoes.Remove(t); // SoftDeleteInterceptor: is_deleted = true, com auditoria.
+            if (!t.RegistrarAusencia()) continue;
+            db.Transacoes.Remove(t); // SoftDeleteInterceptor: is_deleted = true, com auditoria; o motivo já está marcado.
             apagados++;
         }
 
@@ -129,11 +138,12 @@ internal sealed class Importacao(LancamentosDbContext db, IUsuarioAtual atual, I
                 continue;
             }
             candidatas[0].HerdarRevisao(pendente, cofre);
+            pendente.MarcarApagamento(MotivoDoApagamento.PendentePromovida);
             db.Transacoes.Remove(pendente);
             promovidas++;
         }
 
-        return new ResumoDaImportacao(criados, atualizados, ignorados, apagados, promovidas, semPar);
+        return new ResumoDaImportacao(criados, atualizados, ignorados, apagados, promovidas, semPar, restaurados);
     }
 
     /// <summary>Mesma conta (já filtrada), mesmo valor, data até 3 dias e descrição do banco parecida (a do casal não conta).</summary>

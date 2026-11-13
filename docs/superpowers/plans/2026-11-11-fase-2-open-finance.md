@@ -571,6 +571,10 @@ public interface IImportacaoDeLancamentos
   - Nada muda no calendário nem na regra C7.
 - Aplicação nova num item já nascido: vira vínculo com `conta_id` nulo e aparece em Conexões para escolher o grupo, pelo mesmo `POST …/nascimento` (só `aplicacoes`). Até lá, não entra em nenhum grupo.
 - Reconciliação de conta ligada órfã (duas abas, E3 nota H), com teste (CEO, D18).
+- Ordem D19 do CEO (13/11, PR #48):
+  - apagar por ausência só depois de 2 sincronizações completas seguidas sem a linha (contador `ausencias` por lançamento, V0017; zera quando a linha vem);
+  - o motivo fica em `apagada_por` (`CASAL`, `AUSENCIA_NO_BANCO`, `PENDENTE_PROMOVIDA`); só a apagada por ausência volta quando o banco a reenvia (`is_deleted = false`, auditoria `RESTORE`), com a revisão do casal;
+  - conta órfã sem lançamentos é desligada e arquivada; com lançamentos, volta a ser manual.
 
 - [ ] **Passo 1:** testes que falham:
   - `Primeira_sincronizacao_importa_2026_e_calcula_saldo_inicial_que_fecha`;

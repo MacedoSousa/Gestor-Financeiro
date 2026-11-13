@@ -45,6 +45,11 @@ internal sealed class TransacaoConfig : IEntityTypeConfiguration<Transacao>
         b.Property(x => x.Revisao).HasConversion(
             v => v == RevisaoDaTransacao.ARevisar ? "A_REVISAR" : "REVISADA",
             v => v == "A_REVISAR" ? RevisaoDaTransacao.ARevisar : RevisaoDaTransacao.Revisada);
+        b.Property(x => x.ApagadaPor).HasConversion(
+            v => v == null ? null : v == MotivoDoApagamento.Casal ? "CASAL"
+                : v == MotivoDoApagamento.AusenciaNoBanco ? "AUSENCIA_NO_BANCO" : "PENDENTE_PROMOVIDA",
+            v => v == null ? null : v == "CASAL" ? MotivoDoApagamento.Casal
+                : v == "AUSENCIA_NO_BANCO" ? MotivoDoApagamento.AusenciaNoBanco : MotivoDoApagamento.PendentePromovida);
         b.Property(x => x.Confirmacao).HasConversion(
             v => v == ConfirmacaoDaTransacao.AConfirmar ? "A_CONFIRMAR" : "CONFIRMADA",
             v => v == "A_CONFIRMAR" ? ConfirmacaoDaTransacao.AConfirmar : ConfirmacaoDaTransacao.Confirmada);

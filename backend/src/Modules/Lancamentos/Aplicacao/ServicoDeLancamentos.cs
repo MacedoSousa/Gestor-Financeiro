@@ -227,7 +227,10 @@ internal sealed class ServicoDeLancamentos(LancamentosDbContext db, IUsuarioAtua
         if (Fechada(alvo) || (transferencia && lista.Any(Fechada)))
             return new ResultadoDeLancamento.Recusado(TituloFaturaFechada, 409);
 
-        db.Transacoes.RemoveRange(lista.Where(t => t == alvo || !Fechada(t))); // SoftDeleteInterceptor converte em is_deleted = true.
+        var apagadas = lista.Where(t => t == alvo || !Fechada(t)).ToList();
+        // Apagada pelo casal nunca volta pelo banco (D19).
+        foreach (var t in apagadas) t.MarcarApagamento(MotivoDoApagamento.Casal);
+        db.Transacoes.RemoveRange(apagadas); // SoftDeleteInterceptor converte em is_deleted = true.
         await db.SaveChangesAsync(ct);
         return new ResultadoDeLancamento.Feito();
     }

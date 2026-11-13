@@ -17,12 +17,15 @@ public sealed record LancamentoImportado(string IdExterno, DateOnly Data, long V
 
 /// <param name="Criados">Linhas novas, todas "a revisar".</param>
 /// <param name="Atualizados">Linhas que já existiam e mudaram (data, valor, confirmação, parcela ou, se "a revisar", descrição).</param>
-/// <param name="Ignorados">Valor zero, ou chave de uma linha apagada (que não é recriada).</param>
-/// <param name="ApagadosPeloBanco">Confirmadas da janela que o banco deixou de mandar: soft delete.</param>
+/// <param name="Ignorados">Valor zero, ou chave de uma linha apagada pelo casal ou promovida (que não é recriada).</param>
+/// <param name="ApagadosPeloBanco">
+/// Confirmadas da janela que o banco deixou de mandar pela segunda sincronização seguida (D19): soft delete, motivo ausência.
+/// </param>
 /// <param name="PendentesPromovidas">Pendentes que sumiram e tinham uma definitiva única: ela herdou a revisão.</param>
 /// <param name="PendentesSemPar">Pendentes que sumiram sem definitiva única: ficam como estão.</param>
+/// <param name="Restaurados">Apagadas por ausência que o banco mandou de novo: voltam, com a revisão do casal (D19).</param>
 public sealed record ResumoDaImportacao(int Criados, int Atualizados, int Ignorados, int ApagadosPeloBanco, int PendentesPromovidas,
-    int PendentesSemPar);
+    int PendentesSemPar, int Restaurados = 0);
 
 /// <summary>
 /// Importação do banco para o Lancamentos (Fase 2, D6, D17): "criar ou atualizar pela chave natural", idempotente.

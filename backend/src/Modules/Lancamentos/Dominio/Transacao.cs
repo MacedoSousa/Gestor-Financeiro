@@ -34,6 +34,14 @@ internal enum ConfirmacaoDaTransacao
     Confirmada,
 }
 
+/// <summary>Coluna <c>apagada_por</c> (D19): só a apagada por ausência no banco volta quando o banco a manda de novo.</summary>
+internal enum MotivoDoApagamento
+{
+    Casal,
+    AusenciaNoBanco,
+    PendentePromovida,
+}
+
 /// <summary>
 /// Lançamento. O valor tem sinal (negativo = saída). Descrição e contraparte só existem cifradas,
 /// com AAD <c>lancamentos.transacoes|coluna|id</c>.
@@ -71,6 +79,12 @@ internal sealed class Transacao : Entidade, ICasalScoped
 
     /// <summary>billId da Pluggy, só para conferência: a fatura do sistema é a do calendário (D2).</summary>
     public string? FaturaIdExterno { get; private set; }
+
+    /// <summary>Sincronizações completas seguidas que vieram sem esta linha do banco (D19).</summary>
+    public short Ausencias { get; private set; }
+
+    /// <summary>Por que foi apagada (D19). Nulo em linha ativa, ou apagada antes desta regra (nunca volta).</summary>
+    public MotivoDoApagamento? ApagadaPor { get; private set; }
 
     public Dinheiro Valor => new(ValorCentavos);
 
@@ -177,6 +191,50 @@ internal sealed class Transacao : Entidade, ICasalScoped
         Revisao = RevisaoDaTransacao.Revisada;
         CategoriaId = pendente.CategoriaId;
         DescricaoCifrada = cofre.Cifrar(pendente.LerDescricao(cofre), Cofre.Aad(Tabela, ColunaDescricao, Id));
+    }
+
+    /// <summary>Apagar com 2 sincronizações completas seguidas sem a linha (D19).</summary>
+    internal const short AusenciasParaApagar = 2;
+
+    /// <summary>
+    /// Mais uma sincronização completa sem esta linha do banco. Devolve se chegou a hora de apagar; quem chama apaga (o
+    /// motivo já fica marcado).
+    /// </summary>
+    public bool RegistrarAusencia()
+    {
+        if (Origem != OrigemDaTransacao.OpenFinance) throw new InvalidOperationException("Só linha do banco some do banco.");
+        Ausencias++;
+        if (Ausencias < AusenciasParaApagar) return false;
+        ApagadaPor = MotivoDoApagamento.AusenciaNoBanco;
+        return true;
+    }
+
+    /// <summary>O banco mandou a linha: a contagem de ausências recomeça. Devolve se mudou.</summary>
+    public bool ZerarAusencias()
+    {
+        if (Ausencias == 0) return false;
+        Ausencias = 0;
+        return true;
+    }
+
+    /// <summary>Marca o motivo antes do <c>Remove</c> (o SoftDeleteInterceptor grava is_deleted no mesmo UPDATE).</summary>
+    public void MarcarApagamento(MotivoDoApagamento motivo) => ApagadaPor = motivo;
+
+    /// <summary>Só a apagada por ausência no banco volta (D19); a apagada pelo casal ou promovida, nunca.</summary>
+    public bool PodeVoltarDoBanco => IsDeleted && ApagadaPor == MotivoDoApagamento.AusenciaNoBanco;
+
+    /// <summary>
+    /// O banco mandou de novo a linha que tinha sumido: ela volta como estava (categoria, descrição e revisão do casal). A
+    /// auditoria do banco grava RESTORE.
+    /// </summary>
+    public void VoltarDoBanco()
+    {
+        if (!PodeVoltarDoBanco) throw new InvalidOperationException("Só a linha apagada por ausência no banco volta.");
+        IsDeleted = false;
+        DeletedAt = null;
+        DeletedBy = null;
+        ApagadaPor = null;
+        Ausencias = 0;
     }
 
     private static NaturezaDaTransacao NaturezaPeloSinal(long valor) =>
