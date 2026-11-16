@@ -437,4 +437,118 @@ public class AConferirTests(PostgresFixture pg)
         Assert.Equal(HttpStatusCode.NotFound, (await ResolverAsync(c, itemAlheio, new { opcao = "CIENTE" })).StatusCode);
         Assert.Equal("ABERTO", await EscalarAsync<string>(c.Banco, $"SELECT estado FROM lancamentos.itens_a_conferir WHERE id = '{itemAlheio}'"));
     }
+
+    // ------------------------------------------------------------------ Revisão do E6a (D24), rodada 1
+
+    /// <summary>D1: o item da linha que virou o outro lado de um par resolvido em "A conferir" se resolve junto.</summary>
+    [Fact]
+    public async Task Item_da_linha_que_virou_o_outro_lado_se_resolve_junto()
+    {
+        await using var c = await IniciarAsync();
+        await ImportarAsync(c, c.Corrente, Linha("tx-saida", -3_000, codigo: MesmaPessoa));
+        await ImportarAsync(c, c.Poupanca, Linha("tx-e1", 3_000, codigo: MesmaPessoa));
+        await ImportarAsync(c, c.OutraCorrente, Linha("tx-e2", 3_000, codigo: MesmaPessoa));
+        await ReconhecerAsync(c);
+        var saida = await EscalarAsync<Guid>(c.Banco,
+            $"SELECT i.id FROM lancamentos.itens_a_conferir i WHERE i.transacao_id = '{await IdAsync(c, "tx-saida")}'");
+
+        Assert.Equal(HttpStatusCode.NoContent, (await ResolverAsync(c, saida, new { opcao = "TRANSFERENCIA", contaId = c.Poupanca })).StatusCode);
+
+        Assert.True(await MesmoGrupoAsync(c, "tx-saida", "tx-e1"));
+        Assert.Equal("RESOLVIDO|TRANSFERENCIA", await EscalarAsync<string>(c.Banco,
+            $"SELECT estado || '|' || resolucao FROM lancamentos.itens_a_conferir WHERE transacao_id = '{await IdAsync(c, "tx-e1")}'"));
+        Assert.Equal("ABERTO", await EscalarAsync<string>(c.Banco,
+            $"SELECT estado FROM lancamentos.itens_a_conferir WHERE transacao_id = '{await IdAsync(c, "tx-e2")}'"));
+    }
+
+    /// <summary>D1: o item cuja linha o banco tirou só oferece "Ciente" (antes, toda opção dava 409 e o item não fechava).</summary>
+    [Fact]
+    public async Task Item_cuja_linha_o_banco_tirou_so_oferece_ciente()
+    {
+        await using var c = await IniciarAsync();
+        await ImportarAsync(c, c.Corrente, Linha("tx-pix", -3_000, codigo: MesmaPessoa));
+        await ReconhecerAsync(c);
+        await ImportarAsync(c, c.Corrente, Linha("tx-outra", -100));
+        await ImportarAsync(c, c.Corrente, Linha("tx-outra", -100));
+
+        var item = (await JsonAsync(await c.Cliente.GetAsync("/api/v1/a-conferir"))).EnumerateArray().Single();
+        Assert.Equal(["CIENTE"], item.GetProperty("opcoes").EnumerateArray().Select(o => o.GetString()).ToList());
+        Assert.Equal(HttpStatusCode.NoContent, (await ResolverAsync(c, item.GetProperty("id").GetGuid(), new { opcao = "CIENTE" })).StatusCode);
+        Assert.Equal("TRANSFERENCIA_SEM_PAR|RESOLVIDO|CIENTE", await ItensAsync(c));
+    }
+
+    /// <summary>D1: o reconhecimento fecha o item aberto cuja linha já é transferência (pareada por outro caminho).</summary>
+    [Fact]
+    public async Task Reconhecimento_fecha_o_item_cuja_linha_ja_e_transferencia()
+    {
+        await using var c = await IniciarAsync();
+        await ImportarAsync(c, c.Corrente, Linha("tx-saida", -3_000, codigo: MesmaPessoa));
+        await ReconhecerAsync(c);
+        var linha = await IdAsync(c, "tx-saida");
+        await EscalarAsync<int>(c.Banco,
+            $"UPDATE lancamentos.transacoes SET natureza = 'TRANSFERENCIA', categoria_id = NULL, grupo_id = '{Guid.NewGuid()}' WHERE id = '{linha}' RETURNING 1");
+
+        await ReconhecerAsync(c);
+
+        Assert.Equal("TRANSFERENCIA_SEM_PAR|RESOLVIDO|PAREADO_AUTOMATICAMENTE", await ItensAsync(c));
+    }
+
+    /// <summary>D2: resolvida como gasto, a linha conta no orçamento, o extrato não a marca entre contas e a categoria se corrige.</summary>
+    [Fact]
+    public async Task Linha_resolvida_como_gasto_conta_no_orcamento_e_a_categoria_se_corrige()
+    {
+        await using var c = await IniciarAsync();
+        await ImportarAsync(c, c.Corrente, Linha("tx-pix", -3_000, codigo: MesmaPessoa));
+        await ReconhecerAsync(c);
+        Assert.Equal(HttpStatusCode.NoContent,
+            (await ResolverAsync(c, await ItemAsync(c), new { opcao = "GASTO", categoriaId = await CategoriaAsync(c.Cliente, "Mercado") })).StatusCode);
+        var id = await IdAsync(c, "tx-pix");
+
+        Assert.Equal(3_000, (await OrcamentoAsync(c)).Uso);
+        var extrato = (await JsonAsync(await c.Cliente.GetAsync("/api/v1/lancamentos?mes=2026-11"))).GetProperty("lancamentos").EnumerateArray()
+            .Single(l => l.GetProperty("id").GetGuid() == id);
+        Assert.False(extrato.GetProperty("entreContas").GetBoolean());
+        var casa = await CategoriaAsync(c.Cliente, "Casa e contas");
+        var r = await c.Cliente.PutAsJsonAsync($"/api/v1/lancamentos/{id}",
+            new { natureza = "DESPESA", valorCentavos = 3_000L, data = "2026-11-03", descricao = "PIX", categoriaId = casa });
+        Assert.True(r.IsSuccessStatusCode, $"{(int)r.StatusCode}: {await r.Content.ReadAsStringAsync()}");
+        Assert.Equal(casa, await EscalarAsync<Guid>(c.Banco, $"SELECT categoria_id FROM lancamentos.transacoes WHERE id = '{id}'"));
+    }
+
+    /// <summary>D3: o par entre duas pernas do banco (conta destino ligada) pelo "A conferir".</summary>
+    [Fact]
+    public async Task Transferencia_com_o_outro_lado_do_banco_pareia_as_duas_pernas()
+    {
+        await using var c = await IniciarAsync();
+        await ImportarAsync(c, c.Corrente, Linha("tx-saida", -3_000, codigo: MesmaPessoa));
+        await ImportarAsync(c, c.OutraCorrente, Linha("tx-entrada", 3_000, "2026-11-07"));
+        await ReconhecerAsync(c);
+
+        var r = await ResolverAsync(c, await ItemAsync(c), new { opcao = "TRANSFERENCIA", contaId = c.OutraCorrente });
+
+        Assert.Equal(HttpStatusCode.NoContent, r.StatusCode);
+        Assert.True(await MesmoGrupoAsync(c, "tx-saida", "tx-entrada"));
+        Assert.Equal("TRANSFERENCIA|-|REVISADA|true", await EstadoAsync(c, "tx-entrada"));
+        Assert.Equal(0L, await EscalarAsync<long>(c.Banco, "SELECT count(*) FROM lancamentos.transacoes WHERE origem = 'SISTEMA'"));
+    }
+
+    /// <summary>D3: opção que não é do item, aporte em conta que não é poupança nem investimento e categoria de outro casal: 400.</summary>
+    [Fact]
+    public async Task Opcao_de_fora_conta_errada_e_categoria_alheia_dao_400()
+    {
+        await using var c = await IniciarAsync();
+        await ImportarAsync(c, c.Corrente, Linha("tx-aplicacao", -100_000, descricao: "APLICACAO CDB", codigo: Aplicacao));
+        await ReconhecerAsync(c);
+        var item = await ItemAsync(c);
+        var outro = Guid.NewGuid();
+        var alheia = Guid.NewGuid();
+        await EscalarAsync<int>(c.Banco, $"INSERT INTO identidade.casais (id, nome_familia) VALUES ('{outro}', 'Outra Família') RETURNING 1");
+        await EscalarAsync<int>(c.Banco,
+            $"INSERT INTO lancamentos.categorias (id, casal_id, nome, tipo) VALUES ('{alheia}', '{outro}', 'Alheia', 'DESPESA') RETURNING 1");
+
+        Assert.Equal(HttpStatusCode.BadRequest, (await ResolverAsync(c, item, new { opcao = "TRANSFERENCIA", contaId = c.Dinheiro })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await ResolverAsync(c, item, new { opcao = "APORTE", contaId = c.Dinheiro })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await ResolverAsync(c, item, new { opcao = "GASTO", categoriaId = alheia })).StatusCode);
+        Assert.Equal("APORTE_OU_RESGATE|ABERTO|-", await ItensAsync(c));
+    }
 }

@@ -70,8 +70,13 @@ internal sealed class Reconhecimento(LancamentosDbContext db, IUsuarioAtual atua
                 pareadas.Add(e.Id);
             }
 
-            // Item aberto de uma linha que acabou de parear: resolvido sozinho.
-            foreach (var item in itens.Where(i => i.Aberto && i.TransacaoId is { } t && pareadas.Contains(t)))
+            // Item aberto de uma linha que acabou de parear, ou que já virou transferência por outro caminho: resolvido sozinho
+            // (revisão do E6a, D1).
+            var abertas = itens.Where(i => i.Aberto && i.TransacaoId is not null).Select(i => i.TransacaoId!.Value).ToList();
+            var jaTransferencia = (await db.Transacoes.AsNoTracking()
+                    .Where(t => abertas.Contains(t.Id) && t.Natureza == NaturezaDaTransacao.Transferencia).Select(t => t.Id).ToListAsync(ct))
+                .ToHashSet();
+            foreach (var item in itens.Where(i => i.Aberto && i.TransacaoId is { } t && (pareadas.Contains(t) || jaTransferencia.Contains(t))))
                 item.Resolver(ResolucaoDoItem.PareadoAutomaticamente);
 
             var chaves = itens.Select(i => i.Chave).ToHashSet(StringComparer.Ordinal);
@@ -90,7 +95,7 @@ internal sealed class Reconhecimento(LancamentosDbContext db, IUsuarioAtual atua
                     if (candidatos >= 2 || DiasUteis.Entre(t.Data, hoje) >= DiasUteisParaConferir)
                         Abrir(TipoDeItemAConferir.TransferenciaSemPar, ItemAConferir.ChaveSemPar(t.Id), t);
                 }
-                else if (papel is PapelDaCategoriaDoBanco.Aplicacao or PapelDaCategoriaDoBanco.ResgateOuRendimento && !Cartao(t))
+                else if ((papel is PapelDaCategoriaDoBanco.Aplicacao or PapelDaCategoriaDoBanco.ResgateOuRendimento) && !Cartao(t))
                 {
                     Abrir(TipoDeItemAConferir.AporteOuResgate, ItemAConferir.ChaveMovimento(t.Id), t);
                 }

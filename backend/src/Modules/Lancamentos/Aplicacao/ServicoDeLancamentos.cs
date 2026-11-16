@@ -139,10 +139,12 @@ internal sealed class ServicoDeLancamentos(LancamentosDbContext db, IUsuarioAtua
 
         var hoje = Brasilia.Hoje(relogio);
         var lista = await AlvosAsync(alvo, proximas, ct);
-        // D23: pagamento de fatura, mesma titularidade e investimento do banco não recebem categoria nenhuma até a etapa 6:
-        // editar exige categoria e marca REVISADA, e tanto a de gasto (uso) quanto a de receita (receitas) poriam o lançamento
-        // no orçamento. Continuam a revisar.
-        if (lista.Any(t => t.Origem == OrigemDaTransacao.OpenFinance && CategoriasDoBanco.ReconhecidoNaProximaEtapa(t.CategoriaExterna)))
+        // D23: pagamento de fatura, mesma titularidade e investimento do banco, enquanto esperam o reconhecimento (a revisar),
+        // não recebem categoria à mão: editar exige categoria e marca REVISADA, e tanto a de gasto (uso) quanto a de receita
+        // (receitas) poriam o lançamento no orçamento. Decididos pelo casal em "A conferir" (é gasto, é receita), a categoria se
+        // corrige como a de qualquer outro (revisão do E6a, D2).
+        if (lista.Any(t => t.Origem == OrigemDaTransacao.OpenFinance && t.Revisao == RevisaoDaTransacao.ARevisar
+                           && CategoriasDoBanco.ReconhecidoNaProximaEtapa(t.CategoriaExterna)))
             return new ResultadoDeLancamento.Recusado(Revisao.TituloReconhecidoNaProximaEtapa, 400);
         var valorComSinal = natureza == NaturezaDaTransacao.Despesa ? -p.ValorCentavos : p.ValorCentavos;
         var dataMudou = p.Data != alvo.Data;

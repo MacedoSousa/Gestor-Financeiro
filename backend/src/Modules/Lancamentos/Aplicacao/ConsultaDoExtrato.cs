@@ -133,8 +133,11 @@ internal sealed class ConsultaDoExtrato(LancamentosDbContext db, IUsuarioAtual a
                 t.Parcela, t.Parcelas, t.GrupoId, t.FaturaVencimento,
                 t.Revisao == RevisaoDaTransacao.ARevisar ? "A_REVISAR" : "REVISADA",
                 t.Confirmacao == ConfirmacaoDaTransacao.AConfirmar ? "A_CONFIRMAR" : "CONFIRMADA",
-                // Pagamento de fatura, mesma titularidade e investimento do banco: não entram no orçamento (D23, E6).
-                t.Origem == OrigemDaTransacao.OpenFinance && CategoriasDoBanco.ReconhecidoNaProximaEtapa(t.CategoriaExterna));
+                // Pagamento de fatura, mesma titularidade e investimento do banco: não entram no orçamento (D23, E6) enquanto
+                // esperam o reconhecimento ou depois de virar transferência. Decidida pelo casal ("é gasto"), conta como as
+                // outras (revisão do E6a, D2).
+                t.Origem == OrigemDaTransacao.OpenFinance && CategoriasDoBanco.ReconhecidoNaProximaEtapa(t.CategoriaExterna)
+                && (t.Revisao == RevisaoDaTransacao.ARevisar || t.Natureza == NaturezaDaTransacao.Transferencia));
         }).ToList();
     }
 

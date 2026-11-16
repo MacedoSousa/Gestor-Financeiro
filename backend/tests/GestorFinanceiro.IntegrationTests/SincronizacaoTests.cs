@@ -67,6 +67,14 @@ public class SincronizacaoTests(PostgresFixture pg)
         return new Ctx(api, banco, pluggy, relogio, await api.ClienteLogadoAsync(ana), await api.ClienteLogadoAsync(bruno), ana, pasta);
     }
 
+    private static async Task ExecutarAsync(BancoDeTeste banco, string sql)
+    {
+        await using var db = new NpgsqlConnection(banco.ConexaoSuperusuario);
+        await db.OpenAsync();
+        await using var cmd = new NpgsqlCommand(sql, db);
+        await cmd.ExecuteNonQueryAsync();
+    }
+
     private static async Task<T> EscalarAsync<T>(BancoDeTeste banco, string sql)
     {
         await using var db = new NpgsqlConnection(banco.ConexaoSuperusuario);
@@ -1031,5 +1039,22 @@ public class SincronizacaoTests(PostgresFixture pg)
             "SELECT string_agg(natureza, ';') FROM lancamentos.transacoes WHERE id_externo IN ('tx-saida', 'tx-entrada')"));
         Assert.Equal(1L, await EscalarAsync<long>(c.Banco,
             "SELECT count(DISTINCT grupo_id) FROM lancamentos.transacoes WHERE id_externo IN ('tx-saida', 'tx-entrada')"));
+    }
+
+    /// <summary>Revisão do E6a, D3: a falha do reconhecimento só vai para o log; o que as contas importaram fica.</summary>
+    [Fact]
+    public async Task Falha_do_reconhecimento_nao_desfaz_a_importacao()
+    {
+        await using var c = await IniciarAsync();
+        var (item, _) = await NascerAsync(c, Corrente);
+        c.Pluggy.CadastrarTransacao(Corrente.Id, Tx("tx-pix", "2026-11-03", -10_000, descricao: "PIX MESMA TITULARIDADE", categoria: "04000000"));
+        await ExecutarAsync(c.Banco,
+            "CREATE FUNCTION public.falha_sintetica() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'falha sintetica'; END $$; " +
+            "CREATE TRIGGER falha_sintetica BEFORE INSERT ON lancamentos.itens_a_conferir FOR EACH ROW EXECUTE FUNCTION public.falha_sintetica();");
+
+        await SincronizarOkAsync(c, item);
+
+        Assert.Equal(1L, await EscalarAsync<long>(c.Banco, "SELECT count(*) FROM lancamentos.transacoes WHERE id_externo = 'tx-pix'"));
+        Assert.Equal(0L, await EscalarAsync<long>(c.Banco, "SELECT count(*) FROM lancamentos.itens_a_conferir"));
     }
 }

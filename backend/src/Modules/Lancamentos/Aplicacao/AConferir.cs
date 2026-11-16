@@ -19,7 +19,13 @@ internal sealed class AConferir(LancamentosDbContext db, IUsuarioAtual atual, IC
     internal const string TituloOutroLadoAmbiguo = "Há mais de um lançamento que pode ser o outro lado nessa conta. Resolva pelo extrato.";
     private const int DiasDoOutroLado = 5;
 
-    internal static IReadOnlyList<string> Opcoes(ItemAConferir item) => item.Tipo switch
+    /// <summary>
+    /// As opções do item. A linha que o banco tirou, ou que já virou transferência por outro caminho, não tem mais o que
+    /// decidir: só "Ciente" (revisão do E6a, D1; antes, toda opção dava 409 e o item ficava aberto para sempre).
+    /// </summary>
+    internal static IReadOnlyList<string> Opcoes(ItemAConferir item, bool linhaIndisponivel = false) => linhaIndisponivel
+        ? [ResolucaoDoItem.Ciente]
+        : item.Tipo switch
     {
         TipoDeItemAConferir.TransferenciaSemPar =>
             [ResolucaoDoItem.Transferencia, item.ValorCentavos < 0 ? ResolucaoDoItem.Gasto : ResolucaoDoItem.Receita, ResolucaoDoItem.DeixarParaDepois],
@@ -38,8 +44,12 @@ internal sealed class AConferir(LancamentosDbContext db, IUsuarioAtual atual, IC
         // Sob o filtro SoftDelete: a pendente que sumiu (apagada) não mostra descrição (regra 9).
         var transacoes = await db.Transacoes.AsNoTracking().Where(t => ids.Contains(t.Id)).ToDictionaryAsync(t => t.Id, ct);
         var doCasal = (await contas.ListarAsync(ct)).ToDictionary(c => c.Id);
-        return itens.Select(i => new ItemAConferirDto(i.Id, i.Tipo, i.ContaId, doCasal.GetValueOrDefault(i.ContaId)?.Apelido ?? "Conta removida", i.Data,
-                i.ValorCentavos, i.TransacaoId is { } t && transacoes.TryGetValue(t, out var linha) ? linha.LerDescricaoDoBanco(cofre) : null, Opcoes(i)))
+        return itens.Select(i =>
+            {
+                var linha = i.TransacaoId is { } t ? transacoes.GetValueOrDefault(t) : null;
+                return new ItemAConferirDto(i.Id, i.Tipo, i.ContaId, doCasal.GetValueOrDefault(i.ContaId)?.Apelido ?? "Conta removida", i.Data,
+                    i.ValorCentavos, linha?.LerDescricaoDoBanco(cofre), Opcoes(i, Indisponivel(i, linha)));
+            })
             .ToList();
     }
 
@@ -55,7 +65,8 @@ internal sealed class AConferir(LancamentosDbContext db, IUsuarioAtual atual, IC
             var item = await db.ItensAConferir.FirstOrDefaultAsync(i => i.Id == id, ct);
             if (item is null) return new ResultadoDeLancamento.NaoEncontrado();
             if (!item.Aberto) return new ResultadoDeLancamento.Feito(); // repetir não duplica
-            if (pedido.Opcao is not { } opcao || !Opcoes(item).Contains(opcao, StringComparer.Ordinal))
+            var linhaDoItem = item.TransacaoId is { } idDaLinha ? await db.Transacoes.AsNoTracking().FirstOrDefaultAsync(t => t.Id == idDaLinha, ct) : null;
+            if (pedido.Opcao is not { } opcao || !Opcoes(item, Indisponivel(item, linhaDoItem)).Contains(opcao, StringComparer.Ordinal))
                 return Invalido("opcao", "Escolha uma das opções deste item.");
             if (opcao == ResolucaoDoItem.DeixarParaDepois) return new ResultadoDeLancamento.Feito();
 
@@ -78,6 +89,11 @@ internal sealed class AConferir(LancamentosDbContext db, IUsuarioAtual atual, IC
             db.ChangeTracker.Clear();
         }
     }
+
+    /// <summary>A linha do item sumiu (apagada pelo banco, fora do filtro SoftDelete) ou já é transferência.</summary>
+    private static bool Indisponivel(ItemAConferir item, Transacao? linha) =>
+        item.TransacaoId is not null && item.Tipo != TipoDeItemAConferir.PendenteSumiu
+        && (linha is null || linha.Natureza == NaturezaDaTransacao.Transferencia);
 
     private async Task<Transacao?> LinhaAsync(ItemAConferir item, CancellationToken ct)
     {
@@ -125,11 +141,23 @@ internal sealed class AConferir(LancamentosDbContext db, IUsuarioAtual atual, IC
                         && t.ValorCentavos == -linha.ValorCentavos && t.Data >= linha.Data.AddDays(-DiasDoOutroLado)
                         && t.Data <= linha.Data.AddDays(DiasDoOutroLado))
             .ToListAsync(ct);
+        // Como no reconhecimento: só linha ainda não decidida pelo casal (a revisar, ou com código da E6 e sem item resolvido
+        // como gasto ou receita); a que ele decidiu não vira perna de transferência por baixo (revisão do E6a, N1).
+        var idsDosOutros = outros.Select(t => t.Id).ToList();
+        var decididas = await db.ItensAConferir.AsNoTracking()
+            .Where(i => i.TransacaoId != null && idsDosOutros.Contains(i.TransacaoId.Value) && i.Estado == "RESOLVIDO"
+                        && (i.Resolucao == ResolucaoDoItem.Gasto || i.Resolucao == ResolucaoDoItem.Receita))
+            .Select(i => i.TransacaoId!.Value).ToListAsync(ct);
+        outros = outros.Where(t => (t.Revisao == RevisaoDaTransacao.ARevisar || CategoriasDoBanco.ReconhecidoNaProximaEtapa(t.CategoriaExterna))
+                                   && !decididas.Contains(t.Id)).ToList();
         switch (outros)
         {
             case [var outro]:
                 if (linha.ValorCentavos < 0) Pareamento.Parear(linha, outro);
                 else Pareamento.Parear(outro, linha);
+                // O item aberto do outro lado fecha junto (revisão do E6a, D1).
+                var doOutro = await db.ItensAConferir.FirstOrDefaultAsync(i => i.TransacaoId == outro.Id && i.Estado == "ABERTO", ct);
+                doOutro?.Resolver(opcao);
                 return null;
             case [_, _, ..]:
                 return new ResultadoDeLancamento.Recusado(TituloOutroLadoAmbiguo, 409);
