@@ -13,6 +13,12 @@ entrada="$(cat)"
 caminho="$(printf '%s' "$entrada" | grep -oE '"file_path"[[:space:]]*:[[:space:]]*"[^"]*"' | head -n1 | sed -E 's/.*"([^"]*)"$/\1/')"
 relativo="${caminho#"$raiz"/}"
 
+# A instalação de verdade (/opt) é só da pessoa (D24).
+if [[ "$caminho" == /opt || "$caminho" == /opt/* ]]; then
+  echo "Bloqueado: $caminho fica em /opt, a instalação de verdade; só a pessoa mexe nela (D24)." >&2
+  exit 2
+fi
+
 # Segredos nunca são editados pelo Claude.
 if eh_caminho_de_segredo "$relativo"; then
   echo "Bloqueado: $caminho guarda segredos e não pode ser editado pelo Claude." >&2

@@ -108,8 +108,122 @@ checar_trecho_gradle() {
   return "$falhou"
 }
 
+# --- D24: a instalação de verdade é só da pessoa ------------------------------------------------
+# Ela mora em /opt/gestor-financeiro e roda no projeto "gestor" do compose (o infra/docker-compose.yml declara
+# "name: gestor"; os containers são gestor-*). Nenhum agente lê, edita ou mexe nela.
+
+# Caminho absoluto em /opt (também por glob no primeiro nível: /op*, /o?t, /*).
+palavra_cita_opt() {
+  local primeiro="${1#/}"
+  [[ "$1" == /* ]] || return 1
+  primeiro="${primeiro%%/*}"
+  [ -n "$primeiro" ] || return 1
+  # shellcheck disable=SC2053 # o primeiro nível pode ser um glob: o lado direito do == é o padrão de propósito
+  [[ "opt" == $primeiro ]]
+}
+
+# Nome do projeto, container, volume, rede ou imagem do gestor (gestor, gestor-*, gestor_*, -pgestor).
+nome_do_gestor() {
+  case "$1" in gestor|gestor-*|gestor_*|-pgestor*) return 0 ;; esac
+  return 1
+}
+
+# Separa um trecho em palavras (sem aspas) e acha onde começa o comando, pulando atribuições, env, sudo,
+# xargs (e as opções dele) etc. Define TRECHO_P (palavras), TRECHO_I (índice do comando, ou o tamanho se não
+# houver), TRECHO_XARGS (1 se veio por xargs) e TRECHO_PROJETO (valor de COMPOSE_PROJECT_NAME=, se houver).
+separar_trecho() {
+  local palavra
+  TRECHO_I=0; TRECHO_XARGS=0; TRECHO_PROJETO=""
+  read -ra TRECHO_P <<< "$(printf '%s' "$1" | sem_aspas)"
+  while [ "$TRECHO_I" -lt "${#TRECHO_P[@]}" ]; do
+    palavra="${TRECHO_P[$TRECHO_I]}"
+    if [[ "$palavra" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]]; then
+      [[ "$palavra" == COMPOSE_PROJECT_NAME=* ]] && TRECHO_PROJETO="${palavra#*=}"
+      TRECHO_I=$((TRECHO_I + 1)); continue
+    fi
+    case "$palavra" in
+      env|command|exec|nice|nohup|time|sudo|bash|sh|-c|-lc|-l|-e|-x) TRECHO_I=$((TRECHO_I + 1)) ;;
+      xargs) TRECHO_XARGS=1; TRECHO_I=$((TRECHO_I + 1)) ;;
+      timeout) TRECHO_I=$((TRECHO_I + 2)) ;;
+      -*) if [ "$TRECHO_XARGS" -eq 1 ]; then TRECHO_I=$((TRECHO_I + 1)); else break; fi ;;
+      *) break ;;
+    esac
+  done
+}
+
+# pkill e killall casam por nome e alcançam os processos da instalação de verdade: o agente para pelo PID.
+checar_trecho_kill() {
+  separar_trecho "$1"
+  [ "$TRECHO_I" -lt "${#TRECHO_P[@]}" ] || return 0
+  case "${TRECHO_P[$TRECHO_I]##*/}" in
+    pkill|killall)
+      echo "Bloqueado: ${TRECHO_P[$TRECHO_I]##*/} casa por nome e alcança a instalação de verdade; pare pelo PID que você gravou (D24)." >&2
+      return 1 ;;
+  esac
+  return 0
+}
+
+# docker e docker compose: nada que mire o projeto "gestor"; compose sempre com -p explícito (o compose do
+# repositório é "name: gestor"); nada de prune; nada destrutivo com alvo calculado ($(...), variável, xargs).
+checar_trecho_docker() {
+  local -a resto
+  local cmd palavra valor compose=0 projeto="" sub="" pula=0 calculado=0 destrutivo=0 i
+  separar_trecho "$1"
+  [ "$TRECHO_I" -lt "${#TRECHO_P[@]}" ] || return 0
+  cmd="${TRECHO_P[$TRECHO_I]##*/}"
+  case "$cmd" in docker) ;; docker-compose) compose=1 ;; *) return 0 ;; esac
+  resto=("${TRECHO_P[@]:TRECHO_I+1}")
+  projeto="$TRECHO_PROJETO"
+
+  for palavra in "${TRECHO_P[@]}"; do
+    valor="${palavra##*=}"
+    if nome_do_gestor "$palavra" || nome_do_gestor "$valor"; then
+      echo "Bloqueado: docker no projeto, container ou imagem do gestor ('$palavra'); a instalação de verdade é só da pessoa (D24)." >&2
+      return 1
+    fi
+    [[ "$palavra" == *'$'* || "$palavra" == *'`'* ]] && calculado=1
+    case "$palavra" in
+      prune)
+        echo "Bloqueado: docker ... prune alcança os containers e volumes da instalação de verdade (D24)." >&2
+        return 1 ;;
+      rm|rmi|stop|kill|restart|pause|unpause|update|rename|exec|down) destrutivo=1 ;;
+    esac
+  done
+  if [ "$destrutivo" -eq 1 ] && { [ "$calculado" -eq 1 ] || [ "$TRECHO_XARGS" -eq 1 ]; }; then
+    echo "Bloqueado: docker destrutivo com alvo calculado (\$(...), variável ou xargs); use o nome literal do container que você criou (D24)." >&2
+    return 1
+  fi
+
+  # Opções e subcomando do compose.
+  for i in "${!resto[@]}"; do
+    palavra="${resto[$i]}"
+    if [ "$pula" -eq 1 ]; then pula=0; continue; fi
+    if [ "$compose" -eq 0 ]; then
+      [ "$palavra" = compose ] && compose=1
+      [[ "$palavra" == -* ]] || [ "$compose" -eq 1 ] || return 0
+      continue
+    fi
+    case "$palavra" in
+      -p|--project-name) projeto="${resto[$((i + 1))]:-}"; pula=1 ;;
+      --project-name=*) projeto="${palavra#*=}" ;;
+      -p?*) projeto="${palavra#-p}" ;;
+      -f|--file|--project-directory|--env-file|--profile|--ansi|--progress|--parallel) pula=1 ;;
+      -*) ;;
+      *) [ -z "$sub" ] && sub="$palavra" ;;
+    esac
+  done
+  [ "$compose" -eq 1 ] || return 0
+  case "$sub" in ls|version|"") return 0 ;; esac
+  if [ -z "$projeto" ] || [[ "$projeto" == *'$'* ]]; then
+    echo "Bloqueado: docker compose sem -p literal; o compose do repositório é o projeto \"gestor\" da instalação de verdade (D24). Use -p <nome-aleatório>." >&2
+    return 1
+  fi
+  return 0
+}
+
 # Comando que o agente vai rodar pelo Bash (hook PreToolUse). Falha se citar caminho de segredo
-# (também por glob, \ ou cd para ~/.gradle) ou se um trecho com gradle sair da lista positiva.
+# (também por glob, \ ou cd para ~/.gradle), se um trecho com gradle sair da lista positiva ou se mexer
+# na instalação de verdade (/opt, docker no projeto gestor, pkill/killall; D24).
 # Mensagem de commit e corpo de PR vão por arquivo (git commit -F, gh pr ... --body-file).
 checar_comando_bash() {
   local comando="$1" palavra trecho falhou=0 cita_gradle_home=0
@@ -127,10 +241,15 @@ checar_comando_bash() {
     elif [ "$cita_gradle_home" -eq 1 ] && [[ "gradle.properties" == ${palavra##*/} ]]; then
       echo "Bloqueado: o comando cita .gradle e $palavra (gradle.properties do usuário guarda senha)." >&2
       falhou=1
+    elif palavra_cita_opt "$palavra"; then
+      echo "Bloqueado: o comando cita $palavra; /opt é a instalação de verdade, só a pessoa mexe nela (D24)." >&2
+      falhou=1
     fi
   done
   while IFS= read -r trecho; do
     checar_trecho_gradle "$trecho" || falhou=1
+    checar_trecho_docker "$trecho" || falhou=1
+    checar_trecho_kill "$trecho" || falhou=1
   done < <(trechos_do_comando "$comando")
   return "$falhou"
 }

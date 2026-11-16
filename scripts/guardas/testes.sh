@@ -123,6 +123,54 @@ espera_sucesso "-I e properties fora do trecho do gradlew" checar_comando_bash "
 espera_sucesso "gradlew depois de ; e ||"         checar_comando_bash "true; ./gradlew lint || echo falhou"
 espera_falha   "flag barrada no 2º trecho do gradlew" checar_comando_bash "cd android && ./gradlew lint --scan | tail"
 
+# D24: a instalação de verdade (/opt, projeto "gestor" do compose, containers gestor-*) é só da pessoa.
+espera_falha   "ls /opt é barrado"                checar_comando_bash "ls /opt"
+espera_falha   "caminho em /opt é barrado"        checar_comando_bash "cat /opt/gestor-financeiro/infra/docker-compose.yml"
+espera_falha   "cd /opt/ é barrado"               checar_comando_bash "cd /opt/ && ls"
+espera_falha   "/opt entre aspas é barrado"       checar_comando_bash "ls \"/opt/gestor-financeiro\""
+espera_falha   "/opt depois de = é barrado"       checar_comando_bash "GF_RAIZ=/opt/gestor-financeiro bash infra/backup/backup.sh"
+espera_falha   "/opt por glob é barrado"          checar_comando_bash "ls /op*/gestor-financeiro"
+espera_falha   "/opt por glob ? é barrado"        checar_comando_bash "ls /o?t"
+espera_falha   "/opt depois de : é barrado"       checar_comando_bash "docker run -v /opt/x:/x alpine true"
+espera_sucesso "/optar não é /opt"                checar_comando_bash "ls /tmp/optar"
+espera_sucesso "palavra opt solta passa"          checar_comando_bash "grep -rn opt docs"
+espera_sucesso "caminho com /opt no meio passa"   checar_comando_bash "ls frontend/node_modules/x/opt"
+
+espera_falha   "docker compose -p gestor é barrado"          checar_comando_bash "docker compose -p gestor ps"
+espera_falha   "docker compose --project-name gestor"        checar_comando_bash "docker compose --project-name gestor logs api"
+espera_falha   "docker compose --project-name=gestor"        checar_comando_bash "docker compose --project-name=gestor logs api"
+espera_falha   "docker compose -pgestor é barrado"           checar_comando_bash "docker compose -pgestor ps"
+espera_falha   "COMPOSE_PROJECT_NAME=gestor é barrado"       checar_comando_bash "COMPOSE_PROJECT_NAME=gestor docker compose ps"
+espera_falha   "compose do repositório sem -p é barrado"     checar_comando_bash "docker compose -f infra/docker-compose.yml down"
+espera_falha   "compose sem -p dentro de infra é barrado"    checar_comando_bash "cd infra && docker compose down -v"
+espera_falha   "docker-compose sem -p é barrado"             checar_comando_bash "docker-compose -f infra/docker-compose.yml ps"
+espera_falha   "docker exec num gestor-* é barrado"          checar_comando_bash "docker exec gestor-postgres-1 psql -U postgres"
+espera_falha   "docker stop gestor-api-1 é barrado"          checar_comando_bash "docker stop gestor-api-1"
+espera_falha   "docker volume do gestor é barrado"           checar_comando_bash "docker volume inspect gestor_dados"
+espera_falha   "filtro name=gestor é barrado"                checar_comando_bash "docker ps --filter name=gestor"
+espera_falha   "rótulo do projeto gestor é barrado"          checar_comando_bash "docker ps -q --filter label=com.docker.compose.project=gestor"
+espera_falha   "sudo docker no gestor é barrado"             checar_comando_bash "sudo docker restart gestor-web-1"
+# shellcheck disable=SC2016 # o texto do comando, sem expandir, é o que a guarda recebe
+espera_falha   "docker rm por \$(docker ps) é barrado"       checar_comando_bash 'docker rm -f $(docker ps -aq)'
+# shellcheck disable=SC2016 # idem
+espera_falha   "docker stop por variável é barrado"          checar_comando_bash 'docker stop "$C"'
+espera_falha   "xargs docker rm é barrado"                   checar_comando_bash "docker ps -q | xargs -r docker rm -f"
+espera_falha   "docker system prune é barrado"               checar_comando_bash "docker system prune -f"
+espera_falha   "docker volume prune é barrado"               checar_comando_bash "docker volume prune"
+espera_falha   "docker container prune é barrado"            checar_comando_bash "docker container prune -f"
+espera_falha   "docker compose com /opt é barrado"           checar_comando_bash "docker compose -p x -f /opt/gestor-financeiro/infra/docker-compose.yml ps"
+espera_sucesso "docker compose -p aleatório passa"           checar_comando_bash "docker compose -p gf-teste-subida-1a2b -f infra/docker-compose.yml ps"
+espera_sucesso "COMPOSE_PROJECT_NAME aleatório passa"        checar_comando_bash "COMPOSE_PROJECT_NAME=gf-qa-e6 docker compose -f x.yml up -d"
+espera_sucesso "docker compose ls passa"                     checar_comando_bash "docker compose ls"
+espera_sucesso "docker ps passa"                             checar_comando_bash "docker ps --format '{{.Names}}'"
+espera_sucesso "docker run descartável passa"                checar_comando_bash "docker run -d --rm --name gf-qa-pg -p 55439:5432 postgres:17-alpine"
+espera_sucesso "docker rm do próprio container passa"        checar_comando_bash "docker rm -f gf-qa-pg"
+espera_sucesso "gestor fora do docker passa"                 checar_comando_bash "grep -rn gestor-api docs"
+espera_sucesso "gestor-financeiro no caminho do repo passa"  checar_comando_bash "ls /home/x/Gestor-Financeiro && git status"
+espera_falha   "pkill é barrado"                             checar_comando_bash "pkill -f GestorFinanceiro.Api"
+espera_falha   "killall é barrado"                           checar_comando_bash "killall dotnet"
+espera_sucesso "kill por PID passa"                          checar_comando_bash "kill 107430"
+
 # .gitignore cobre os segredos do app.
 for ignorado in android/app/release.jks android/release.keystore android/keystore.properties android/local.properties a/x.p12; do
   espera_sucesso ".gitignore ignora $ignorado"   git -C "$raiz" check-ignore -q --no-index "$ignorado"
@@ -288,6 +336,8 @@ confere_hook "hook do Claude barra segredo" 2 '{"file_path":"'"$raiz"'/infra/sec
 confere_hook "hook do Claude deixa .env.example" 0 '{"file_path":"'"$raiz"'/infra/.env.example","content":"a"}'
 confere_hook "hook do Claude deixa teste citar DELETE" 0 '{"file_path":"'"$raiz"'/backend/tests/A.cs","new_string":"DELETE FROM x"}'
 confere_hook "hook do Claude barra editar keystore.properties" 2 '{"file_path":"'"$raiz"'/android/keystore.properties","content":"a"}'
+confere_hook "hook do Claude barra editar em /opt" 2 '{"file_path":"/opt/gestor-financeiro/infra/docker-compose.yml","new_string":"a"}'
+confere_hook "hook do Claude barra escrever em /opt" 2 '{"file_path":"/opt/x.txt","content":"a"}'
 
 hook_bash="$raiz/.claude/hooks/guardar-bash.sh"
 roda_hook_bash() { printf '%s' "$1" | CLAUDE_PROJECT_DIR="$raiz" "$hook_bash" >/dev/null 2>&1; echo $?; }
@@ -297,6 +347,9 @@ confere_bash "hook Bash barra gradlew --scan"      2 '{"tool_name":"Bash","tool_
 confere_bash "hook Bash barra ler keystore.properties" 2 '{"tool_name":"Bash","tool_input":{"command":"cat \"android/keystore.properties\""}}'
 confere_bash "hook Bash barra ler ~/.android"      2 '{"tool_name":"Bash","tool_input":{"command":"ls -la ~/.android/"}}'
 confere_bash "hook Bash deixa git status"          0 '{"tool_name":"Bash","tool_input":{"command":"git status"}}'
+confere_bash "hook Bash barra /opt"                2 '{"tool_name":"Bash","tool_input":{"command":"ls /opt/gestor-financeiro"}}'
+confere_bash "hook Bash barra docker no gestor"    2 '{"tool_name":"Bash","tool_input":{"command":"docker compose -p gestor down"}}'
+confere_bash "hook Bash barra pkill"               2 '{"tool_name":"Bash","tool_input":{"command":"pkill -f GestorFinanceiro.Api"}}'
 confere_bash "hook Bash deixa entrada sem comando" 0 '{"tool_name":"Bash","tool_input":{}}'
 confere_bash "hook Bash barra entrada malformada"  2 'nao-e-json'
 # Sem jq no PATH o hook tem de bloquear, nunca deixar passar.
