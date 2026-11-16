@@ -9,8 +9,10 @@
 #                                                   o container é conferido no docker (nome e projeto do compose)
 #   cp   <gf-*:caminho> <local> | <local> <gf-*:caminho>
 #   build -t gf-* [-f arquivo] <contexto>
-#   compose -p gf-* [-f arquivo] [--project-directory dir] [--env-file arquivo] <subcomando> ...
-# Caminho do host (montagem, -f, contexto) só dentro do repositório ou de /tmp, nunca /opt nem o socket do docker.
+# compose não passa por aqui: os testes do repositório o chamam por dentro, com -p aleatório, e um compose qualquer pode
+# montar o que quiser (revisão da guarda, rodada 3).
+# Caminho do host (montagem, -f, contexto, cp) só dentro do repositório, de /tmp/gf-* ou do scratchpad (/tmp/claude-*);
+# nunca /opt nem o socket do docker. Porta publicada só em 127.0.0.1.
 # Uso: scripts/docker-gf.sh <subcomando> [argumentos]. DOCKER_GF_BIN troca o binário (os testes usam um falso).
 set -euo pipefail
 
@@ -26,7 +28,7 @@ nosso() { [[ "$1" =~ ^gf-[A-Za-z0-9_.-]+$ ]]; }
 caminho_permitido() {
   local r
   r="$(realpath -m -- "$1")"
-  case "$r" in "$raiz" | "$raiz"/* | /tmp | /tmp/*) ;; *) return 1 ;; esac
+  case "$r" in "$raiz" | "$raiz"/* | /tmp/gf-* | /tmp/claude-*) ;; *) return 1 ;; esac
   [[ "$r" != *docker.sock* ]]
 }
 
@@ -41,15 +43,21 @@ container_nosso() {
 }
 exigir_container() { container_nosso "$1" || recusa "$sub em '$1' (só container gf-* que exista e não seja do projeto gestor)"; }
 
-# --opcao=valor vira "--opcao valor".
+# --opcao=valor vira "--opcao valor", só nas opções do docker: para na primeira palavra que não é opção nem valor de
+# opção (a imagem ou o container), e o comando de dentro do container chega como veio (ls --color=never).
 declare -a ARGS=()
 separar_iguais() {
   ARGS=()
-  local a
+  local a anterior="" parou=0
   for a in "$@"; do
-    if [[ "$a" =~ ^--[a-z][a-z-]*= ]]; then ARGS+=("${a%%=*}" "${a#*=}"); else ARGS+=("$a"); fi
+    if [ "$parou" -eq 0 ] && [[ "$a" != -* ]] && [[ -z "$anterior" || "$anterior" != -* || "$anterior" == --*=* ]]; then parou=1; fi
+    if [ "$parou" -eq 0 ] && [[ "$a" =~ ^--[a-z][a-z-]*= ]]; then ARGS+=("${a%%=*}" "${a#*=}"); else ARGS+=("$a"); fi
+    anterior="$a"
   done
 }
+
+# Imagem da instalação de verdade pelo nome, também com registro ou namespace (docker.io/library/gestor-api).
+imagem_do_gestor() { local img="${1%%@*}"; img="${img##*/}"; nome_do_gestor "${img%%:*}"; }
 
 [ $# -gt 0 ] || recusa "sem subcomando"
 sub="$1"; shift
@@ -63,7 +71,7 @@ case "$sub" in
 
   pull)
     [ $# -eq 1 ] || recusa "pull com mais de uma imagem"
-    nome_do_gestor "${1%%:*}" && recusa "pull de '$1'"
+    imagem_do_gestor "$1" && recusa "pull de '$1'"
     exec "$DOCKER" pull "$1" ;;
 
   run)
@@ -73,26 +81,29 @@ case "$sub" in
         --rm | -d | --detach | -i | -t | -it | -ti | --init | --read-only) saida+=("$1"); shift ;;
         --name) nosso "${2:-}" || recusa "run com --name '${2:-}' (use gf-*)"; nome="$2"; saida+=("$1" "$2"); shift 2 ;;
         -p | --publish)
-          [[ "${2:-}" =~ ^(127\.0\.0\.1:)?[0-9]+:[0-9]+(/(tcp|udp))?$ ]] || recusa "run com -p '${2:-}' (só [127.0.0.1:]porta:porta)"
+          [[ "${2:-}" =~ ^127\.0\.0\.1:[0-9]+:[0-9]+(/(tcp|udp))?$ ]] || recusa "run com -p '${2:-}' (só 127.0.0.1:porta:porta)"
           saida+=("$1" "$2"); shift 2 ;;
-        -e | --env | -w | --workdir | -u | --user | -l | --label | --entrypoint | --tmpfs | --hostname | -h)
+        -e | --env | -w | --workdir | -u | --user | -l | --label | --entrypoint | --tmpfs | --hostname | -h | --shm-size \
+          | --platform | --add-host | --health-cmd | --health-interval | --health-timeout | --health-retries)
           [ $# -ge 2 ] || recusa "run com $1 sem valor"; saida+=("$1" "$2"); shift 2 ;;
         --network | --net)
           case "${2:-}" in none | bridge) ;; *) nosso "${2:-}" || recusa "run na rede '${2:-}'" ;; esac
           saida+=("$1" "$2"); shift 2 ;;
+        --env-file) caminho_permitido "${2:-}" || recusa "run com --env-file '${2:-}'"; saida+=("$1" "$2"); shift 2 ;;
         -v | --volume)
           origem="${2%%:*}"
-          if [[ "$origem" == /* || "$origem" == .* ]]; then caminho_permitido "$origem" || recusa "run montando '$origem' (só o repositório ou /tmp)"
+          if [[ "${2:-}" != *:* && "${2:-}" == /* ]]; then : # volume anônimo: só o caminho de dentro do container
+          elif [[ "$origem" == /* || "$origem" == .* ]]; then caminho_permitido "$origem" || recusa "run montando '$origem' (só o repositório, /tmp/gf-* ou o scratchpad)"
           else nosso "$origem" || recusa "run com o volume '$origem' (use gf-*)"; fi
           saida+=("$1" "$2"); shift 2 ;;
-        --) shift; break ;;
+        --) recusa "run com -- (o docker leria o resto como opção)" ;;
         -*) recusa "run com a opção $1 (fora da lista)" ;;
         *) break ;;
       esac
     done
     [ -n "$nome" ] || recusa "run sem --name gf-*"
     [ $# -gt 0 ] || recusa "run sem imagem"
-    nome_do_gestor "${1%%:*}" && recusa "run da imagem '$1'"
+    imagem_do_gestor "$1" && recusa "run da imagem '$1'"
     exec "$DOCKER" run "${saida[@]}" "$@" ;;
 
   exec)
@@ -147,7 +158,7 @@ case "$sub" in
     lados=0
     for lado in "$1" "$2"; do
       if [[ "$lado" == *:* && "$lado" != /* && "$lado" != .* ]]; then exigir_container "${lado%%:*}"; lados=$((lados + 1))
-      else caminho_permitido "$lado" || recusa "cp com '$lado' (só o repositório ou /tmp)"; fi
+      else caminho_permitido "$lado" || recusa "cp com '$lado' (só o repositório, /tmp/gf-* ou o scratchpad)"; fi
     done
     [ "$lados" -eq 1 ] || recusa "cp com um lado no container gf-* e o outro no host"
     exec "$DOCKER" cp "$1" "$2" ;;
@@ -166,27 +177,7 @@ case "$sub" in
     caminho_permitido "$1" || recusa "build com o contexto '$1'"
     exec "$DOCKER" build "${saida[@]+"${saida[@]}"}" "$1" ;;
 
-  compose)
-    if ! { [ "${1:-}" = -p ] || [ "${1:-}" = --project-name ]; } || ! nosso "${2:-}"; then
-      recusa "compose sem -p gf-* logo depois de compose"
-    fi
-    saida+=("$1" "$2"); shift 2
-    while [ $# -gt 0 ]; do
-      case "$1" in
-        -f | --file | --env-file)
-          caminho_permitido "${2:-}" || recusa "compose com o arquivo '${2:-}' (só o repositório ou /tmp)"
-          if [ "$1" != --env-file ] && grep -qE '^[[:space:]]*(container_name|external)[[:space:]]*:' -- "$2"; then
-            recusa "compose com nome fixo ou recurso externo em '$2'"
-          fi
-          saida+=("$1" "$2"); shift 2 ;;
-        --project-directory) caminho_permitido "${2:-}" || recusa "compose com o diretório '${2:-}'"; saida+=("$1" "$2"); shift 2 ;;
-        --profile | --ansi | --progress) saida+=("$1" "${2:-}"); shift 2 ;;
-        -*) recusa "compose com a opção $1 antes do subcomando (fora da lista)" ;;
-        *) break ;;
-      esac
-    done
-    [ $# -gt 0 ] || recusa "compose sem subcomando"
-    exec "$DOCKER" compose "${saida[@]}" "$@" ;;
+  compose) recusa "compose (use os scripts de teste do repositório, que sobem com -p aleatório)" ;;
 
   *) recusa "subcomando '$sub' (fora da lista)" ;;
 esac

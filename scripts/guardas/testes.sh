@@ -13,7 +13,8 @@ falha() { falhou=$((falhou + 1)); echo "FALHA $1"; }
 espera_sucesso() { local d="$1"; shift; if "$@" >/dev/null 2>&1; then ok "$d"; else falha "$d"; fi; }
 espera_falha()   { local d="$1"; shift; if "$@" >/dev/null 2>&1; then falha "$d"; else ok "$d"; fi; }
 
-tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
+# Em /tmp/gf-*: o docker-gf.sh só aceita caminho do host no repositório, em /tmp/gf-* ou no scratchpad.
+tmp="$(mktemp -d /tmp/gf-guardas.XXXXXX)"; trap 'rm -rf "$tmp"' EXIT
 sql() { local nome="$1"; shift; printf '%s\n' "$@" > "$tmp/$nome"; echo "$tmp/$nome"; }
 
 # --- regras.sh -------------------------------------------------------------
@@ -233,7 +234,7 @@ espera_sucesso "gf: rm -f"                        gf rm -f gf-qa-pg
 espera_sucesso "gf: inspect -f"                   gf inspect -f '{{json .State}}' gf-qa-pg
 espera_sucesso "gf: cp do container para /tmp"    gf cp gf-qa-pg:/tmp/x "$tmp/x"
 espera_sucesso "gf: build -t gf-"                 gf build -q -t gf-teste-api:1 "$raiz"
-espera_sucesso "gf: compose -p gf- com o compose real" gf compose -p gf-teste-1 -f "$raiz/infra/docker-compose.yml" ps
+espera_falha   "gf: compose não passa por aqui"   gf compose -p gf-teste-1 -f "$raiz/infra/docker-compose.yml" ps
 espera_sucesso "gf: pull"                         gf pull postgres:17-alpine
 espera_falha   "gf: run sem --name"               gf run -d --rm postgres:17-alpine
 espera_falha   "gf: run com --name gestor-"       gf run --name gestor-x alpine true
@@ -266,6 +267,38 @@ espera_falha   "gf: compose com /opt"             gf compose -p gf-x -f /opt/ges
 espera_falha   "gf: volume"                       gf volume rm algum
 espera_falha   "gf: system prune"                 gf system prune -f
 espera_falha   "gf: pull gestor-api"              gf pull gestor-api
+
+# Revisão da guarda, rodada 3.
+espera_falha   "gf: run com -- antes das opções"  gf run --name gf-x -- --privileged --pid host -v /:/host alpine sh
+espera_falha   "gf: compose run com -v /"         gf compose -p gf-x -f "$raiz/infra/docker-compose.yml" run --rm -v /:/host postgres
+espera_falha   "gf: run -p sem 127.0.0.1"         gf run --name gf-x -p 5432:5432 alpine true
+espera_falha   "gf: run -v /tmp inteiro"          gf run --name gf-x -v /tmp:/t alpine ls
+espera_falha   "gf: run de docker.io/library/gestor-api" gf run --name gf-x docker.io/library/gestor-api
+espera_sucesso "gf: run com volume anônimo"       gf run -d --rm --name gf-qa-pg -v /var/lib/postgresql/data postgres:17-alpine
+espera_sucesso "gf: exec com --color= no comando de dentro" gf exec gf-qa-pg ls --color=never /
+if tail -n1 "$tmp/docker-gf/chamadas" | grep -q -- '--color=never'; then ok "gf: o comando de dentro chega como veio"; else falha "gf: o comando de dentro chega como veio"; fi
+com_cwd() { local base="$1"; shift; GUARDA_CWD="$base" checar_comando_bash "$@"; }
+espera_falha   "cd ../../.. e opt relativo"       com_cwd /home/x/repo "cd ../../.. && ls opt/gestor-financeiro"
+espera_falha   "find ../../.."                    com_cwd /home/x/repo "find ../../.. -name docker-compose.yml"
+espera_falha   "find ~/../.."                     com_cwd /home/x/repo "find ~/../.. -name docker-compose.yml"
+espera_falha   "../../../op*"                     com_cwd /home/x/repo "ls ../../../op*/gestor-financeiro"
+espera_falha   "../../../o{p,}t"                  com_cwd /home/x/repo "ls ../../../o{p,}t"
+espera_falha   "timeout 60 find /"                com_cwd /home/x/repo "timeout 60 find / -name x"
+espera_falha   "ln -s / raiz"                     com_cwd /home/x/repo "ln -s / raiz"
+espera_sucesso "../outro passa"                   com_cwd /home/x/repo "ls ../outro"
+espera_sucesso "git add de backup.sh passa"       checar_comando_bash "git add infra/backup/backup.sh"
+espera_sucesso "git diff de restaurar.sh passa"   checar_comando_bash "git diff -- infra/backup/restaurar.sh"
+espera_sucesso "sed -n em backup.sh passa"        checar_comando_bash "sed -n 1,40p infra/backup/backup.sh"
+espera_falha   "testes/../backup.sh"              com_cwd /home/x/repo "infra/backup/testes/../backup.sh"
+espera_falha   "programa por glob"                checar_comando_bash "/usr/bin/dock?r stop gestor-api-1"
+espera_falha   "programa por chaves"              checar_comando_bash "{docker,} stop gestor-api-1"
+espera_falha   "pkill por glob"                   checar_comando_bash "/usr/bin/pkil? dotnet"
+espera_falha   "socket por glob"                  checar_comando_bash "curl --unix-socket /var/run/dock*.sock http://localhost/containers/json"
+espera_falha   "docker quebrado com barra e linha" checar_comando_bash $'doc\
+ker stop gestor-api-1'
+espera_falha   "plugin docker-buildx direto"      checar_comando_bash "/usr/libexec/docker/cli-plugins/docker-buildx build -t gestor-api ."
+espera_falha   "skill"                            checar_comando_bash "skill -KILL dotnet"
+espera_falha   "DOCKER_GF_BIN"                    checar_comando_bash "DOCKER_GF_BIN=/tmp/x.sh scripts/docker-gf.sh ps"
 
 # .gitignore cobre os segredos do app.
 for ignorado in android/app/release.jks android/release.keystore android/keystore.properties android/local.properties a/x.p12; do

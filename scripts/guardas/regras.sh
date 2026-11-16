@@ -113,7 +113,8 @@ checar_trecho_gradle() {
 # "name: gestor"; os containers são gestor-*). Nenhum agente lê, edita ou mexe nela. O docker dos agentes passa só por
 # scripts/docker-gf.sh, que confere os argumentos já separados pelo shell (lista positiva, nomes gf-*); o hook barra o
 # docker direto, fora a leitura (ps, images, version, info). É uma guarda de texto: pega o descuido e as grafias comuns,
-# não um caminho montado em variável de propósito.
+# não um caminho montado em variável de propósito, nem o que roda dentro de um script ou programa (bash /tmp/x.sh,
+# python3 -c "subprocess..."): esses ficam com a revisão.
 
 # Caminho em /opt: no começo da palavra, depois de : = , @ ou de uma opção colada (-C/opt), com barras repetidas,
 # relativo (../opt), entre chaves (/{opt,}) ou por glob no primeiro nível (/op*, /o?t, /*).
@@ -136,6 +137,46 @@ palavra_cita_opt() {
   [[ -n "$primeiro" && "$primeiro" == *[\*\?\[]* ]] || return 1
   # shellcheck disable=SC2053 # o primeiro nível é um glob: o lado direito do == é o padrão de propósito
   [[ "opt" == $primeiro ]]
+}
+
+# Anda pelos segmentos de um caminho a partir de base (o diretório do comando), sem seguir links: devolve 0 se ele chega
+# em /opt (também por glob ou chaves no nível da raiz: ../../op*, ../../o{p,}t). CAMINHO_FINAL fica com o resultado.
+caminho_chega_em_opt() {
+  local palavra="$1" base="$2" atual seg
+  local -a segs
+  # shellcheck disable=SC2088 # o til é o texto que a guarda recebe; ele é trocado pelo $HOME aqui
+  case "$palavra" in
+    /*) atual=/ ;;
+    "~" | "~/"*) palavra="$HOME/${palavra#\~}"; atual=/ ;;
+    *) atual="$base" ;;
+  esac
+  IFS=/ read -ra segs <<< "$palavra"
+  for seg in "${segs[@]}"; do
+    case "$seg" in
+      "" | .) continue ;;
+      ..) atual="$(dirname -- "$atual")" ;;
+      *)
+        if [ "$atual" = / ]; then
+          if [ "$seg" = opt ] || [[ "$seg" == *\{* ]]; then CAMINHO_FINAL=/opt; return 0; fi
+          # shellcheck disable=SC2053 # o segmento pode ser um glob: o lado direito do == é o padrão de propósito
+          if [[ "$seg" == *[\*\?\[]* && "opt" == $seg ]]; then CAMINHO_FINAL=/opt; return 0; fi
+        fi
+        atual="${atual%/}/$seg" ;;
+    esac
+  done
+  CAMINHO_FINAL="$atual"
+  return 1
+}
+
+# A palavra é o nome deste programa: pelo nome do arquivo, também por glob (/usr/bin/dock?r) ou chaves ({docker,}).
+palavra_e_programa() {
+  local base="${1##*/}" alvo="$2" cand
+  [ "$base" = "$alvo" ] && return 0
+  if [[ "$base" == *\{* ]]; then
+    for cand in $(printf '%s' "$base" | tr -d '{}' | tr ',' ' '); do [ "$cand" = "$alvo" ] && return 0; done
+  fi
+  # shellcheck disable=SC2053 # a palavra pode ser um glob: o lado direito do == é o padrão de propósito
+  [[ "$base" == *[\*\?\[]* && "$alvo" == $base ]]
 }
 
 # Nome do projeto, container, volume, rede ou imagem da instalação de verdade (gestor, gestor-*, gestor_*, /gestor-*).
@@ -169,8 +210,27 @@ achar_programa() {
   if comando_de_texto "${TRECHO_P[$primeiro]}"; then return 0; fi
   for i in "${!TRECHO_P[@]}"; do
     for alvo in "$@"; do
-      if [ "${TRECHO_P[$i]##*/}" = "$alvo" ]; then INDICE_DO_PROGRAMA=$i; return 0; fi
+      if palavra_e_programa "${TRECHO_P[$i]}" "$alvo"; then INDICE_DO_PROGRAMA=$i; return 0; fi
+      # Plugins do docker chamados direto (docker-buildx, docker-compose...).
+      if [ "$alvo" = docker ] && [[ "${TRECHO_P[$i]##*/}" == docker-* && "${TRECHO_P[$i]##*/}" != docker-gf.sh ]]; then INDICE_DO_PROGRAMA=$i; return 0; fi
     done
+  done
+}
+
+# Índice do programa que o trecho roda, pulando atribuições, env, sudo, timeout, nice, nohup, bash/sh/source/. e as opções
+# deles (-c, -e...). -1 se não houver. Usa TRECHO_P.
+programa_do_trecho() {
+  local i=0 palavra
+  INDICE_DO_PROGRAMA=-1
+  while [ "$i" -lt "${#TRECHO_P[@]}" ]; do
+    palavra="${TRECHO_P[$i]}"
+    if [[ "$palavra" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]]; then i=$((i + 1)); continue; fi
+    case "${palavra##*/}" in
+      env | sudo | nice | nohup | exec | command | time | bash | sh | source | . | stdbuf | setsid | xargs) i=$((i + 1)) ;;
+      timeout) i=$((i + 2)) ;;
+      -*) i=$((i + 1)) ;;
+      *) INDICE_DO_PROGRAMA=$i; return 0 ;;
+    esac
   done
 }
 
@@ -192,7 +252,7 @@ alvo_calculado() {
 checar_trecho_kill() {
   local i
   separar_palavras "$1"
-  achar_programa pkill killall
+  achar_programa pkill killall killall5 skill
   if [ "$INDICE_DO_PROGRAMA" -ge 0 ]; then
     echo "Bloqueado: ${TRECHO_P[$INDICE_DO_PROGRAMA]##*/} casa por nome e alcança a instalação de verdade; pare pelo PID que você gravou (D24)." >&2
     return 1
@@ -216,10 +276,15 @@ checar_trecho_kill() {
 
 # Os scripts de produção do backup rodam como root, contra a instalação de verdade; os testes os chamam por dentro.
 checar_trecho_producao() {
+  local programa
   separar_palavras "$1"
-  achar_programa backup.sh restaurar.sh enviar.sh
-  if [ "$INDICE_DO_PROGRAMA" -ge 0 ] && [[ "${TRECHO_P[$INDICE_DO_PROGRAMA]}" != */testes/* ]]; then
-    echo "Bloqueado: ${TRECHO_P[$INDICE_DO_PROGRAMA]} é script de produção (instalação de verdade); rode os testes em infra/backup/testes (D24)." >&2
+  programa_do_trecho
+  [ "$INDICE_DO_PROGRAMA" -ge 0 ] || return 0
+  programa="${TRECHO_P[$INDICE_DO_PROGRAMA]}"
+  case "${programa##*/}" in backup.sh | restaurar.sh | enviar.sh) ;; *) return 0 ;; esac
+  caminho_chega_em_opt "$programa" "${2:-$PWD}" || true
+  if [[ "$CAMINHO_FINAL" != */testes/* ]]; then
+    echo "Bloqueado: $programa é script de produção (instalação de verdade); rode os testes em infra/backup/testes (D24)." >&2
     return 1
   fi
   return 0
@@ -234,7 +299,9 @@ checar_trecho_docker() {
   while [ "$primeiro" -lt "${#TRECHO_P[@]}" ] && [[ "${TRECHO_P[$primeiro]}" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]]; do primeiro=$((primeiro + 1)); done
   if [ "$primeiro" -ge "${#TRECHO_P[@]}" ] || ! comando_de_texto "${TRECHO_P[$primeiro]}"; then
     for palavra in "${TRECHO_P[@]}"; do
-      if [[ "$palavra" == *docker.sock* || "$palavra" == DOCKER_HOST=* || "$palavra" == DOCKER_CONTEXT=* ]]; then
+      # shellcheck disable=SC2053 # a palavra pode ser um glob (/var/run/dock*.sock): o lado direito do == é o padrão
+      if [[ "$palavra" == *docker.sock* || "$palavra" == DOCKER_HOST=* || "$palavra" == DOCKER_CONTEXT=* || "$palavra" == DOCKER_GF_BIN=* ]] \
+         || [[ "$palavra" == *[\*\?\[]* && ( "/var/run/docker.sock" == $palavra || "/run/docker.sock" == $palavra || "docker.sock" == ${palavra##*/} ) ]]; then
         echo "Bloqueado: docker pelo socket ou por outro host/contexto ($palavra) (D24)." >&2
         return 1
       fi
@@ -243,7 +310,7 @@ checar_trecho_docker() {
   achar_programa docker docker-compose podman nerdctl
   k="$INDICE_DO_PROGRAMA"
   [ "$k" -ge 0 ] || return 0
-  if [ "$k" -eq "$primeiro" ] && [ "${TRECHO_P[$k]##*/}" = docker ] && ! alvo_calculado "$k"; then
+  if [ "$k" -eq "$primeiro" ] && [ "${TRECHO_P[$k]}" = docker ] && ! alvo_calculado "$k"; then
     case "${TRECHO_P[$((k + 1))]:-}" in ps | images | version | info | --version) return 0 ;; esac
   fi
   echo "Bloqueado: docker direto; use scripts/docker-gf.sh (lista positiva, nomes gf-*; só ps, images, version e info passam direto) (D24)." >&2
@@ -252,15 +319,17 @@ checar_trecho_docker() {
 
 # Busca ou cópia a partir da raiz (find /, grep -r ... /, du /) lê /opt sem citá-lo.
 checar_trecho_raiz() {
-  local palavra r
+  local palavra programa="" base="${2:-$PWD}"
   separar_palavras "$1"
-  [ "${#TRECHO_P[@]}" -gt 0 ] || return 0
-  case "${TRECHO_P[0]##*/}" in find | grep | egrep | fgrep | rg | du | tar | rsync | ls | tree | cp | chmod | chown | zip) ;; *) return 0 ;; esac
-  for palavra in "${TRECHO_P[@]:1}"; do
-    [[ "$palavra" == /* ]] || continue
-    r="$(realpath -m -- "$palavra" 2>/dev/null || printf '%s' "$palavra")"
-    if [ "$r" = / ] || [[ "$palavra" =~ ^/+\*$ ]]; then
-      echo "Bloqueado: ${TRECHO_P[0]##*/} a partir de / alcança /opt, a instalação de verdade (D24)." >&2
+  for palavra in "${TRECHO_P[@]}"; do
+    case "${palavra##*/}" in find | grep | egrep | fgrep | rg | du | tar | rsync | ls | tree | cp | chmod | chown | zip | ln) programa="${palavra##*/}"; break ;; esac
+  done
+  [ -n "$programa" ] || return 0
+  for palavra in "${TRECHO_P[@]}"; do
+    [[ "$palavra" == */* || "$palavra" == . || "$palavra" == .. || "$palavra" == "~" ]] || continue
+    [[ "$palavra" == -* ]] && continue
+    if [[ "$palavra" =~ ^/+\*$ ]] || { ! caminho_chega_em_opt "$palavra" "$base" && [ "$CAMINHO_FINAL" = / ]; }; then
+      echo "Bloqueado: $programa a partir de / alcança /opt, a instalação de verdade (D24)." >&2
       return 1
     fi
   done
@@ -271,7 +340,10 @@ checar_trecho_raiz() {
 # na instalação de verdade (/opt, docker no projeto gestor, pkill/killall; D24).
 # Mensagem de commit e corpo de PR vão por arquivo (git commit -F, gh pr ... --body-file).
 checar_comando_bash() {
-  local comando="$1" palavra trecho falhou=0 cita_gradle_home=0 cd_na_raiz=0 destino
+  local comando="$1" palavra trecho falhou=0 cita_gradle_home=0 parte
+  local base="${GUARDA_CWD:-$PWD}"
+  # Barra invertida no fim da linha junta as duas (doc\⏎ker é docker).
+  comando="${comando//$'\\\n'/}"
   COMANDO_TEM_CRASE=0
   [[ "$comando" == *'`'* ]] && COMANDO_TEM_CRASE=1
   local -a palavras
@@ -297,24 +369,26 @@ checar_comando_bash() {
     checar_trecho_gradle "$trecho" || falhou=1
     checar_trecho_docker "$trecho" || falhou=1
     checar_trecho_kill "$trecho" || falhou=1
-    checar_trecho_producao "$trecho" || falhou=1
-    checar_trecho_raiz "$trecho" || falhou=1
+    checar_trecho_producao "$trecho" "$base" || falhou=1
+    checar_trecho_raiz "$trecho" "$base" || falhou=1
     separar_palavras "$trecho"
-    # cd ou pushd que chega na raiz (cd /, cd /tmp/.., cd ~/../..).
-    if [[ "${TRECHO_P[0]:-}" == cd || "${TRECHO_P[0]:-}" == pushd ]] && [ -n "${TRECHO_P[1]:-}" ]; then
-      destino="${TRECHO_P[1]/#\~/$HOME}"
-      [[ "$destino" == /* ]] && [ "$(realpath -m -- "$destino" 2>/dev/null)" = / ] && cd_na_raiz=1
+    # Caminho relativo a partir do diretório do comando (o cwd do hook, e o de cada cd): ../../opt, cd / && ls opt/x.
+    for palavra in "${TRECHO_P[@]}"; do
+      for parte in "$palavra" "${palavra##*=}"; do
+        [[ "$parte" == */* || "$parte" == opt* || "$parte" == *\{* || "$parte" == "~" ]] || continue
+        [[ "$parte" == -* ]] && continue
+        if caminho_chega_em_opt "$parte" "$base"; then
+          echo "Bloqueado: $palavra chega a /opt a partir de $base; /opt é a instalação de verdade (D24)." >&2
+          falhou=1
+          break
+        fi
+      done
+    done
+    if [[ "${TRECHO_P[0]:-}" == cd || "${TRECHO_P[0]:-}" == pushd ]]; then
+      caminho_chega_em_opt "${TRECHO_P[1]:-~}" "$base" || true
+      base="$CAMINHO_FINAL"
     fi
   done < <(trechos_do_comando "$comando")
-  # cd / e depois um caminho relativo que começa em opt (D24).
-  if [ "$cd_na_raiz" -eq 1 ]; then
-    for palavra in "${palavras[@]}"; do
-      if [[ "$palavra" =~ ^(\./)?opt(/|$) ]]; then
-        echo "Bloqueado: cd / e $palavra chegam a /opt, a instalação de verdade (D24)." >&2
-        falhou=1
-      fi
-    done
-  fi
   return "$falhou"
 }
 
