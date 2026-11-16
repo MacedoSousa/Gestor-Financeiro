@@ -46,7 +46,11 @@ const TITULOS: ReadonlySet<string> = new Set([
   "O banco desta conexão já foi escolhido.",
   // Lancamentos (revisão em lote, E5, e o que espera a E6, D23)
   "Algum lançamento do lote já foi revisado. Atualize a página.",
-  "Pagamento de fatura e transferência entre as contas de vocês são reconhecidos na próxima etapa; não entram no orçamento.",
+  "Pagamento de fatura e transferência entre as contas de vocês são reconhecidos sozinhos ou vão para “A conferir”; não entram no orçamento.",
+  // Lancamentos ("A conferir", E6)
+  "O outro lado ainda não veio do banco nessa conta. Tente depois da próxima sincronização.",
+  "Há mais de um lançamento que pode ser o outro lado nessa conta. Resolva pelo extrato.",
+  "Este lançamento já não está disponível. Atualize a página.",
 ]);
 
 /** Títulos com o nome do cônjuge ou do grupo: só no formato exato, com o nome curto e sem ponto no meio. */

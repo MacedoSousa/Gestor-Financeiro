@@ -15,6 +15,18 @@ internal sealed class LancamentosDbContext(DbContextOptions<LancamentosDbContext
     public DbSet<Transacao> Transacoes => Set<Transacao>();
     public DbSet<RegraDeCategoria> Regras => Set<RegraDeCategoria>();
     public DbSet<MapaDeCategoriaExterna> Mapa => Set<MapaDeCategoriaExterna>();
+    public DbSet<ItemAConferir> ItensAConferir => Set<ItemAConferir>();
+}
+
+internal sealed class ItemAConferirConfig : IEntityTypeConfiguration<ItemAConferir>
+{
+    public void Configure(EntityTypeBuilder<ItemAConferir> b)
+    {
+        b.ToTable("itens_a_conferir");
+        b.HasKey(x => x.Id);
+        b.Ignore(x => x.Aberto);
+        b.Property(x => x.Chave).HasMaxLength(120);
+    }
 }
 
 internal sealed class RegraDeCategoriaConfig : IEntityTypeConfiguration<RegraDeCategoria>

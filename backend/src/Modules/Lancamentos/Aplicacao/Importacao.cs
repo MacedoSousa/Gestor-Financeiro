@@ -19,7 +19,7 @@ namespace GestorFinanceiro.Modules.Lancamentos.Aplicacao;
 /// valor, descrição ou id do banco vai para log ou exceção.
 /// </summary>
 internal sealed class Importacao(LancamentosDbContext db, IUsuarioAtual atual, IConsultaDeContas contas, ICofre cofre,
-    SugestaoDeCategoria sugestao)
+    SugestaoDeCategoria sugestao, Reconhecimento reconhecimento)
     : IImportacaoDeLancamentos
 {
     /// <summary>Pendente → definitiva: a data da definitiva fica até 3 dias da pendente (spec, números da Fase 2).</summary>
@@ -134,10 +134,31 @@ internal sealed class Importacao(LancamentosDbContext db, IUsuarioAtual atual, I
         var pares = pendentes.ToDictionary(p => p, p => definitivas.Where(d => Par(p, d)).ToList());
         // Par único dos dois lados: a definitiva também não pode servir a outra pendente.
         var disputadas = pares.Values.Where(l => l.Count == 1).GroupBy(l => l[0]).Where(g => g.Count() > 1).Select(g => g.Key).ToHashSet();
+        // "A conferir" (Tarefa 6.1): a pendente sem par único fica e vira item; a que sumiu sem nenhuma candidata é apagada
+        // na segunda sincronização completa seguida sem ela (como a confirmada, D19) e aparece uma vez. Nada é descartado.
+        var chavesDosItens = pares.Count == 0
+            ? []
+            : (await db.ItensAConferir.Select(i => i.Chave).ToListAsync(ct)).ToHashSet(StringComparer.Ordinal);
+        void Abrir(string tipo, string chave, Transacao t)
+        {
+            if (chavesDosItens.Add(chave))
+                db.ItensAConferir.Add(ItemAConferir.Criar(casalId, tipo, chave, t.ContaId, t.Id, t.ValorCentavos, t.Data));
+        }
         foreach (var (pendente, candidatas) in pares)
         {
+            if (candidatas.Count == 0)
+            {
+                if (apagarAusentes && lote.Count > 0 && pendente.RegistrarAusencia())
+                {
+                    db.Transacoes.Remove(pendente);
+                    Abrir(TipoDeItemAConferir.PendenteSumiu, ItemAConferir.ChavePendenteSumiu(pendente.Id), pendente);
+                }
+                semPar++;
+                continue;
+            }
             if (candidatas.Count != 1 || disputadas.Contains(candidatas[0]))
             {
+                Abrir(TipoDeItemAConferir.PendenteSemPar, ItemAConferir.ChavePendenteSemPar(pendente.Id), pendente);
                 semPar++;
                 continue;
             }
@@ -149,6 +170,8 @@ internal sealed class Importacao(LancamentosDbContext db, IUsuarioAtual atual, I
 
         return new ResumoDaImportacao(criados, atualizados, ignorados, apagados, promovidas, semPar, restaurados);
     }
+
+    public Task ReconhecerMovimentosAsync(DateOnly desde, CancellationToken ct) => reconhecimento.ReconhecerAsync(desde, ct);
 
     /// <summary>Mesma conta (já filtrada), mesmo valor, data até 3 dias e descrição do banco parecida (a do casal não conta).</summary>
     private bool Par(Transacao pendente, Transacao definitiva) =>

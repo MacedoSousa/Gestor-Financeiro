@@ -47,7 +47,10 @@ internal sealed partial class Sincronizacao(
     internal const int DiasDaJanela = 10;
 
     /// <summary>O que uma conta (ou cartão) rendeu na importação.</summary>
-    private sealed record Importada(int Novos, int Atualizados);
+    private sealed record Importada(int Novos, int Atualizados, DateOnly Janela);
+
+    /// <summary>O reconhecimento olha uns dias antes da janela importada: o outro lado pode ter chegado antes (outro item).</summary>
+    internal const int DiasAntesDoReconhecimento = 5;
 
     public async Task<ResultadoDaSincronizacao> SincronizarAsync(Guid itemId, CancellationToken ct)
     {
@@ -107,6 +110,7 @@ internal sealed partial class Sincronizacao(
             .ToListAsync(ct);
 
         int sincronizadas = 0, comFalha = 0, novos = 0, atualizados = 0;
+        DateOnly? desdeDoReconhecimento = null;
         foreach (var vinculo in vinculos)
         {
             // Conta que não existe (ou ainda não é ligada: nascimento pela metade) ou arquivada não é lida (decisão 7).
@@ -114,6 +118,7 @@ internal sealed partial class Sincronizacao(
             try
             {
                 var r = await ImportarAsync(a, leitura!, vinculo.Id, conta, hoje, atualizado, ct);
+                desdeDoReconhecimento = desdeDoReconhecimento is { } d && d < r.Janela ? d : r.Janela;
                 sincronizadas++;
                 novos += r.Novos;
                 atualizados += r.Atualizados;
@@ -124,6 +129,21 @@ internal sealed partial class Sincronizacao(
                 db.ChangeTracker.Clear();
                 comFalha++;
                 ContaFalhou(log, a.Chaves.Slot, vinculo.Id, e is ErroDaPluggy p ? p.Status : 0, e.GetType().Name);
+            }
+        }
+
+        // Reconhecimento (Tarefa 6.2), por casal: transferência entre contas ligadas (de qualquer item), pagamento de fatura,
+        // aplicação e resgate. A falha só vai para o log: o que as contas importaram fica.
+        if (sincronizadas > 0)
+        {
+            try
+            {
+                await importacao.ReconhecerMovimentosAsync(desdeDoReconhecimento!.Value.AddDays(-DiasAntesDoReconhecimento), ct);
+            }
+            catch (Exception e) when (e is not OperationCanceledException || !ct.IsCancellationRequested)
+            {
+                db.ChangeTracker.Clear();
+                ReconhecimentoFalhou(log, a.Chaves.Slot, a.Item.Id, e.GetType().Name);
             }
         }
 
@@ -186,7 +206,7 @@ internal sealed partial class Sincronizacao(
 
         vinculo.RegistrarImportacao(historico, hoje);
         await db.SaveChangesAsync(ct);
-        return new Importada(resumo.Criados, resumo.Atualizados);
+        return new Importada(resumo.Criados, resumo.Atualizados, janela);
     }
 
     /// <summary>
@@ -344,6 +364,9 @@ internal sealed partial class Sincronizacao(
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Sincronização: a conta do vínculo {Vinculo} falhou (slot {Slot}, status {Status}, {Tipo}).")]
     private static partial void ContaFalhou(ILogger logger, int slot, Guid vinculo, int status, string tipo);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Sincronização: o reconhecimento de transferências do item {Item} falhou (slot {Slot}, {Tipo}).")]
+    private static partial void ReconhecimentoFalhou(ILogger logger, int slot, Guid item, string tipo);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Sincronização: a conferência dos investimentos do item {Item} falhou (slot {Slot}, {Tipo}).")]
     private static partial void InvestimentosFalharam(ILogger logger, int slot, Guid item, string tipo);

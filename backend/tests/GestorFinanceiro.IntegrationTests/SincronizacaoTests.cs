@@ -95,7 +95,8 @@ public class SincronizacaoTests(PostgresFixture pg)
         var item = (await JsonAsync(r)).GetProperty("items")[0].GetProperty("id").GetGuid();
         var confirmadas = contas.Select(k => new
         {
-            idExterno = k.Id, acao = "CRIAR", apelido = k.Tipo == "CREDIT" ? "Itaú Cartão · Ana" : "Itaú Corrente · Ana",
+            idExterno = k.Id, acao = "CRIAR",
+            apelido = k.Tipo == "CREDIT" ? "Itaú Cartão · Ana" : k.Subtipo == "SAVINGS_ACCOUNT" ? "Itaú Poupança · Ana" : "Itaú Corrente · Ana",
             titularUsuarioId = c.AnaId, diaFechamento = k.Tipo == "CREDIT" ? 3 : (int?)null, diaVencimento = k.Tipo == "CREDIT" ? 10 : (int?)null,
         }).ToArray();
         await EsperarAsync(c.Ana.PostAsJsonAsync($"/api/v1/integracoes/items/{item}/nascimento", new { contas = confirmadas, aplicacoes = Array.Empty<object>() }),
@@ -114,8 +115,8 @@ public class SincronizacaoTests(PostgresFixture pg)
     }
 
     private static TransacaoPluggy Tx(string id, string data, long valor, string tipo = "DEBIT", string status = "POSTED",
-        string descricao = "COMPRA SINTETICA", string? fatura = null, int? parcela = null, int? parcelas = null) =>
-        new(id, DateOnly.Parse(data, System.Globalization.CultureInfo.InvariantCulture), valor, tipo, status, descricao, "01010000", "Compras",
+        string descricao = "COMPRA SINTETICA", string? fatura = null, int? parcela = null, int? parcelas = null, string categoria = "01010000") =>
+        new(id, DateOnly.Parse(data, System.Globalization.CultureInfo.InvariantCulture), valor, tipo, status, descricao, categoria, "Compras",
             parcela, parcelas, fatura);
 
     private static Task<Guid> ContaAsync(Ctx c, string idExterno) =>
@@ -1012,5 +1013,23 @@ public class SincronizacaoTests(PostgresFixture pg)
         await SincronizarOkAsync(c, item);
 
         Assert.Equal(2L, await LancamentosAsync(c, conta));
+    }
+
+    /// <summary>E6, 6.2: a sincronização reconhece a transferência entre a corrente e a poupança do casal.</summary>
+    [Fact]
+    public async Task Sincronizacao_reconhece_transferencia_entre_contas_do_casal()
+    {
+        await using var c = await IniciarAsync();
+        var poupanca = new ContaPluggy("poupanca-sintetica-1", "BANK", "SAVINGS_ACCOUNT", "Poupança", null, "0001/12345-7", 10_000, null, null, null);
+        var (item, _) = await NascerAsync(c, Corrente, poupanca);
+        c.Pluggy.CadastrarTransacao(Corrente.Id, Tx("tx-saida", "2026-11-03", -10_000, descricao: "TED MESMA TITULARIDADE", categoria: "04000000"));
+        c.Pluggy.CadastrarTransacao(poupanca.Id, Tx("tx-entrada", "2026-11-03", 10_000, tipo: "CREDIT", descricao: "TED MESMA TITULARIDADE", categoria: "04000000"));
+
+        await SincronizarOkAsync(c, item);
+
+        Assert.Equal("TRANSFERENCIA;TRANSFERENCIA", await EscalarAsync<string>(c.Banco,
+            "SELECT string_agg(natureza, ';') FROM lancamentos.transacoes WHERE id_externo IN ('tx-saida', 'tx-entrada')"));
+        Assert.Equal(1L, await EscalarAsync<long>(c.Banco,
+            "SELECT count(DISTINCT grupo_id) FROM lancamentos.transacoes WHERE id_externo IN ('tx-saida', 'tx-entrada')"));
     }
 }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Conta } from "../api/contas";
 import type { Categoria, Lancamento } from "../api/lancamentos";
-import { avisaAporteEmDobro, categoriasDoTipo, contasParaLancar, edicaoEmContaLigada, ehEstorno, exigeEscolhaDeCategoria } from "./lancamentos";
+import { avisaAporteEmDobro, categoriasDoTipo, contasParaLancar, edicaoEmContaLigada, ehEstorno, exigeEscolhaDeCategoria, fimDaNotaDoImportado, deOndeVeio, oQueSeMudaNoImportado } from "./lancamentos";
 
 const cat = (id: string, tipo: string, papel: string | null = null, arquivada = false): Categoria => ({ id, nome: id, tipo, arquivada, papel });
 const conta = (tipo: string) => ({ id: "c", apelido: "c", tipo }) as Conta;
@@ -86,5 +86,36 @@ describe("exigeEscolhaDeCategoria (testador da E4, achado 2)", () => {
   it("com sugestão ou já revisado, a categoria atual vale", () => {
     expect(exigeEscolhaDeCategoria({ ...base, categoria: { id: "m", nome: "Mercado", arquivada: false } })).toBe(false);
     expect(exigeEscolhaDeCategoria({ ...base, revisao: "REVISADA" })).toBe(false);
+  });
+});
+
+describe("de onde veio o lançamento de conta ligada (testador da E6, rodada 2)", () => {
+  it("o que o sistema lançou não diz que veio do banco", () => {
+    expect(deOndeVeio({ origem: "OPEN_FINANCE", natureza: "DESPESA" })).toBe("Veio do banco");
+    expect(deOndeVeio({ origem: "MANUAL", natureza: "DESPESA" })).toBe("Esta conta agora vem do banco. Lançado à mão antes de ligar");
+    expect(deOndeVeio({ origem: "SISTEMA", natureza: "TRANSFERENCIA" })).toBe("Criado pelo sistema como o outro lado, ao resolver em “A conferir”");
+  });
+});
+
+describe("o que se muda no importado (testador da E6, achado 4)", () => {
+  it("transferência do banco não tem categoria: só a descrição", () => {
+    expect(oQueSeMudaNoImportado(true)).toBe("Aqui você muda só a descrição");
+    expect(oQueSeMudaNoImportado(false)).toBe("Aqui você escolhe a categoria e, se quiser, a descrição");
+  });
+});
+
+describe("nota do importado no editor (E6, item 2)", () => {
+  it("a revisar comum: salvar passa a contar no orçamento", () => {
+    expect(fimDaNotaDoImportado({ revisao: "A_REVISAR", entreContas: false })).toBe(
+      "; salvar marca como revisado e o lançamento passa a contar no orçamento",
+    );
+    expect(fimDaNotaDoImportado({ revisao: "REVISADA", entreContas: false })).toBe("");
+  });
+
+  it("fatura, transferência e investimento: nunca diz que passa a contar no orçamento (D23)", () => {
+    for (const revisao of ["A_REVISAR", "REVISADA"])
+      expect(fimDaNotaDoImportado({ revisao, entreContas: true })).toBe(
+        ". Pagamento de fatura e transferência entre as contas de vocês não entram no orçamento",
+      );
   });
 });

@@ -10,6 +10,7 @@ import { RegistrarAcesso } from "./paginas/RegistrarAcesso";
 import { Dispositivos } from "./paginas/Dispositivos";
 import { Lancamentos } from "./paginas/Lancamentos";
 import { RevisarImportados } from "./paginas/RevisarImportados";
+import { AConferir } from "./paginas/AConferir";
 import { Contas } from "./paginas/Contas";
 import { Conexoes } from "./paginas/Conexoes";
 import { Nascimento } from "./paginas/conexoes/Nascimento";
@@ -28,6 +29,7 @@ export function App() {
         <Route index element={<VisaoGeral />} />
         <Route path="lancamentos" element={<Lancamentos />} />
         <Route path="lancamentos/revisar" element={<RevisarImportados />} />
+        <Route path="lancamentos/a-conferir" element={<AConferir />} />
         <Route path="orcamento" element={<Orcamento />} />
         <Route path="boletos" element={<EmBreve titulo="Boletos e faturas" fase="Fase 1" />} />
         <Route path="metas" element={<Metas />} />

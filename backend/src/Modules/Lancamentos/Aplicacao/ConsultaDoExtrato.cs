@@ -132,7 +132,9 @@ internal sealed class ConsultaDoExtrato(LancamentosDbContext db, IUsuarioAtual a
                 quem, TextoDaOrigem(t.Origem), t.Natureza.ToString().ToUpperInvariant(), t.ValorCentavos,
                 t.Parcela, t.Parcelas, t.GrupoId, t.FaturaVencimento,
                 t.Revisao == RevisaoDaTransacao.ARevisar ? "A_REVISAR" : "REVISADA",
-                t.Confirmacao == ConfirmacaoDaTransacao.AConfirmar ? "A_CONFIRMAR" : "CONFIRMADA");
+                t.Confirmacao == ConfirmacaoDaTransacao.AConfirmar ? "A_CONFIRMAR" : "CONFIRMADA",
+                // Pagamento de fatura, mesma titularidade e investimento do banco: não entram no orçamento (D23, E6).
+                t.Origem == OrigemDaTransacao.OpenFinance && CategoriasDoBanco.ReconhecidoNaProximaEtapa(t.CategoriaExterna));
         }).ToList();
     }
 

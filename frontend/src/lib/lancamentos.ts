@@ -62,3 +62,23 @@ export function contasParaLancar<T extends Pick<Conta, "arquivada" | "ligada">>(
 export function exigeEscolhaDeCategoria(l: Pick<Lancamento, "revisao" | "categoria">): boolean {
   return l.revisao === "A_REVISAR" && !l.categoria;
 }
+
+/** De onde veio o lançamento de conta ligada: do banco, da mão do casal antes de ligar, ou do sistema (D12). */
+export function deOndeVeio(l: { origem: string; natureza: string }): string {
+  if (l.origem === "MANUAL") return "Esta conta agora vem do banco. Lançado à mão antes de ligar";
+  if (l.origem !== "SISTEMA") return "Veio do banco";
+  return "Criado pelo sistema como o outro lado, ao resolver em “A conferir”";
+}
+
+/** Transferência do banco não tem categoria (D9): no editor, só a descrição muda. */
+export const oQueSeMudaNoImportado = (transferencia: boolean): string =>
+  transferencia ? "Aqui você muda só a descrição" : "Aqui você escolhe a categoria e, se quiser, a descrição";
+
+/**
+ * Fim da nota do editor para um lançamento do banco (E6, item 2). Pagamento de fatura, transferência entre as contas do
+ * casal e investimento nunca "passam a contar no orçamento" (D23): o sistema os reconhece como transferência.
+ */
+export function fimDaNotaDoImportado(l: { revisao?: string | null; entreContas?: boolean | null }): string {
+  if (l.entreContas) return ". Pagamento de fatura e transferência entre as contas de vocês não entram no orçamento";
+  return l.revisao === "A_REVISAR" ? "; salvar marca como revisado e o lançamento passa a contar no orçamento" : "";
+}

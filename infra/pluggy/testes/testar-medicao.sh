@@ -16,7 +16,7 @@ falha() { echo "FALHA $1"; falhas=$((falhas + 1)); }
 caso()  { if "$1"; then ok "$1"; else falha "$1"; fi; }
 
 mkdir -p "$T/servidor" "$T/raiz/infra/secrets" "$T/home" "$T/legado/infra/secrets"
-PLUGGY_FALSO_INVESTIMENTOS="$T/servidor/investimentos.json" python3 "$DIR/pluggy-falso.py" "$T/servidor/porta" "$T/servidor/registro" &
+PLUGGY_FALSO_INVESTIMENTOS="$T/servidor/investimentos.json" PLUGGY_FALSO_E6="$T/servidor/e6" python3 "$DIR/pluggy-falso.py" "$T/servidor/porta" "$T/servidor/registro" &
 servidor=$!
 for _ in $(seq 50); do [ -s "$T/servidor/porta" ] && break; sleep 0.1; done
 [ -s "$T/servidor/porta" ] || { echo "FALHA a Pluggy falsa não subiu"; exit 1; }
@@ -48,6 +48,34 @@ investimentos_do_falso() {
     >"$T/servidor/investimentos.json"
   [ "$(curl -sS "$URL/investments?itemId=item-sintetico" -H "X-API-KEY: $chave" | jq -c '[.results[].balance == null]')" = '[false,true]' ] || return 1
   rm -f "$T/servidor/investimentos.json"
+}
+
+# Com o arquivo PLUGGY_FALSO_E6 presente, a Pluggy falsa serve também os movimentos da E6 (transferência para a
+# mesma pessoa com e sem par, aplicação, resgate e o pagamento da fatura fechada); sem ele, nada muda.
+movimentos_da_e6_no_falso() {
+  local chave contas k1 p1 categorias
+  chave="$(printf '{"clientId":"id-sintetico","clientSecret":"segredo-sintetico"}' |
+    curl -sS -X POST "$URL/auth" -H 'Content-Type: application/json' --data @- | jq -r .apiKey)"
+  contas() { curl -sS "$URL/accounts?itemId=item-sintetico" -H "X-API-KEY: $chave" | jq -c '[.results[].id]'; }
+  transacoes() { # junta as duas páginas do cursor
+    local primeira proximo
+    primeira="$(curl -sS "$URL/v2/transactions?accountId=$1&dateFrom=2026-01-01" -H "X-API-KEY: $chave")"
+    proximo="$(jq -r '.next // empty' <<<"$primeira")"
+    { jq -c '.results[]' <<<"$primeira"; [ -z "$proximo" ] || curl -sS "$URL$proximo" -H "X-API-KEY: $chave" | jq -c '.results[]'; } | jq -sc .
+  }
+  [ "$(contas)" = '["k1","c1"]' ] || { echo "  sem a chave já tem contas novas"; return 1; }
+  [ "$(transacoes k1 | jq length)" = 4 ] || { echo "  sem a chave já tem transações novas"; return 1; }
+  : >"$T/servidor/e6"
+  [ "$(contas)" = '["k1","c1","p1"]' ] || { echo "  sem a poupança da mesma pessoa: $(contas)"; rm -f "$T/servidor/e6"; return 1; }
+  k1="$(transacoes k1)"; p1="$(transacoes p1)"
+  rm -f "$T/servidor/e6"
+  categorias="$(jq -c '[.[] | select(.id | IN("k-5","k-6","k-7","k-8","k-9")) | [.id, .categoryId, (.amount * 100 | round)]]' <<<"$k1")"
+  [ "$categorias" = '[["k-5","04000000",-80000],["k-6","04000000",-15000],["k-7","03000000",-100000],["k-8","03060000",40000],["k-9","05100000",-50000]]' ] ||
+    { echo "  movimentos da corrente: $categorias"; return 1; }
+  [ "$(jq -c '[.[] | [.id, .categoryId, (.amount * 100 | round), .date[:10]]]' <<<"$p1")" = '[["p-1","04000000",80000,"2026-11-06"]]' ] ||
+    { echo "  poupança: $p1"; return 1; }
+  # O pagamento da fatura fechada (c-2, 10/10) tem o lado da corrente no mesmo dia.
+  [ "$(jq -r '.[] | select(.id == "k-9") | .date[:10]' <<<"$k1")" = 2026-10-10 ] || return 1
 }
 
 cartao_fecha_com_c() {
@@ -133,6 +161,7 @@ credencial_recusada_mostra_so_o_status() {
 }
 
 caso investimentos_do_falso
+caso movimentos_da_e6_no_falso
 caso cartao_fecha_com_c
 caso banco_mostra_o_campo_do_codigo_sem_o_valor
 caso saida_sem_valores_nem_descricoes

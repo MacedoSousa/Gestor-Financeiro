@@ -50,4 +50,12 @@ public interface IImportacaoDeLancamentos
     /// <exception cref="ArgumentException">Uma linha do lote é inválida (nada foi gravado).</exception>
     Task<ResumoDaImportacao> ImportarAsync(Guid contaId, DateOnly desde, IReadOnlyList<LancamentoImportado> lote, bool apagarAusentes,
         CancellationToken ct);
+
+    /// <summary>
+    /// Reconhecimento (Tarefa 6.2), depois de importar: entre as contas ligadas do casal (de qualquer item), pareia como
+    /// transferência a saída e a entrada do mesmo valor, até 1 dia útil, com par único (pagamento de fatura: corrente para o
+    /// cartão). Pagamento de fatura e mesma titularidade sem par único vão para "A conferir" (sem par, só depois de 2 dias
+    /// úteis); aplicação e resgate na corrente também (D12). Item sem par que ganha par é resolvido sozinho.
+    /// </summary>
+    Task ReconhecerMovimentosAsync(DateOnly desde, CancellationToken ct);
 }

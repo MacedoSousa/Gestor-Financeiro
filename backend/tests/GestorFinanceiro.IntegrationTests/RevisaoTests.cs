@@ -503,7 +503,7 @@ public class RevisaoTests(PostgresFixture pg)
     // ------------------------------------------------------------------ Ordem D23 do CEO
 
     private const string ReconhecidosNaE6 =
-        "Pagamento de fatura e transferência entre as contas de vocês são reconhecidos na próxima etapa; não entram no orçamento.";
+        "Pagamento de fatura e transferência entre as contas de vocês são reconhecidos sozinhos ou vão para “A conferir”; não entram no orçamento.";
 
     private static readonly string[] CodigosDaE6 = ["05100000", "04000000", "03000000", "03020000", "03060000"];
 
@@ -631,5 +631,19 @@ public class RevisaoTests(PostgresFixture pg)
         await using var leitura = c.Api.Services.CreateAsyncScope();
         var uso = await leitura.ServiceProvider.GetRequiredService<IConsultaDeUso>().UsoPorCategoriaAsync(new DateOnly(2026, 11, 1));
         Assert.Equal(0, uso.Where(u => u.CategoriaId == mercado).Sum(u => u.UsadoCentavos));
+    }
+
+    /// <summary>E6, item 2: o extrato marca os lançamentos de fatura, mesma titularidade e investimento (entreContas).</summary>
+    [Fact]
+    public async Task Extrato_marca_os_lancamentos_entre_contas()
+    {
+        await using var c = await IniciarAsync();
+        await ImportarAsync(c, Linha("tx-normal", -1_000, "PADARIA 1"), Linha("tx-fatura", -50_000, "PAGAMENTO FATURA", "05100000", "Credit card payment"));
+
+        var lista = (await JsonAsync(await c.Cliente.GetAsync("/api/v1/lancamentos?mes=2026-11"))).GetProperty("lancamentos").EnumerateArray()
+            .ToDictionary(l => l.GetProperty("id").GetGuid(), l => l.GetProperty("entreContas").GetBoolean());
+
+        Assert.True(lista[await IdAsync(c, "tx-fatura")]);
+        Assert.False(lista[await IdAsync(c, "tx-normal")]);
     }
 }

@@ -81,7 +81,8 @@ public sealed record LancamentoDto(
     Guid? GrupoId,
     DateOnly? FaturaVencimento,
     string Revisao = "REVISADA",
-    string Confirmacao = "CONFIRMADA")
+    string Confirmacao = "CONFIRMADA",
+    bool EntreContas = false)
 {
     public override string ToString() => $"LancamentoDto {{ Id = {Id} }}";
 }

@@ -693,6 +693,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/a-conferir": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Itens abertos de "A conferir", com as opções de cada um. Nada é descartado: resolvido sai da lista e fica guardado. */
+        get: operations["ListarAConferir"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/a-conferir/{id}/resolucao": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Resolve um item: TRANSFERENCIA, APORTE ou RESGATE (com contaId), GASTO ou RECEITA (com categoriaId), CIENTE. DEIXAR_PARA_DEPOIS mantém aberto. Repetir num item resolvido não faz nada. Opção que não é do item dá 400. */
+        post: operations["ResolverAConferir"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/orcamento": {
         parameters: {
             query?: never;
@@ -1411,6 +1445,20 @@ export interface components {
             /** Format: int32 */
             diaVencimento: null | number | string;
         };
+        ItemAConferirDto: {
+            /** Format: uuid */
+            id: string;
+            tipo: string;
+            /** Format: uuid */
+            contaId: string;
+            contaApelido: string;
+            /** Format: date */
+            data: string;
+            /** Format: int64 */
+            valorCentavos: number | string;
+            descricao: null | string;
+            opcoes: string[];
+        };
         ItemDto: {
             /** Format: uuid */
             id: string;
@@ -1452,6 +1500,8 @@ export interface components {
             revisao: string;
             /** @default CONFIRMADA */
             confirmacao: string;
+            /** @default false */
+            entreContas: boolean;
         };
         MembroDto: {
             /** Format: uuid */
@@ -1722,6 +1772,13 @@ export interface components {
         RecuperacaoDto: {
             cpf: string;
             codigo: string;
+        };
+        ResolucaoDto: {
+            opcao: null | string;
+            /** Format: uuid */
+            contaId: null | string;
+            /** Format: uuid */
+            categoriaId: null | string;
         };
         RespostaDeLoginComPasskeyDto: {
             id: string;
@@ -3593,6 +3650,82 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["TransferenciaDto"];
                 };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    ListarAConferir: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemAConferirDto"][];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ResolverAConferir: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResolucaoDto"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Bad Request */
             400: {
