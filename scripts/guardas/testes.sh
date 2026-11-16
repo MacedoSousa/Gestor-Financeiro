@@ -227,13 +227,15 @@ FALSO
 chmod +x "$tmp/docker-gf/docker"
 gf() { DOCKER_GF_BIN="$tmp/docker-gf/docker" "$raiz/scripts/docker-gf.sh" "$@"; }
 espera_sucesso "gf: run descartável"              gf run -d --rm --name gf-qa-pg -p 127.0.0.1:55439:5432 -e POSTGRES_DB=gestor postgres:17-alpine
-espera_sucesso "gf: run com o repositório montado" gf run --rm --name gf-sc -v "$raiz:/mnt:ro" -w /mnt koalaman/shellcheck:stable -x a.sh
+mkdir -p "$tmp/repo-limpo/scripts"
+espera_sucesso "gf: run com um diretório montado" gf run --rm --name gf-sc -v "$tmp/repo-limpo/scripts:/mnt:ro" -w /mnt koalaman/shellcheck:stable -x a.sh
+espera_falha   "gf: run com a raiz do repositório montada" gf run --rm --name gf-sc -v "$raiz:/mnt:ro" alpine ls
 espera_sucesso "gf: exec no próprio container"   gf exec gf-qa-pg psql -U postgres -d gestor -c "select 1"
 espera_sucesso "gf: logs --tail"                  gf logs --tail 50 gf-qa-pg
 espera_sucesso "gf: rm -f"                        gf rm -f gf-qa-pg
 espera_sucesso "gf: inspect -f"                   gf inspect -f '{{json .State}}' gf-qa-pg
 espera_sucesso "gf: cp do container para /tmp"    gf cp gf-qa-pg:/tmp/x "$tmp/x"
-espera_sucesso "gf: build -t gf-"                 gf build -q -t gf-teste-api:1 "$raiz"
+espera_sucesso "gf: build -t gf-"                 gf build -q -t gf-teste-api:1 "$tmp/repo-limpo"
 espera_falha   "gf: compose não passa por aqui"   gf compose -p gf-teste-1 -f "$raiz/infra/docker-compose.yml" ps
 espera_sucesso "gf: pull"                         gf pull postgres:17-alpine
 espera_falha   "gf: run sem --name"               gf run -d --rm postgres:17-alpine
@@ -277,7 +279,7 @@ espera_falha   "gf: run de docker.io/library/gestor-api" gf run --name gf-x dock
 espera_sucesso "gf: run com volume anônimo"       gf run -d --rm --name gf-qa-pg -v /var/lib/postgresql/data postgres:17-alpine
 espera_sucesso "gf: exec com --color= no comando de dentro" gf exec gf-qa-pg ls --color=never /
 if tail -n1 "$tmp/docker-gf/chamadas" | grep -q -- '--color=never'; then ok "gf: o comando de dentro chega como veio"; else falha "gf: o comando de dentro chega como veio"; fi
-com_cwd() { local base="$1"; shift; GUARDA_CWD="$base" checar_comando_bash "$@"; }
+com_cwd() { local base="$1"; shift; HOME=/home/x GUARDA_CWD="$base" checar_comando_bash "$@"; }
 espera_falha   "cd ../../.. e opt relativo"       com_cwd /home/x/repo "cd ../../.. && ls opt/gestor-financeiro"
 espera_falha   "find ../../.."                    com_cwd /home/x/repo "find ../../.. -name docker-compose.yml"
 espera_falha   "find ~/../.."                     com_cwd /home/x/repo "find ~/../.. -name docker-compose.yml"
@@ -327,6 +329,28 @@ mkdir -p "$tmp/repo-falso/infra/secrets" "$tmp/repo-falso/scripts"
 printf 'x\n' >"$tmp/repo-falso/infra/secrets/pg_senha_app"
 espera_falha   "gf: montar diretório com infra/secrets" gf run --rm --name gf-x -v "$tmp/repo-falso:/m:ro" alpine ls /m
 espera_sucesso "gf: montar subdiretório sem segredo"  gf run --rm --name gf-x -v "$tmp/repo-falso/scripts:/m:ro" alpine ls /m
+
+# Revisão da guarda, rodada 5.
+espera_falha   "gf: montar infra/secrets direto"   gf run --rm --name gf-x -v "$tmp/repo-falso/infra/secrets:/s:ro" alpine ls /s
+espera_falha   "gf: montar infra/ (pai dos segredos)" gf run --rm --name gf-x -v "$tmp/repo-falso/infra:/i:ro" alpine ls /i
+espera_falha   "gf: montar infra/secrets do repositório" gf run --rm --name gf-x -v "$raiz/infra/secrets:/s:ro" alpine ls /s
+espera_falha   "gf: montar infra/ do repositório" gf run --rm --name gf-x -v "$raiz/infra:/i:ro" alpine ls /i
+espera_sucesso "find -name backup.sh passa"        checar_comando_bash "find . -name backup.sh"
+espera_sucesso "chmod +x enviar.sh passa"          checar_comando_bash "chmod +x infra/backup/enviar.sh"
+espera_sucesso "bash -n backup.sh passa"           checar_comando_bash "bash -n infra/backup/backup.sh"
+espera_sucesso "[ -x backup.sh ] passa"            checar_comando_bash "[ -x infra/backup/backup.sh ]"
+espera_falha   "cd / e find sem caminho"           checar_comando_bash "cd / && find -name docker-compose.yml"
+espera_falha   "cd / e grep -rn sem caminho"       checar_comando_bash "cd / && grep -rn POSTGRES"
+espera_falha   "cd / e rg"                         checar_comando_bash "cd / && rg senha"
+espera_falha   "cd / e du -sh"                     checar_comando_bash "cd / && du -sh"
+espera_falha   "cd / e ls -R"                      checar_comando_bash "cd / && ls -R"
+espera_sucesso "cd / e ls sem -R passa"            checar_comando_bash "cd / && ls"
+# shellcheck disable=SC2016 # o texto do comando, sem expandir, é o que a guarda recebe
+espera_falha   "cd \$OLDPWD e opt"                 com_cwd /home/x/repo 'cd $OLDPWD && ls opt'
+# shellcheck disable=SC2016 # idem
+espera_falha   "find \$OLDPWD"                     com_cwd /home/x/repo 'find $OLDPWD -name x'
+# shellcheck disable=SC2016 # idem
+espera_falha   "cd \${PWD}/../../.. e opt"         com_cwd /home/x/repo 'cd ${PWD}/../../.. && ls opt'
 
 # .gitignore cobre os segredos do app.
 for ignorado in android/app/release.jks android/release.keystore android/keystore.properties android/local.properties a/x.p12; do

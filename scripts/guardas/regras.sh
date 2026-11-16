@@ -216,7 +216,8 @@ achar_programa() {
     for alvo in "$@"; do
       # Também colado depois de = (GIT_PAGER="docker ...", LESSOPEN=...).
       if palavra_e_programa "${TRECHO_P[$i]}" "$alvo" || palavra_e_programa "${TRECHO_P[$i]##*=}" "$alvo"; then INDICE_DO_PROGRAMA=$i; return 0; fi
-      # Plugins do docker chamados direto (docker-buildx, docker-compose); docker-compose.yml é arquivo, não plugin.
+      # Plugins do docker chamados direto (docker-buildx, docker-compose); docker-compose.yml é arquivo, não plugin. Um nome
+      # de branch docker-* também cai aqui (risco aceito: escolha outro nome).
       if [ "$alvo" = docker ] && [[ "${TRECHO_P[$i]##*/}" =~ ^docker-[a-z]+$ ]]; then INDICE_DO_PROGRAMA=$i; return 0; fi
     done
   done
@@ -287,7 +288,10 @@ checar_trecho_producao() {
   [ "$primeiro" -lt "${#TRECHO_P[@]}" ] || return 0
   # Ler ou versionar o script (git, sed, cat...) não o roda; qualquer outro comando que o cite, em qualquer posição
   # (timeout -s KILL 600 ..., nice -n 19 ..., env -C dir ./backup.sh), conta como rodar.
-  case "${TRECHO_P[$primeiro]##*/}" in git | sed | awk | vim | vi | nano | code | gh) return 0 ;; esac
+  case "${TRECHO_P[$primeiro]##*/}" in
+    git | sed | awk | vim | vi | nano | code | gh | find | chmod | chown | cp | mv | ln | test | "[" | realpath | basename | dirname | diff) return 0 ;;
+    bash | sh) [ "${TRECHO_P[$((primeiro + 1))]:-}" = -n ] && return 0 ;;
+  esac
   comando_de_texto "${TRECHO_P[$primeiro]}" && return 0
   # Pelo nome exato (um glob como *.sh não é o script).
   programa=""
@@ -338,8 +342,21 @@ checar_trecho_raiz() {
     case "${palavra##*/}" in find | grep | egrep | fgrep | rg | du | tar | rsync | ls | tree | cp | chmod | chown | zip | ln) programa="${palavra##*/}"; break ;; esac
   done
   [ -n "$programa" ] || return 0
+  # Na raiz, o programa recursivo sem caminho escrito lê o "." (find -name x, grep -rn x, rg x, du -sh, ls -R).
+  if [ "$base" = / ]; then
+    case "$programa" in
+      find | rg | du | tree | tar) echo "Bloqueado: $programa em / alcança /opt, a instalação de verdade (D24)." >&2; return 1 ;;
+      grep | egrep | fgrep | ls)
+        for palavra in "${TRECHO_P[@]}"; do
+          if [[ "$palavra" =~ ^-[A-Za-z]*[rR] || "$palavra" == --recursive || "$palavra" == --dereference-recursive ]]; then
+            echo "Bloqueado: $programa recursivo em / alcança /opt, a instalação de verdade (D24)." >&2
+            return 1
+          fi
+        done ;;
+    esac
+  fi
   for palavra in "${TRECHO_P[@]}"; do
-    [[ "$palavra" == */* || "$palavra" == . || "$palavra" == .. || "$palavra" == "~" ]] || continue
+    [[ "$palavra" == */* || "$palavra" == . || "$palavra" == .. || "$palavra" == "~" || "$palavra" == *'$'* ]] || continue
     [[ "$palavra" == -* ]] && continue
     if [[ "$palavra" =~ ^/+\*$ ]] || { ! caminho_chega_em_opt "$palavra" "$base" && [ "$CAMINHO_FINAL" = / ]; }; then
       echo "Bloqueado: $programa a partir de / alcança /opt, a instalação de verdade (D24)." >&2
