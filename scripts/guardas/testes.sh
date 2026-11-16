@@ -15,6 +15,8 @@ espera_falha()   { local d="$1"; shift; if "$@" >/dev/null 2>&1; then falha "$d"
 
 # Em /tmp/gf-*: o docker-gf.sh só aceita caminho do host no repositório, em /tmp/gf-* ou no scratchpad.
 tmp="$(mktemp -d /tmp/gf-guardas.XXXXXX)"; trap 'rm -rf "$tmp"' EXIT
+# Comando visto a partir de um diretório (o cwd que o hook recebe), com HOME fixo.
+com_cwd() { local base="$1"; shift; HOME=/home/x GUARDA_CWD="$base" checar_comando_bash "$@"; }
 sql() { local nome="$1"; shift; printf '%s\n' "$@" > "$tmp/$nome"; echo "$tmp/$nome"; }
 
 # --- regras.sh -------------------------------------------------------------
@@ -146,7 +148,7 @@ espera_falha   "rsync host:/opt"                  checar_comando_bash "rsync a l
 espera_falha   "cd / e opt relativo"              checar_comando_bash "cd / && ls opt/gestor-financeiro"
 espera_falha   "pushd / e opt relativo"           checar_comando_bash "pushd / && ls opt/x"
 espera_falha   "cd /tmp/.. e opt"                 checar_comando_bash "cd /tmp/.. && ls opt"
-espera_falha   "cd ~/../.. e opt"                 env HOME=/home/x bash -c "source '$raiz/scripts/guardas/regras.sh'; checar_comando_bash 'cd ~/../.. && ls opt'"
+espera_falha   "cd ~/../.. e opt"                 com_cwd /home/x/repo "cd ~/../.. && ls opt"
 espera_falha   "find a partir de /"               checar_comando_bash "find / -name docker-compose.yml 2>/dev/null"
 espera_falha   "grep -r a partir de /"            checar_comando_bash "grep -rn POSTGRES /etc / 2>/dev/null"
 espera_falha   "du /*"                            checar_comando_bash "du -sh /*"
@@ -279,7 +281,6 @@ espera_falha   "gf: run de docker.io/library/gestor-api" gf run --name gf-x dock
 espera_sucesso "gf: run com volume anônimo"       gf run -d --rm --name gf-qa-pg -v /var/lib/postgresql/data postgres:17-alpine
 espera_sucesso "gf: exec com --color= no comando de dentro" gf exec gf-qa-pg ls --color=never /
 if tail -n1 "$tmp/docker-gf/chamadas" | grep -q -- '--color=never'; then ok "gf: o comando de dentro chega como veio"; else falha "gf: o comando de dentro chega como veio"; fi
-com_cwd() { local base="$1"; shift; HOME=/home/x GUARDA_CWD="$base" checar_comando_bash "$@"; }
 espera_falha   "cd ../../.. e opt relativo"       com_cwd /home/x/repo "cd ../../.. && ls opt/gestor-financeiro"
 espera_falha   "find ../../.."                    com_cwd /home/x/repo "find ../../.. -name docker-compose.yml"
 espera_falha   "find ~/../.."                     com_cwd /home/x/repo "find ~/../.. -name docker-compose.yml"
@@ -347,6 +348,14 @@ espera_falha   "cd / e ls -R"                      checar_comando_bash "cd / && 
 espera_sucesso "cd / e ls sem -R passa"            checar_comando_bash "cd / && ls"
 espera_falha   "cd - conta como /"                  com_cwd /home/x/repo "cd / && cd ~ && cd - && find -name docker-compose.yml"
 espera_falha   "gf: montar o /tmp/claude-* inteiro" gf run --rm --name gf-x -v /tmp/claude-1000:/m alpine ls /m
+espera_sucesso "gf: montar o scratchpad da sessão" gf run --rm --name gf-x -v /tmp/claude-0/p/s/scratchpad/sub:/m alpine true
+mkdir -p "$tmp/ctx/infra/secrets" "$tmp/ctx/scripts"; printf 'leia-me\n' >"$tmp/ctx/infra/secrets/README.md"
+espera_sucesso "gf: build com o README de infra/secrets" gf build -q -t gf-api "$tmp/ctx"
+espera_falha   "cd ~- e opt"                        com_cwd /home/x/repo "cd / && cd ~ && cd ~- && ls opt"
+espera_falha   "ls ~-/opt"                          com_cwd /home/x/repo "ls ~-/opt"
+espera_falha   "popd conta como /"                  com_cwd /home/x/repo "cd / && pushd ~ && popd && find -name docker-compose.yml"
+espera_falha   "cd -P -"                            com_cwd /home/x/repo "cd / && cd ~ && cd -P - && find -name x"
+espera_falha   "find ~root/.."                      com_cwd /home/x/repo "find ~root/.. -name docker-compose.yml"
 # shellcheck disable=SC2016 # o texto do comando, sem expandir, é o que a guarda recebe
 espera_falha   "cd \$OLDPWD e opt"                 com_cwd /home/x/repo 'cd $OLDPWD && ls opt'
 # shellcheck disable=SC2016 # idem

@@ -9,10 +9,12 @@
 #                                                   o container é conferido no docker (nome e projeto do compose)
 #   cp   <gf-*:caminho> <local> | <local> <gf-*:caminho>
 #   build -t gf-* [-f arquivo] <contexto>   (contexto sem segredo: para as imagens do projeto, uma cópia limpa,
-#                                             git archive HEAD | tar -x -C /tmp/gf-ctx)
+#                                             git archive HEAD | tar -x -C /tmp/gf-ctx; o README de infra/secrets
+#                                             que vem junto não conta como segredo)
 # compose não passa por aqui: os testes do repositório o chamam por dentro, com -p aleatório, e um compose qualquer pode
 # montar o que quiser (revisão da guarda, rodada 3).
-# Caminho do host (montagem, -f, contexto, cp) só dentro do repositório, de /tmp/gf-* ou do scratchpad (/tmp/claude-*);
+# Caminho do host (montagem, -f, contexto, cp) só dentro do repositório, de /tmp/gf-* ou do scratchpad da sessão
+# (/tmp/claude-<uid>/<projeto>/<sessão>/scratchpad...);
 # nunca /opt nem o socket do docker. Porta publicada só em 127.0.0.1.
 # Uso: scripts/docker-gf.sh <subcomando> [argumentos]. DOCKER_GF_BIN troca o binário (os testes usam um falso).
 set -euo pipefail
@@ -43,11 +45,22 @@ caminho_permitido() {
   done
   # Noutra árvore (outra cópia do repositório em /tmp): pela existência, que vale mesmo sem permissão de leitura.
   if [ -d "$r" ]; then
-    for lugar in infra/secrets infra/data backups .env infra/.env; do [ -e "$r/$lugar" ] && return 1; done
-    [ "${r##*/}" = infra ] && { [ -e "$r/secrets" ] || [ -e "$r/data" ]; } && return 1
-    [ "${r##*/}" = secrets ] || [ "${r##*/}" = data ] && [ "$(basename -- "$(dirname -- "$r")")" = infra ] && return 1
+    for lugar in backups .env infra/.env; do [ -e "$r/$lugar" ] && return 1; done
+    for lugar in "$r/infra/secrets" "$r/infra/data" "$r/secrets" "$r/data"; do
+      [ "$lugar" = "$r/secrets" ] || [ "$lugar" = "$r/data" ] && [ "${r##*/}" != infra ] && continue
+      tem_segredo "$lugar" && return 1
+    done
+    [ "${r##*/}" = secrets ] || [ "${r##*/}" = data ] && [ "$(basename -- "$(dirname -- "$r")")" = infra ] && tem_segredo "$r" && return 1
   fi
   return 0
+}
+
+# Diretório de segredo com algo além do README versionado (infra/secrets/README.md); o que não dá para ler conta como
+# segredo (o container roda como root e leria).
+tem_segredo() {
+  [ -e "$1" ] || return 1
+  [ -r "$1" ] && [ -x "$1" ] || return 0
+  [ -n "$(find "$1" -mindepth 1 ! -name README.md 2>/dev/null | head -n1)" ]
 }
 
 # O container existe, se chama gf-* e não é de um projeto do compose que não seja gf-*.

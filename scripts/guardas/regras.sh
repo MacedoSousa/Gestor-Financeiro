@@ -152,6 +152,8 @@ caminho_chega_em_opt() {
   case "$palavra" in
     /*) atual=/ ;;
     "~" | "~/"*) palavra="$HOME/${palavra#\~}"; atual=/ ;;
+    # ~- e ~+ (o diretório anterior e o atual do shell) e ~usuário: a guarda não sabe onde caem, contam como /.
+    "~"[-+]* | "~"[A-Za-z_]*) palavra="/${palavra#*/}"; [[ "$1" == */* ]] || palavra=/; atual=/ ;;
     *) atual="$base" ;;
   esac
   IFS=/ read -ra segs <<< "$palavra"
@@ -418,8 +420,11 @@ checar_comando_bash() {
     # cd ou pushd, também depois de if/then/do/{ e com opções (-P, -L, --).
     i_cd=0
     while [ "$i_cd" -lt "${#TRECHO_P[@]}" ] && [[ "${TRECHO_P[$i_cd]}" =~ ^(if|then|else|elif|do|\{|!)$ ]]; do i_cd=$((i_cd + 1)); done
+    # popd volta a um diretório que a guarda não acompanha: conta como /.
+    [ "${TRECHO_P[$i_cd]:-}" = popd ] && base=/
     if [[ "${TRECHO_P[$i_cd]:-}" == cd || "${TRECHO_P[$i_cd]:-}" == pushd ]]; then
       i_cd=$((i_cd + 1))
+      while [[ "${TRECHO_P[$i_cd]:-}" == -?* && "${TRECHO_P[$i_cd]}" != - ]]; do i_cd=$((i_cd + 1)); done
       if [ "${TRECHO_P[$i_cd]:-}" = - ]; then
         base=/ # cd - volta ao diretório anterior, que a guarda não conhece: conta como / (como o $OLDPWD)
       else
