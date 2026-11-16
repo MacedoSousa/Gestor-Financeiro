@@ -43,7 +43,8 @@ caminho_permitido() {
   for lugar in "$raiz/infra/secrets" "$raiz/infra/data" "$raiz/backups" "$raiz/.env" "$raiz/infra/.env"; do
     if [ "$r" = "$lugar" ] || [[ "$r" == "$lugar"/* || "$lugar" == "$r"/* ]]; then return 1; fi
   done
-  # Noutra árvore (outra cópia do repositório em /tmp): pela existência, que vale mesmo sem permissão de leitura.
+  # Noutra árvore (outra cópia do repositório em /tmp): backups e .env pela existência; infra/secrets e infra/data por
+  # tem_segredo (o README versionado não conta; o que não dá para ler conta).
   if [ -d "$r" ]; then
     for lugar in backups .env infra/.env; do [ -e "$r/$lugar" ] && return 1; done
     for lugar in "$r/infra/secrets" "$r/infra/data" "$r/secrets" "$r/data"; do

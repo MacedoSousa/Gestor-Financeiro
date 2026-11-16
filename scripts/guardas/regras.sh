@@ -358,7 +358,7 @@ checar_trecho_raiz() {
     esac
   fi
   for palavra in "${TRECHO_P[@]}"; do
-    [[ "$palavra" == */* || "$palavra" == . || "$palavra" == .. || "$palavra" == "~" || "$palavra" == *'$'* ]] || continue
+    [[ "$palavra" == */* || "$palavra" == . || "$palavra" == .. || "$palavra" == "~"* || "$palavra" == *'$'* ]] || continue
     [[ "$palavra" == -* ]] && continue
     if [[ "$palavra" =~ ^/+\*$ ]] || { ! caminho_chega_em_opt "$palavra" "$base" && [ "$CAMINHO_FINAL" = / ]; }; then
       echo "Bloqueado: $programa a partir de / alcança /opt, a instalação de verdade (D24)." >&2
@@ -407,7 +407,7 @@ checar_comando_bash() {
     # Caminho relativo a partir do diretório do comando (o cwd do hook, e o de cada cd): ../../opt, cd / && ls opt/x.
     for palavra in "${TRECHO_P[@]}"; do
       for parte in "$palavra" "${palavra##*=}"; do
-        [[ "$parte" == */* || "$parte" == opt* || "$parte" == *\{* || "$parte" == "~" || "$parte" == *'$'* ]] \
+        [[ "$parte" == */* || "$parte" == opt* || "$parte" == *\{* || "$parte" == "~"* || "$parte" == *'$'* ]] \
           || { [ "$base" = / ] && [[ "$parte" == *[\*\?\[]* ]]; } || continue
         [[ "$parte" == -* ]] && continue
         if caminho_chega_em_opt "$parte" "$base"; then

@@ -351,6 +351,14 @@ espera_falha   "gf: montar o /tmp/claude-* inteiro" gf run --rm --name gf-x -v /
 espera_sucesso "gf: montar o scratchpad da sessão" gf run --rm --name gf-x -v /tmp/claude-0/p/s/scratchpad/sub:/m alpine true
 mkdir -p "$tmp/ctx/infra/secrets" "$tmp/ctx/scripts"; printf 'leia-me\n' >"$tmp/ctx/infra/secrets/README.md"
 espera_sucesso "gf: build com o README de infra/secrets" gf build -q -t gf-api "$tmp/ctx"
+mkdir -p "$tmp/ctx2/infra/secrets"; printf 'leia-me\n' >"$tmp/ctx2/infra/secrets/README.md"; printf 'x\n' >"$tmp/ctx2/infra/secrets/pg_senha_app"
+espera_falha   "gf: build com segredo ao lado do README" gf build -q -t gf-api "$tmp/ctx2"
+if [ "$(id -u)" -ne 0 ]; then
+  mkdir -p "$tmp/ctx3/infra/secrets"; chmod 000 "$tmp/ctx3/infra/secrets"
+  espera_falha "gf: build com infra/secrets ilegível" gf build -q -t gf-api "$tmp/ctx3"
+  chmod 700 "$tmp/ctx3/infra/secrets"
+fi
+espera_falha   "find ~- sozinho"                    com_cwd /home/x/repo "cd / && cd ~ && find ~- -name docker-compose.yml"
 espera_falha   "cd ~- e opt"                        com_cwd /home/x/repo "cd / && cd ~ && cd ~- && ls opt"
 espera_falha   "ls ~-/opt"                          com_cwd /home/x/repo "ls ~-/opt"
 espera_falha   "popd conta como /"                  com_cwd /home/x/repo "cd / && pushd ~ && popd && find -name docker-compose.yml"
