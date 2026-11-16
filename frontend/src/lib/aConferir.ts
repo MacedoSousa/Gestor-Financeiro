@@ -48,6 +48,17 @@ export function contasDaOpcao<C extends ContaBasica>(opcao: string, contaDoItem:
   );
 }
 
+/**
+ * O aviso do outro lado (a mesma regra da API): conta ligada que não é o grupo de investimento só recebe o lado quando
+ * ele vem do banco; no grupo e em conta manual, o sistema o cria.
+ */
+export function avisoDaConta(opcao: string, escolha: string, contas: readonly (ContaBasica & { ligada?: boolean })[]): string | undefined {
+  const destino = contas.find((c) => c.id === escolha);
+  if (destino?.ligada && destino.tipo !== "INVESTIMENTO") return "Essa conta vem do banco: o outro lado precisa já ter chegado.";
+  if (opcao === "TRANSFERENCIA" && !escolha) return "Se a outra conta vem do banco, o outro lado precisa já ter chegado.";
+  return undefined;
+}
+
 /** Aporte e resgate com uma conta só que serve: ela já vem escolhida (o casal confere). Transferência nunca vem escolhida. */
 export function contaSugerida(opcao: string, contaDoItem: string, contas: readonly ContaBasica[]): string {
   if (opcao !== "APORTE" && opcao !== "RESGATE") return "";

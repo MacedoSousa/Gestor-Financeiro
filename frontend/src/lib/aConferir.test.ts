@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { contaSugerida, contasDaOpcao, categoriasDaOpcao, oQuePede, rotuloDaOpcao, textoDaResolucao, tituloDoItem } from "./aConferir";
+import { avisoDaConta, contaSugerida, contasDaOpcao, categoriasDaOpcao, oQuePede, rotuloDaOpcao, textoDaResolucao, tituloDoItem } from "./aConferir";
 
 const conta = (id: string, tipo: string, arquivada = false) => ({ id, apelido: id, tipo, arquivada });
 const contas = [
@@ -56,6 +56,17 @@ describe("A conferir (Tarefas 6.1 e 6.2)", () => {
     expect(contaSugerida("RESGATE", "corrente", [conta("corrente", "CORRENTE"), conta("cdb", "INVESTIMENTO")])).toBe("cdb");
     expect(contaSugerida("APORTE", "corrente", contas)).toBe("");
     expect(contaSugerida("TRANSFERENCIA", "corrente", [conta("corrente", "CORRENTE"), conta("dinheiro", "DINHEIRO")])).toBe("");
+  });
+
+  it("avisa do outro lado só onde ele tem de vir do banco (revisão do E6a, rodada 3)", () => {
+    const ligada = (id: string, tipo: string) => ({ id, tipo, arquivada: false, ligada: true });
+    const comuns = [ligada("poupanca", "POUPANCA"), ligada("grupo", "INVESTIMENTO"), { ...conta("dinheiro", "DINHEIRO"), ligada: false }];
+    expect(avisoDaConta("APORTE", "poupanca", comuns)).toBe("Essa conta vem do banco: o outro lado precisa já ter chegado.");
+    expect(avisoDaConta("TRANSFERENCIA", "poupanca", comuns)).toBe("Essa conta vem do banco: o outro lado precisa já ter chegado.");
+    expect(avisoDaConta("APORTE", "grupo", comuns)).toBeUndefined();
+    expect(avisoDaConta("TRANSFERENCIA", "dinheiro", comuns)).toBeUndefined();
+    expect(avisoDaConta("TRANSFERENCIA", "", comuns)).toBe("Se a outra conta vem do banco, o outro lado precisa já ter chegado.");
+    expect(avisoDaConta("APORTE", "", comuns)).toBeUndefined();
   });
 
   it("oferece categorias não arquivadas: despesa para gasto, receita para receita", () => {

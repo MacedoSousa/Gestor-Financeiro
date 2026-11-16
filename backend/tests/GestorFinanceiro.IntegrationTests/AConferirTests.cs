@@ -567,9 +567,14 @@ public class AConferirTests(PostgresFixture pg)
 
         await ImportarAsync(c, c.Corrente, Linha("tx-outra", -100), Linha("tx-pix", -3_000, codigo: MesmaPessoa));
         await ReconhecerAsync(c);
+        await ReconhecerAsync(c);
 
         var item = (await JsonAsync(await c.Cliente.GetAsync("/api/v1/a-conferir"))).EnumerateArray().Single();
         Assert.Equal(["TRANSFERENCIA", "GASTO", "DEIXAR_PARA_DEPOIS"], item.GetProperty("opcoes").EnumerateArray().Select(o => o.GetString()).ToList());
+        // O resolvido fica (nada é descartado); o novo tem a chave :2; repetir o reconhecimento não abre outro.
+        Assert.Equal("TRANSFERENCIA_SEM_PAR|RESOLVIDO|CIENTE;TRANSFERENCIA_SEM_PAR|ABERTO|-", await ItensAsync(c));
+        Assert.Equal(1L, await EscalarAsync<long>(c.Banco,
+            $"SELECT count(*) FROM lancamentos.itens_a_conferir WHERE chave = 'sem-par:{await IdAsync(c, "tx-pix")}:2'"));
     }
 
     /// <summary>D2 (N1 da rodada 1): o par manual não usa como outro lado a linha que o casal decidiu como receita.</summary>
