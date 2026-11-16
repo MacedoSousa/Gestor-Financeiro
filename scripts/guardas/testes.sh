@@ -146,7 +146,7 @@ espera_falha   "rsync host:/opt"                  checar_comando_bash "rsync a l
 espera_falha   "cd / e opt relativo"              checar_comando_bash "cd / && ls opt/gestor-financeiro"
 espera_falha   "pushd / e opt relativo"           checar_comando_bash "pushd / && ls opt/x"
 espera_falha   "cd /tmp/.. e opt"                 checar_comando_bash "cd /tmp/.. && ls opt"
-espera_falha   "cd ~/../.. e opt"                 checar_comando_bash "cd ~/../.. && ls opt"
+espera_falha   "cd ~/../.. e opt"                 env HOME=/home/x bash -c "source '$raiz/scripts/guardas/regras.sh'; checar_comando_bash 'cd ~/../.. && ls opt'"
 espera_falha   "find a partir de /"               checar_comando_bash "find / -name docker-compose.yml 2>/dev/null"
 espera_falha   "grep -r a partir de /"            checar_comando_bash "grep -rn POSTGRES /etc / 2>/dev/null"
 espera_falha   "du /*"                            checar_comando_bash "du -sh /*"
@@ -161,7 +161,7 @@ espera_sucesso "docker ps passa"                  checar_comando_bash "docker ps
 espera_sucesso "docker images passa"              checar_comando_bash "docker images"
 espera_sucesso "docker version passa"             checar_comando_bash "docker version"
 espera_sucesso "docker-gf.sh passa"               checar_comando_bash "scripts/docker-gf.sh run -d --rm --name gf-qa-pg -e POSTGRES_DB=gestor postgres:17-alpine"
-espera_sucesso "docker-gf.sh com \$PWD passa"     checar_comando_bash "scripts/docker-gf.sh run --rm --name gf-sc -v \"\$PWD:/mnt:ro\" koalaman/shellcheck:stable -x a.sh"
+espera_sucesso "docker-gf.sh com \$PWD passa"     checar_comando_bash "scripts/docker-gf.sh run --rm --name gf-sc -v \"\$PWD/scripts:/mnt/scripts:ro\" koalaman/shellcheck:stable -x a.sh"
 espera_sucesso "grep docker no texto passa"       checar_comando_bash "grep -rn docker infra"
 espera_sucesso "testes do backup passam"          checar_comando_bash "infra/backup/testes/rodar-todos.sh"
 espera_sucesso "testes de subida passam"          checar_comando_bash "infra/testes/testar-subida.sh"
@@ -260,8 +260,8 @@ espera_falha   "gf: stop /gestor-api-1"           gf stop /gestor-api-1
 espera_falha   "gf: logs por ID"                  gf logs 3f2a9c1e
 espera_falha   "gf: cp de gestor-*"               gf cp gestor-postgres-1:/run/secrets/x "$tmp/x"
 espera_falha   "gf: cp para fora do repo e /tmp"  gf cp gf-qa-pg:/x /home/x
-espera_falha   "gf: build -t gestor-"             gf build -t gestor-api "$raiz"
-espera_falha   "gf: build -tgestor- colado"       gf build -tgestor-api "$raiz"
+espera_falha   "gf: build -t gestor-"             gf build -t gestor-api "$tmp/repo-limpo"
+espera_falha   "gf: build -tgestor- colado"       gf build -tgestor-api "$tmp/repo-limpo"
 espera_falha   "gf: compose sem -p"               gf compose -f "$raiz/infra/docker-compose.yml" down
 espera_falha   "gf: compose -p gestor"            gf compose -p gestor ps
 espera_falha   "gf: compose -p depois do -f"      gf compose -f "$raiz/infra/docker-compose.yml" -p gf-x ps
@@ -345,6 +345,8 @@ espera_falha   "cd / e rg"                         checar_comando_bash "cd / && 
 espera_falha   "cd / e du -sh"                     checar_comando_bash "cd / && du -sh"
 espera_falha   "cd / e ls -R"                      checar_comando_bash "cd / && ls -R"
 espera_sucesso "cd / e ls sem -R passa"            checar_comando_bash "cd / && ls"
+espera_falha   "cd - conta como /"                  com_cwd /home/x/repo "cd / && cd ~ && cd - && find -name docker-compose.yml"
+espera_falha   "gf: montar o /tmp/claude-* inteiro" gf run --rm --name gf-x -v /tmp/claude-1000:/m alpine ls /m
 # shellcheck disable=SC2016 # o texto do comando, sem expandir, é o que a guarda recebe
 espera_falha   "cd \$OLDPWD e opt"                 com_cwd /home/x/repo 'cd $OLDPWD && ls opt'
 # shellcheck disable=SC2016 # idem

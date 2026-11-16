@@ -8,7 +8,8 @@
 #   exec|logs|stop|restart|rm|kill|inspect|port|top|wait <container gf-*> ...
 #                                                   o container é conferido no docker (nome e projeto do compose)
 #   cp   <gf-*:caminho> <local> | <local> <gf-*:caminho>
-#   build -t gf-* [-f arquivo] <contexto>
+#   build -t gf-* [-f arquivo] <contexto>   (contexto sem segredo: para as imagens do projeto, uma cópia limpa,
+#                                             git archive HEAD | tar -x -C /tmp/gf-ctx)
 # compose não passa por aqui: os testes do repositório o chamam por dentro, com -p aleatório, e um compose qualquer pode
 # montar o que quiser (revisão da guarda, rodada 3).
 # Caminho do host (montagem, -f, contexto, cp) só dentro do repositório, de /tmp/gf-* ou do scratchpad (/tmp/claude-*);
@@ -28,7 +29,8 @@ nosso() { [[ "$1" =~ ^gf-[A-Za-z0-9_.-]+$ ]]; }
 caminho_permitido() {
   local r
   r="$(realpath -m -- "$1")"
-  case "$r" in "$raiz" | "$raiz"/* | /tmp/gf-* | /tmp/claude-*) ;; *) return 1 ;; esac
+  # O scratchpad é o da sessão (/tmp/claude-<uid>/<projeto>/<sessão>/scratchpad...), não o /tmp/claude-* inteiro.
+  case "$r" in "$raiz" | "$raiz"/* | /tmp/gf-* | /tmp/claude-*/*/*/scratchpad*) ;; *) return 1 ;; esac
   [[ "$r" != *docker.sock* ]] || return 1
   # Nem segredo de verdade (regra 5): o caminho em si, ou um diretório que tenha infra/secrets, infra/data, backups ou
   # .env dentro (o container roda como root e leria o que o próprio usuário não lê). Monte um subdiretório.

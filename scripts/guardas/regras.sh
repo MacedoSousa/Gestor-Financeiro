@@ -420,9 +420,13 @@ checar_comando_bash() {
     while [ "$i_cd" -lt "${#TRECHO_P[@]}" ] && [[ "${TRECHO_P[$i_cd]}" =~ ^(if|then|else|elif|do|\{|!)$ ]]; do i_cd=$((i_cd + 1)); done
     if [[ "${TRECHO_P[$i_cd]:-}" == cd || "${TRECHO_P[$i_cd]:-}" == pushd ]]; then
       i_cd=$((i_cd + 1))
-      while [[ "${TRECHO_P[$i_cd]:-}" == -* ]]; do i_cd=$((i_cd + 1)); done
-      caminho_chega_em_opt "${TRECHO_P[$i_cd]:-~}" "$base" || true
-      base="$CAMINHO_FINAL"
+      if [ "${TRECHO_P[$i_cd]:-}" = - ]; then
+        base=/ # cd - volta ao diretório anterior, que a guarda não conhece: conta como / (como o $OLDPWD)
+      else
+        while [[ "${TRECHO_P[$i_cd]:-}" == -* ]]; do i_cd=$((i_cd + 1)); done
+        caminho_chega_em_opt "${TRECHO_P[$i_cd]:-~}" "$base" || true
+        base="$CAMINHO_FINAL"
+      fi
     fi
   done < <(trechos_do_comando "$comando")
   return "$falhou"
