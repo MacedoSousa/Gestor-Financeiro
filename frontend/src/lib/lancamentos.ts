@@ -45,8 +45,11 @@ export function edicaoEmContaLigada(
   l: Pick<Lancamento, "conta" | "origem">,
   contas: readonly Pick<Conta, "id" | "ligada">[] | undefined,
 ): { travada: boolean; apagavel: boolean } {
+  // O lado que o sistema criou ao resolver "A conferir" é a outra perna de uma linha do banco: trava em qualquer conta,
+  // mesmo manual (a API recusa mudar valor ou apagar; testador do E6a, achados 1 e 2).
+  if (l.origem === "SISTEMA") return { travada: true, apagavel: false };
   const ligada = contas?.find((c) => c.id === l.conta.id)?.ligada === true;
-  const doBanco = l.origem === "OPEN_FINANCE" || l.origem === "SISTEMA";
+  const doBanco = l.origem === "OPEN_FINANCE";
   return { travada: ligada, apagavel: !(ligada && doBanco) };
 }
 

@@ -95,7 +95,7 @@ function ItemDaCaixa({ item, contas, categorias, aoResolver }: { item: ItemAConf
           <div
             className="opcoes-aplicar"
             role="radiogroup"
-            aria-label={`Como resolver: ${titulo}`}
+            aria-label={`Como resolver: ${titulo}, ${item.contaApelido}, ${diaEMes(item.data)}`}
             aria-invalid={falta && !opcao ? true : undefined}
             aria-describedby={falta && !opcao ? idDoErro : undefined}
           >
@@ -136,7 +136,7 @@ function ItemDaCaixa({ item, contas, categorias, aoResolver }: { item: ItemAConf
               nota={
                 pede === "conta" && escolhas.length === 0
                   ? "Nenhuma conta serve. Crie uma conta de poupança ou investimento em Contas."
-                  : opcao === "TRANSFERENCIA" || opcao === "APORTE" || opcao === "RESGATE"
+                  : opcao === "TRANSFERENCIA"
                     ? "Se a outra conta vem do banco, o outro lado precisa já ter chegado."
                     : undefined
               }

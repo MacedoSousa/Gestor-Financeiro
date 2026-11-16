@@ -65,6 +65,11 @@ describe("edicaoEmContaLigada (Tarefa 4.4; revisão da E4, rodada 2)", () => {
     expect(edicaoEmContaLigada(doBanco, [{ id: "itau", ligada: false }])).toEqual({ travada: false, apagavel: true });
     expect(edicaoEmContaLigada(manual, undefined)).toEqual({ travada: false, apagavel: true });
   });
+  it("lado criado pelo sistema trava em qualquer conta, mesmo manual (testador do E6a, achados 1 e 2)", () => {
+    const sistema = { conta, origem: "SISTEMA" } as Lancamento;
+    expect(edicaoEmContaLigada(sistema, [{ id: "itau", ligada: false }])).toEqual({ travada: true, apagavel: false });
+    expect(edicaoEmContaLigada(sistema, undefined)).toEqual({ travada: true, apagavel: false });
+  });
 });
 
 describe("contasParaLancar (testador da E4, achado 3)", () => {
