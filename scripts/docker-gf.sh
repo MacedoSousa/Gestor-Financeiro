@@ -29,7 +29,16 @@ caminho_permitido() {
   local r
   r="$(realpath -m -- "$1")"
   case "$r" in "$raiz" | "$raiz"/* | /tmp/gf-* | /tmp/claude-*) ;; *) return 1 ;; esac
-  [[ "$r" != *docker.sock* ]]
+  [[ "$r" != *docker.sock* ]] || return 1
+  # Nem segredo de verdade (regra 5): o caminho em si, ou um diretório que tenha infra/secrets, infra/data, backups ou
+  # .env dentro (o container roda como root e leria o que o próprio usuário não lê). Monte um subdiretório.
+  eh_caminho_de_segredo "${r#"$raiz"/}" && return 1
+  if [ -d "$r" ]; then
+    [ -n "$(find "$r/infra/secrets" -type f ! -name README.md 2>/dev/null | head -n1)" ] && return 1
+    [ -n "$(find "$r/infra/data" "$r/backups" -mindepth 1 2>/dev/null | head -n1)" ] && return 1
+    [ -e "$r/.env" ] || [ -e "$r/infra/.env" ] && return 1
+  fi
+  return 0
 }
 
 # O container existe, se chama gf-* e não é de um projeto do compose que não seja gf-*.

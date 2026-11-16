@@ -300,6 +300,34 @@ espera_falha   "plugin docker-buildx direto"      checar_comando_bash "/usr/libe
 espera_falha   "skill"                            checar_comando_bash "skill -KILL dotnet"
 espera_falha   "DOCKER_GF_BIN"                    checar_comando_bash "DOCKER_GF_BIN=/tmp/x.sh scripts/docker-gf.sh ps"
 
+# Revisão da guarda, rodada 4.
+# shellcheck disable=SC2016 # o texto do comando, sem expandir, é o que a guarda recebe
+espera_falha   "cd \$HOME/../.. e opt"            com_cwd /home/x/repo 'cd $HOME/../.. && ls opt/gestor-financeiro'
+# shellcheck disable=SC2016 # idem
+espera_falha   "cd \$PWD/../../.. e opt"          com_cwd /home/x/repo 'cd "$PWD/../../.." && cat opt/gestor-financeiro/infra/docker-compose.yml'
+# shellcheck disable=SC2016 # idem
+espera_falha   "find \${HOME}/../.."              com_cwd /home/x/repo 'find "${HOME}/../.." -name compose.yml'
+espera_falha   "timeout -s KILL antes do backup.sh" checar_comando_bash "GF_TMP=/tmp/gf-x timeout -s KILL 600 infra/backup/backup.sh"
+espera_falha   "nice -n antes do backup.sh"        checar_comando_bash "GF_TMP=/tmp/gf-x nice -n 19 infra/backup/backup.sh"
+espera_falha   "timeout --signal= antes do restaurar.sh" checar_comando_bash "timeout --signal=KILL 60 infra/backup/restaurar.sh p -i -"
+espera_falha   "env -C e ./backup.sh"              com_cwd /home/x/repo "env -C infra/backup ./backup.sh"
+espera_falha   "cd / e glob op*"                   checar_comando_bash "cd / && ls op*"
+espera_falha   "cd / e glob o?t"                   checar_comando_bash "cd / && ls o?t"
+espera_falha   "cd / e grep em *"                  checar_comando_bash "cd / && grep -rn POSTGRES *"
+espera_falha   "cd -P /"                           checar_comando_bash "cd -P / && ls opt/gestor-financeiro"
+espera_falha   "cd -- /"                           checar_comando_bash "cd -- / && ls opt/x"
+espera_falha   "if cd /"                           checar_comando_bash "if cd /; then ls opt/x; fi"
+espera_falha   "{ cd /; }"                         checar_comando_bash "{ cd /; ls opt/x; }"
+espera_falha   "GIT_PAGER com docker"              checar_comando_bash "GIT_PAGER=\"docker stop gestor-api-1\" git log"
+espera_sucesso "git add do docker-compose.yml"     checar_comando_bash "git add infra/docker-compose.yml"
+espera_sucesso "git diff do docker-compose.yml"    checar_comando_bash "git diff origin/main -- infra/docker-compose.yml"
+espera_sucesso "find -name docker-compose.yml"     checar_comando_bash "find . -name docker-compose.yml"
+espera_sucesso "glob no repositório passa"         checar_comando_bash "ls src/*.ts"
+mkdir -p "$tmp/repo-falso/infra/secrets" "$tmp/repo-falso/scripts"
+printf 'x\n' >"$tmp/repo-falso/infra/secrets/pg_senha_app"
+espera_falha   "gf: montar diretório com infra/secrets" gf run --rm --name gf-x -v "$tmp/repo-falso:/m:ro" alpine ls /m
+espera_sucesso "gf: montar subdiretório sem segredo"  gf run --rm --name gf-x -v "$tmp/repo-falso/scripts:/m:ro" alpine ls /m
+
 # .gitignore cobre os segredos do app.
 for ignorado in android/app/release.jks android/release.keystore android/keystore.properties android/local.properties a/x.p12; do
   espera_sucesso ".gitignore ignora $ignorado"   git -C "$raiz" check-ignore -q --no-index "$ignorado"

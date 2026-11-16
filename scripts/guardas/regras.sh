@@ -144,6 +144,10 @@ palavra_cita_opt() {
 caminho_chega_em_opt() {
   local palavra="$1" base="$2" atual seg
   local -a segs
+  # As variáveis de diretório que se escrevem à mão: $HOME, $PWD (a base) e $OLDPWD (desconhecido: conta como /).
+  palavra="${palavra//\$\{HOME\}/$HOME}"; palavra="${palavra//\$HOME/$HOME}"
+  palavra="${palavra//\$\{PWD\}/$base}"; palavra="${palavra//\$PWD/$base}"
+  palavra="${palavra//\$\{OLDPWD\}//}"; palavra="${palavra//\$OLDPWD//}"
   # shellcheck disable=SC2088 # o til é o texto que a guarda recebe; ele é trocado pelo $HOME aqui
   case "$palavra" in
     /*) atual=/ ;;
@@ -210,9 +214,10 @@ achar_programa() {
   if comando_de_texto "${TRECHO_P[$primeiro]}"; then return 0; fi
   for i in "${!TRECHO_P[@]}"; do
     for alvo in "$@"; do
-      if palavra_e_programa "${TRECHO_P[$i]}" "$alvo"; then INDICE_DO_PROGRAMA=$i; return 0; fi
-      # Plugins do docker chamados direto (docker-buildx, docker-compose...).
-      if [ "$alvo" = docker ] && [[ "${TRECHO_P[$i]##*/}" == docker-* && "${TRECHO_P[$i]##*/}" != docker-gf.sh ]]; then INDICE_DO_PROGRAMA=$i; return 0; fi
+      # Também colado depois de = (GIT_PAGER="docker ...", LESSOPEN=...).
+      if palavra_e_programa "${TRECHO_P[$i]}" "$alvo" || palavra_e_programa "${TRECHO_P[$i]##*=}" "$alvo"; then INDICE_DO_PROGRAMA=$i; return 0; fi
+      # Plugins do docker chamados direto (docker-buildx, docker-compose); docker-compose.yml é arquivo, não plugin.
+      if [ "$alvo" = docker ] && [[ "${TRECHO_P[$i]##*/}" =~ ^docker-[a-z]+$ ]]; then INDICE_DO_PROGRAMA=$i; return 0; fi
     done
   done
 }
@@ -276,12 +281,20 @@ checar_trecho_kill() {
 
 # Os scripts de produção do backup rodam como root, contra a instalação de verdade; os testes os chamam por dentro.
 checar_trecho_producao() {
-  local programa
+  local programa primeiro=0 palavra
   separar_palavras "$1"
-  programa_do_trecho
-  [ "$INDICE_DO_PROGRAMA" -ge 0 ] || return 0
-  programa="${TRECHO_P[$INDICE_DO_PROGRAMA]}"
-  case "${programa##*/}" in backup.sh | restaurar.sh | enviar.sh) ;; *) return 0 ;; esac
+  while [ "$primeiro" -lt "${#TRECHO_P[@]}" ] && [[ "${TRECHO_P[$primeiro]}" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]]; do primeiro=$((primeiro + 1)); done
+  [ "$primeiro" -lt "${#TRECHO_P[@]}" ] || return 0
+  # Ler ou versionar o script (git, sed, cat...) não o roda; qualquer outro comando que o cite, em qualquer posição
+  # (timeout -s KILL 600 ..., nice -n 19 ..., env -C dir ./backup.sh), conta como rodar.
+  case "${TRECHO_P[$primeiro]##*/}" in git | sed | awk | vim | vi | nano | code | gh) return 0 ;; esac
+  comando_de_texto "${TRECHO_P[$primeiro]}" && return 0
+  # Pelo nome exato (um glob como *.sh não é o script).
+  programa=""
+  for palavra in "${TRECHO_P[@]}"; do
+    case "${palavra##*/}" in backup.sh | restaurar.sh | enviar.sh) programa="$palavra"; break ;; esac
+  done
+  [ -n "$programa" ] || return 0
   caminho_chega_em_opt "$programa" "${2:-$PWD}" || true
   if [[ "$CAMINHO_FINAL" != */testes/* ]]; then
     echo "Bloqueado: $programa é script de produção (instalação de verdade); rode os testes em infra/backup/testes (D24)." >&2
@@ -340,7 +353,7 @@ checar_trecho_raiz() {
 # na instalação de verdade (/opt, docker no projeto gestor, pkill/killall; D24).
 # Mensagem de commit e corpo de PR vão por arquivo (git commit -F, gh pr ... --body-file).
 checar_comando_bash() {
-  local comando="$1" palavra trecho falhou=0 cita_gradle_home=0 parte
+  local comando="$1" palavra trecho falhou=0 cita_gradle_home=0 parte i_cd
   local base="${GUARDA_CWD:-$PWD}"
   # Barra invertida no fim da linha junta as duas (doc\⏎ker é docker).
   comando="${comando//$'\\\n'/}"
@@ -375,7 +388,8 @@ checar_comando_bash() {
     # Caminho relativo a partir do diretório do comando (o cwd do hook, e o de cada cd): ../../opt, cd / && ls opt/x.
     for palavra in "${TRECHO_P[@]}"; do
       for parte in "$palavra" "${palavra##*=}"; do
-        [[ "$parte" == */* || "$parte" == opt* || "$parte" == *\{* || "$parte" == "~" ]] || continue
+        [[ "$parte" == */* || "$parte" == opt* || "$parte" == *\{* || "$parte" == "~" || "$parte" == *'$'* ]] \
+          || { [ "$base" = / ] && [[ "$parte" == *[\*\?\[]* ]]; } || continue
         [[ "$parte" == -* ]] && continue
         if caminho_chega_em_opt "$parte" "$base"; then
           echo "Bloqueado: $palavra chega a /opt a partir de $base; /opt é a instalação de verdade (D24)." >&2
@@ -384,8 +398,13 @@ checar_comando_bash() {
         fi
       done
     done
-    if [[ "${TRECHO_P[0]:-}" == cd || "${TRECHO_P[0]:-}" == pushd ]]; then
-      caminho_chega_em_opt "${TRECHO_P[1]:-~}" "$base" || true
+    # cd ou pushd, também depois de if/then/do/{ e com opções (-P, -L, --).
+    i_cd=0
+    while [ "$i_cd" -lt "${#TRECHO_P[@]}" ] && [[ "${TRECHO_P[$i_cd]}" =~ ^(if|then|else|elif|do|\{|!)$ ]]; do i_cd=$((i_cd + 1)); done
+    if [[ "${TRECHO_P[$i_cd]:-}" == cd || "${TRECHO_P[$i_cd]:-}" == pushd ]]; then
+      i_cd=$((i_cd + 1))
+      while [[ "${TRECHO_P[$i_cd]:-}" == -* ]]; do i_cd=$((i_cd + 1)); done
+      caminho_chega_em_opt "${TRECHO_P[$i_cd]:-~}" "$base" || true
       base="$CAMINHO_FINAL"
     fi
   done < <(trechos_do_comando "$comando")
