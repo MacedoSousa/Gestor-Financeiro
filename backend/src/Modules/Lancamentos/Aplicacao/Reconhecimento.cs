@@ -39,7 +39,10 @@ internal sealed class Reconhecimento(LancamentosDbContext db, IUsuarioAtual atua
 
             var ids = ligadas.Keys.ToList();
             var itens = await db.ItensAConferir.ToListAsync(ct);
-            var decididas = itens.Where(i => !i.Aberto && i.Resolucao != ResolucaoDoItem.PareadoAutomaticamente && i.TransacaoId is not null)
+            // Decidida pelo casal = "é gasto" ou "é receita" (a mesma regra do par manual, revisão do E6a, rodada 2). "Ciente"
+            // numa linha que o banco tirou não é decisão: se ela volta, volta para "A conferir".
+            var decididas = itens.Where(i => !i.Aberto && i.TransacaoId is not null
+                                             && (i.Resolucao == ResolucaoDoItem.Gasto || i.Resolucao == ResolucaoDoItem.Receita))
                 .Select(i => i.TransacaoId!.Value).ToHashSet();
             var linhas = (await db.Transacoes
                     .Where(t => t.Origem == OrigemDaTransacao.OpenFinance && t.Natureza != NaturezaDaTransacao.Transferencia
@@ -80,9 +83,20 @@ internal sealed class Reconhecimento(LancamentosDbContext db, IUsuarioAtual atua
                 item.Resolver(ResolucaoDoItem.PareadoAutomaticamente);
 
             var chaves = itens.Select(i => i.Chave).ToHashSet(StringComparer.Ordinal);
+            var porLinha = itens.Where(i => i.TransacaoId is not null).ToLookup(i => i.TransacaoId!.Value);
             void Abrir(string tipo, string chave, Transacao t)
             {
-                if (!chaves.Add(chave)) return;
+                var daLinha = porLinha[t.Id].ToList();
+                if (daLinha.Any(i => i.Aberto)) return;
+                if (!chaves.Add(chave))
+                {
+                    // A linha que o banco tirou (item marcado "Ciente") voltou: item novo, com outra chave; o resolvido fica como
+                    // está (nada é descartado; revisão do E6a, rodada 2).
+                    if (daLinha.Count == 0 || daLinha.Any(i => i.Resolucao != ResolucaoDoItem.Ciente)) return;
+                    var vez = 2;
+                    while (!chaves.Add($"{chave}:{vez}")) vez++;
+                    chave = $"{chave}:{vez}";
+                }
                 db.ItensAConferir.Add(ItemAConferir.Criar(casalId, tipo, chave, t.ContaId, t.Id, t.ValorCentavos, t.Data));
             }
 

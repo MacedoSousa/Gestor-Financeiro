@@ -29,6 +29,8 @@ function ItemDaCaixa({ item, contas, categorias, aoResolver }: { item: ItemAConf
   const titulo = tituloDoItem(item);
   const valor = n(item.valorCentavos);
   const pede = opcao ? oQuePede(opcao) : "nada";
+  // No grupo de investimento o sistema cria o lado; noutra conta ligada, o outro lado tem de ter vindo do banco.
+  const destino = pede === "conta" ? contas.find((c) => c.id === escolha) : undefined;
   const escolhas =
     pede === "conta"
       ? contasDaOpcao(opcao, item.contaId, contas).map((c) => ({ valor: c.id, rotulo: c.apelido }))
@@ -136,8 +138,10 @@ function ItemDaCaixa({ item, contas, categorias, aoResolver }: { item: ItemAConf
               nota={
                 pede === "conta" && escolhas.length === 0
                   ? "Nenhuma conta serve. Crie uma conta de poupança ou investimento em Contas."
-                  : opcao === "TRANSFERENCIA"
-                    ? "Se a outra conta vem do banco, o outro lado precisa já ter chegado."
+                  : destino?.ligada && destino.tipo !== "INVESTIMENTO"
+                    ? "Essa conta vem do banco: o outro lado precisa já ter chegado."
+                    : opcao === "TRANSFERENCIA" && !escolha
+                      ? "Se a outra conta vem do banco, o outro lado precisa já ter chegado."
                     : undefined
               }
             />

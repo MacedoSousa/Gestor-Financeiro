@@ -455,7 +455,7 @@ public class AConferirTests(PostgresFixture pg)
         Assert.Equal(HttpStatusCode.NoContent, (await ResolverAsync(c, saida, new { opcao = "TRANSFERENCIA", contaId = c.Poupanca })).StatusCode);
 
         Assert.True(await MesmoGrupoAsync(c, "tx-saida", "tx-e1"));
-        Assert.Equal("RESOLVIDO|TRANSFERENCIA", await EscalarAsync<string>(c.Banco,
+        Assert.Equal("RESOLVIDO|PAREADO_AUTOMATICAMENTE", await EscalarAsync<string>(c.Banco,
             $"SELECT estado || '|' || resolucao FROM lancamentos.itens_a_conferir WHERE transacao_id = '{await IdAsync(c, "tx-e1")}'"));
         Assert.Equal("ABERTO", await EscalarAsync<string>(c.Banco,
             $"SELECT estado FROM lancamentos.itens_a_conferir WHERE transacao_id = '{await IdAsync(c, "tx-e2")}'"));
@@ -550,5 +550,58 @@ public class AConferirTests(PostgresFixture pg)
         Assert.Equal(HttpStatusCode.BadRequest, (await ResolverAsync(c, item, new { opcao = "APORTE", contaId = c.Dinheiro })).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await ResolverAsync(c, item, new { opcao = "GASTO", categoriaId = alheia })).StatusCode);
         Assert.Equal("APORTE_OU_RESGATE|ABERTO|-", await ItensAsync(c));
+    }
+
+    // ------------------------------------------------------------------ Revisão do E6a (D24), rodada 2
+
+    /// <summary>D1: a linha que o banco tirou, de item marcado "Ciente", volta para "A conferir" quando o banco a devolve.</summary>
+    [Fact]
+    public async Task Linha_que_volta_depois_do_ciente_reabre_em_a_conferir()
+    {
+        await using var c = await IniciarAsync();
+        await ImportarAsync(c, c.Corrente, Linha("tx-pix", -3_000, codigo: MesmaPessoa));
+        await ReconhecerAsync(c);
+        await ImportarAsync(c, c.Corrente, Linha("tx-outra", -100));
+        await ImportarAsync(c, c.Corrente, Linha("tx-outra", -100));
+        Assert.Equal(HttpStatusCode.NoContent, (await ResolverAsync(c, await ItemAsync(c), new { opcao = "CIENTE" })).StatusCode);
+
+        await ImportarAsync(c, c.Corrente, Linha("tx-outra", -100), Linha("tx-pix", -3_000, codigo: MesmaPessoa));
+        await ReconhecerAsync(c);
+
+        var item = (await JsonAsync(await c.Cliente.GetAsync("/api/v1/a-conferir"))).EnumerateArray().Single();
+        Assert.Equal(["TRANSFERENCIA", "GASTO", "DEIXAR_PARA_DEPOIS"], item.GetProperty("opcoes").EnumerateArray().Select(o => o.GetString()).ToList());
+    }
+
+    /// <summary>D2 (N1 da rodada 1): o par manual não usa como outro lado a linha que o casal decidiu como receita.</summary>
+    [Fact]
+    public async Task Par_manual_nao_usa_a_linha_decidida_como_receita()
+    {
+        await using var c = await IniciarAsync();
+        await ImportarAsync(c, c.Poupanca, Linha("tx-entrada", 3_000, codigo: MesmaPessoa));
+        await ReconhecerAsync(c);
+        var salario = await CategoriaAsync(c.Cliente, "Salário");
+        Assert.Equal(HttpStatusCode.NoContent, (await ResolverAsync(c, await ItemAsync(c), new { opcao = "RECEITA", categoriaId = salario })).StatusCode);
+        await ImportarAsync(c, c.Corrente, Linha("tx-saida", -3_000, codigo: MesmaPessoa));
+        await ReconhecerAsync(c);
+
+        var r = await ResolverAsync(c, await ItemAsync(c), new { opcao = "TRANSFERENCIA", contaId = c.Poupanca });
+
+        Assert.Equal(HttpStatusCode.Conflict, r.StatusCode);
+        Assert.Equal($"RECEITA|{salario}|REVISADA|false", await EstadoAsync(c, "tx-entrada"));
+    }
+
+    /// <summary>D1, caminho da resolução: linha que já virou transferência só aceita "Ciente".</summary>
+    [Fact]
+    public async Task Linha_ja_transferencia_so_aceita_ciente_na_resolucao()
+    {
+        await using var c = await IniciarAsync();
+        await ImportarAsync(c, c.Corrente, Linha("tx-saida", -3_000, codigo: MesmaPessoa));
+        await ReconhecerAsync(c);
+        var item = await ItemAsync(c);
+        await EscalarAsync<int>(c.Banco, "UPDATE lancamentos.transacoes SET natureza = 'TRANSFERENCIA', categoria_id = NULL, " +
+                                         $"grupo_id = '{Guid.NewGuid()}' WHERE id = '{await IdAsync(c, "tx-saida")}' RETURNING 1");
+
+        Assert.Equal(HttpStatusCode.BadRequest, (await ResolverAsync(c, item, new { opcao = "TRANSFERENCIA", contaId = c.Dinheiro })).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await ResolverAsync(c, item, new { opcao = "CIENTE" })).StatusCode);
     }
 }

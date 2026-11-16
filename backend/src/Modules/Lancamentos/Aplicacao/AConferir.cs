@@ -155,9 +155,9 @@ internal sealed class AConferir(LancamentosDbContext db, IUsuarioAtual atual, IC
             case [var outro]:
                 if (linha.ValorCentavos < 0) Pareamento.Parear(linha, outro);
                 else Pareamento.Parear(outro, linha);
-                // O item aberto do outro lado fecha junto (revisão do E6a, D1).
-                var doOutro = await db.ItensAConferir.FirstOrDefaultAsync(i => i.TransacaoId == outro.Id && i.Estado == "ABERTO", ct);
-                doOutro?.Resolver(opcao);
+                // Os itens abertos do outro lado fecham junto, como pareados (revisão do E6a, D1 e rodada 2, N2).
+                foreach (var doOutro in await db.ItensAConferir.Where(i => i.TransacaoId == outro.Id && i.Estado == "ABERTO").ToListAsync(ct))
+                    doOutro.Resolver(ResolucaoDoItem.PareadoAutomaticamente);
                 return null;
             case [_, _, ..]:
                 return new ResultadoDeLancamento.Recusado(TituloOutroLadoAmbiguo, 409);
