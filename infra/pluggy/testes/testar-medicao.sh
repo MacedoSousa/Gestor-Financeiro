@@ -53,7 +53,7 @@ investimentos_do_falso() {
 # Com o arquivo PLUGGY_FALSO_E6 presente, a Pluggy falsa serve também os movimentos da E6 (transferência para a
 # mesma pessoa com e sem par, aplicação, resgate e o pagamento da fatura fechada); sem ele, nada muda.
 movimentos_da_e6_no_falso() {
-  local chave contas k1 p1 categorias
+  local chave k1 p1 categorias
   chave="$(printf '{"clientId":"id-sintetico","clientSecret":"segredo-sintetico"}' |
     curl -sS -X POST "$URL/auth" -H 'Content-Type: application/json' --data @- | jq -r .apiKey)"
   contas() { curl -sS "$URL/accounts?itemId=item-sintetico" -H "X-API-KEY: $chave" | jq -c '[.results[].id]'; }
