@@ -110,115 +110,266 @@ checar_trecho_gradle() {
 
 # --- D24: a instalação de verdade é só da pessoa ------------------------------------------------
 # Ela mora em /opt/gestor-financeiro e roda no projeto "gestor" do compose (o infra/docker-compose.yml declara
-# "name: gestor"; os containers são gestor-*). Nenhum agente lê, edita ou mexe nela.
+# "name: gestor"; os containers são gestor-*). Nenhum agente lê, edita ou mexe nela. As regras de docker são uma
+# lista positiva (o que é dos agentes tem nome gf-*); o que a guarda não reconhece é barrado. É uma guarda de texto:
+# pega o descuido e as grafias comuns, não um caminho montado em variável de propósito.
 
-# Caminho absoluto em /opt (também por glob no primeiro nível: /op*, /o?t, /*).
+# Caminho em /opt: no começo da palavra, depois de : = , @ ou de uma opção colada (-C/opt), com barras repetidas,
+# relativo (../opt), entre chaves (/{opt,}) ou por glob no primeiro nível (/op*, /o?t, /*).
 palavra_cita_opt() {
-  local primeiro="${1#/}"
-  [[ "$1" == /* ]] || return 1
-  primeiro="${primeiro%%/*}"
-  [ -n "$primeiro" ] || return 1
-  # shellcheck disable=SC2053 # o primeiro nível pode ser um glob: o lado direito do == é o padrão de propósito
+  local n primeiro
+  n="$(printf '%s' "$1" | tr -s '/')"
+  [[ "$n" =~ (^|[:=,@]|^-[A-Za-z]+)/opt(/|$|[^A-Za-z0-9._-]) ]] && return 0
+  [[ "$n" =~ (^|/)\.\./(\.\./)*opt(/|$) ]] && return 0
+  [[ "$n" == *\{*opt*\}* && "$n" == */* ]] && return 0
+  [[ "$n" == /* ]] || return 1
+  primeiro="${n#/}"; primeiro="${primeiro%%/*}"
+  [[ -n "$primeiro" && "$primeiro" == *[\*\?\[]* ]] || return 1
+  # shellcheck disable=SC2053 # o primeiro nível é um glob: o lado direito do == é o padrão de propósito
   [[ "opt" == $primeiro ]]
 }
 
-# Nome do projeto, container, volume, rede ou imagem do gestor (gestor, gestor-*, gestor_*, -pgestor).
+# Nome do projeto, container, volume, rede ou imagem da instalação de verdade (gestor, gestor-*, gestor_*, /gestor-*).
 nome_do_gestor() {
-  case "$1" in gestor|gestor-*|gestor_*|-pgestor*) return 0 ;; esac
+  case "${1#/}" in gestor|gestor-*|gestor_*|-pgestor*) return 0 ;; esac
   return 1
 }
 
-# Separa um trecho em palavras (sem aspas) e acha onde começa o comando, pulando atribuições, env, sudo,
-# xargs (e as opções dele) etc. Define TRECHO_P (palavras), TRECHO_I (índice do comando, ou o tamanho se não
-# houver), TRECHO_XARGS (1 se veio por xargs) e TRECHO_PROJETO (valor de COMPOSE_PROJECT_NAME=, se houver).
-separar_trecho() {
-  local palavra
-  TRECHO_I=0; TRECHO_XARGS=0; TRECHO_PROJETO=""
-  read -ra TRECHO_P <<< "$(printf '%s' "$1" | sem_aspas)"
-  while [ "$TRECHO_I" -lt "${#TRECHO_P[@]}" ]; do
-    palavra="${TRECHO_P[$TRECHO_I]}"
-    if [[ "$palavra" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]]; then
-      [[ "$palavra" == COMPOSE_PROJECT_NAME=* ]] && TRECHO_PROJETO="${palavra#*=}"
-      TRECHO_I=$((TRECHO_I + 1)); continue
-    fi
-    case "$palavra" in
-      env|command|exec|nice|nohup|time|sudo|bash|sh|-c|-lc|-l|-e|-x) TRECHO_I=$((TRECHO_I + 1)) ;;
-      xargs) TRECHO_XARGS=1; TRECHO_I=$((TRECHO_I + 1)) ;;
-      timeout) TRECHO_I=$((TRECHO_I + 2)) ;;
-      -*) if [ "$TRECHO_XARGS" -eq 1 ]; then TRECHO_I=$((TRECHO_I + 1)); else break; fi ;;
-      *) break ;;
-    esac
+# O que é dos agentes: containers, projetos, imagens e redes com nome gf-* (testes e QA).
+nome_nosso() { [[ "${1#/}" == gf-* && "$1" != *'$'* ]]; }
+
+# Comandos que só leem texto: uma palavra "docker", "pkill" etc. nos argumentos deles não é execução.
+comando_de_texto() {
+  case "${1##*/}" in
+    grep|egrep|fgrep|rg|git|echo|printf|cat|head|tail|less|sed|awk|wc|jq|ls|diff|sort|uniq|cut|tr|shellcheck|stat|file) return 0 ;;
+  esac
+  return 1
+}
+
+# Índice da primeira palavra do trecho que executa um destes programas (pelo nome do arquivo), em qualquer posição:
+# depois de env, sudo, timeout, stdbuf, setsid, eval, script -c, bash -c "..." etc. Num comando só de texto, nenhuma.
+# Devolve o índice em INDICE_DO_PROGRAMA (ou -1). Usa TRECHO_P.
+achar_programa() {
+  local i alvo
+  INDICE_DO_PROGRAMA=-1
+  [ "${#TRECHO_P[@]}" -gt 0 ] || return 0
+  local primeiro=0
+  while [ "$primeiro" -lt "${#TRECHO_P[@]}" ] && [[ "${TRECHO_P[$primeiro]}" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]]; do primeiro=$((primeiro + 1)); done
+  [ "$primeiro" -lt "${#TRECHO_P[@]}" ] || return 0
+  if comando_de_texto "${TRECHO_P[$primeiro]}"; then return 0; fi
+  for i in "${!TRECHO_P[@]}"; do
+    for alvo in "$@"; do
+      if [ "${TRECHO_P[$i]##*/}" = "$alvo" ]; then INDICE_DO_PROGRAMA=$i; return 0; fi
+    done
   done
 }
 
-# pkill e killall casam por nome e alcançam os processos da instalação de verdade: o agente para pelo PID.
+separar_palavras() { read -ra TRECHO_P <<< "$(printf '%s' "$1" | sem_aspas)"; }
+
+# Alvo calculado no trecho: $(...), crase, variável (fora $PWD) ou xargs antes do programa.
+alvo_calculado() {
+  local ate="$1" i palavra
+  for i in "${!TRECHO_P[@]}"; do
+    palavra="${TRECHO_P[$i]//\$\{PWD\}/}"; palavra="${palavra//\$PWD/}"
+    [[ "$palavra" == *'$'* || "$palavra" == *'`'* ]] && return 0
+    [ "$i" -lt "$ate" ] && [ "${TRECHO_P[$i]##*/}" = xargs ] && return 0
+  done
+  return 1
+}
+
+# pkill, killall e fuser -k casam por nome ou porta e alcançam a instalação de verdade; kill só com PID literal.
 checar_trecho_kill() {
-  separar_trecho "$1"
-  [ "$TRECHO_I" -lt "${#TRECHO_P[@]}" ] || return 0
-  case "${TRECHO_P[$TRECHO_I]##*/}" in
-    pkill|killall)
-      echo "Bloqueado: ${TRECHO_P[$TRECHO_I]##*/} casa por nome e alcança a instalação de verdade; pare pelo PID que você gravou (D24)." >&2
-      return 1 ;;
+  local i
+  separar_palavras "$1"
+  achar_programa pkill killall
+  if [ "$INDICE_DO_PROGRAMA" -ge 0 ]; then
+    echo "Bloqueado: ${TRECHO_P[$INDICE_DO_PROGRAMA]##*/} casa por nome e alcança a instalação de verdade; pare pelo PID que você gravou (D24)." >&2
+    return 1
+  fi
+  achar_programa fuser
+  if [ "$INDICE_DO_PROGRAMA" -ge 0 ]; then
+    for i in "${TRECHO_P[@]:INDICE_DO_PROGRAMA+1}"; do
+      if [[ "$i" == -*k* && "$i" != --* ]] || [ "$i" = --kill ]; then
+        echo "Bloqueado: fuser -k mata pela porta e alcança a instalação de verdade; pare pelo PID que você gravou (D24)." >&2
+        return 1
+      fi
+    done
+  fi
+  achar_programa kill
+  if [ "$INDICE_DO_PROGRAMA" -ge 0 ] && alvo_calculado "$INDICE_DO_PROGRAMA"; then
+    echo "Bloqueado: kill com alvo calculado (\$(...), variável ou xargs); use o PID literal que você gravou (D24)." >&2
+    return 1
+  fi
+  return 0
+}
+
+# Os scripts de produção do backup rodam como root, contra a instalação de verdade; os testes os chamam por dentro.
+checar_trecho_producao() {
+  separar_palavras "$1"
+  achar_programa backup.sh restaurar.sh enviar.sh
+  if [ "$INDICE_DO_PROGRAMA" -ge 0 ] && [[ "${TRECHO_P[$INDICE_DO_PROGRAMA]}" == *infra/backup/* || "${TRECHO_P[$INDICE_DO_PROGRAMA]}" != */* ]]; then
+    echo "Bloqueado: ${TRECHO_P[$INDICE_DO_PROGRAMA]} é script de produção (instalação de verdade); rode os testes em infra/backup/testes (D24)." >&2
+    return 1
+  fi
+  return 0
+}
+
+recusar_docker() { echo "Bloqueado: docker $1 (D24: a instalação de verdade é só da pessoa; o que é dos agentes tem nome gf-*)." >&2; return 1; }
+
+# docker compose: projeto gf-* (por -p antes do subcomando ou COMPOSE_PROJECT_NAME), ou só ls/version.
+checar_compose() {
+  local -a a=("$@")
+  local i=0 palavra projeto="$COMPOSE_DO_AMBIENTE" sub=""
+  while [ "$i" -lt "${#a[@]}" ]; do
+    palavra="${a[$i]}"
+    case "$palavra" in
+      -p|--project-name) projeto="${a[$((i + 1))]:-}"; i=$((i + 2)); continue ;;
+      --project-name=*) projeto="${palavra#*=}" ;;
+      -p?*) projeto="${palavra#-p}" ;;
+      -f|--file|--project-directory|--env-file|--profile|--ansi|--progress|--parallel) i=$((i + 2)); continue ;;
+      --dry-run|--compatibility|--all-resources) ;;
+      -*) recusar_docker "compose com opção desconhecida antes do subcomando ($palavra)"; return 1 ;;
+      *) sub="$palavra"; break ;;
+    esac
+    i=$((i + 1))
+  done
+  case "$sub" in ""|ls|version) return 0 ;; esac
+  nome_nosso "$projeto" || { recusar_docker "compose sem -p gf-* antes do subcomando (o compose do repositório é o projeto \"gestor\")"; return 1; }
+}
+
+# Opções do docker run/create que recebem valor (as curtas e as longas sem "=").
+run_opcao_com_valor() {
+  case "$1" in
+    -e|-p|-v|-w|-u|-h|-l|-m|-a|-c|--*) return 0 ;;
+  esac
+  return 1
+}
+run_opcao_sem_valor() {
+  case "$1" in
+    --rm|--init|--interactive|--tty|--detach|--read-only|--no-healthcheck|--quiet|-P|--publish-all) return 0 ;;
+    -[ditq]|-[ditq][ditq]|-[ditq][ditq][ditq]) return 0 ;;
+  esac
+  return 1
+}
+
+# Um valor de opção do docker run/create: só o que não alcança a instalação de verdade nem o host.
+checar_valor_do_run() {
+  local opcao="$1" valor="$2" origem
+  case "$opcao" in
+    --privileged|--cap-add|--device|--security-opt|--userns|--cgroupns|--uts|--pid|--ipc|--volumes-from|--link|--pull)
+      [ "$opcao" = --pull ] && return 0
+      recusar_docker "run com $opcao"; return 1 ;;
+    --network|--net)
+      case "$valor" in none|bridge|default) return 0 ;; esac
+      nome_nosso "$valor" || { recusar_docker "run na rede '$valor'"; return 1; } ;;
+    -v|--volume|--mount)
+      if [ "$opcao" = --mount ]; then origem="$(printf '%s' "$valor" | tr ',' '\n' | sed -n 's/^\(source\|src\)=//p')"; else origem="${valor%%:*}"; fi
+      origem="$(printf '%s' "$origem" | tr -s '/')"
+      if [ "$origem" = / ] || [[ "$valor" == *docker.sock* ]] || nome_do_gestor "$origem"; then recusar_docker "run montando '$valor'"; return 1; fi ;;
+    --name)
+      nome_nosso "$valor" || { recusar_docker "run com --name '$valor' (use gf-*)"; return 1; } ;;
   esac
   return 0
 }
 
-# docker e docker compose: nada que mire o projeto "gestor"; compose sempre com -p explícito (o compose do
-# repositório é "name: gestor"); nada de prune; nada destrutivo com alvo calculado ($(...), variável, xargs).
-checar_trecho_docker() {
-  local -a resto
-  local cmd palavra valor compose=0 projeto="" sub="" pula=0 calculado=0 destrutivo=0 i
-  separar_trecho "$1"
-  [ "$TRECHO_I" -lt "${#TRECHO_P[@]}" ] || return 0
-  cmd="${TRECHO_P[$TRECHO_I]##*/}"
-  case "$cmd" in docker) ;; docker-compose) compose=1 ;; *) return 0 ;; esac
-  resto=("${TRECHO_P[@]:TRECHO_I+1}")
-  projeto="$TRECHO_PROJETO"
-
-  for palavra in "${TRECHO_P[@]}"; do
-    valor="${palavra##*=}"
-    if nome_do_gestor "$palavra" || nome_do_gestor "$valor"; then
-      echo "Bloqueado: docker no projeto, container ou imagem do gestor ('$palavra'); a instalação de verdade é só da pessoa (D24)." >&2
-      return 1
+# docker run/create: --name gf-* obrigatório; até a imagem, cada opção passa por checar_valor_do_run. Depois da
+# imagem vem o comando de dentro do container, que não é conferido (psql -d gestor no próprio container passa).
+checar_run() {
+  local -a a=("$@")
+  local i=0 palavra opcao valor tem_nome=0 imagem=""
+  while [ "$i" -lt "${#a[@]}" ]; do
+    palavra="${a[$i]}"
+    if [[ "$palavra" != -* ]]; then imagem="$palavra"; break; fi
+    if [[ "$palavra" == --*=* ]]; then opcao="${palavra%%=*}"; valor="${palavra#*=}"; i=$((i + 1))
+    elif run_opcao_sem_valor "$palavra"; then opcao="$palavra"; valor=""; i=$((i + 1))
+    elif [[ "$palavra" =~ ^-[a-zA-Z]$ || "$palavra" == --* ]] && run_opcao_com_valor "$palavra"; then opcao="$palavra"; valor="${a[$((i + 1))]:-}"; i=$((i + 2))
+    else recusar_docker "run com opção desconhecida ($palavra)"; return 1
     fi
-    [[ "$palavra" == *'$'* || "$palavra" == *'`'* ]] && calculado=1
-    case "$palavra" in
-      prune)
-        echo "Bloqueado: docker ... prune alcança os containers e volumes da instalação de verdade (D24)." >&2
-        return 1 ;;
-      rm|rmi|stop|kill|restart|pause|unpause|update|rename|exec|down) destrutivo=1 ;;
-    esac
+    [ "$opcao" = --name ] && tem_nome=1
+    checar_valor_do_run "$opcao" "$valor" || return 1
   done
-  if [ "$destrutivo" -eq 1 ] && { [ "$calculado" -eq 1 ] || [ "$TRECHO_XARGS" -eq 1 ]; }; then
-    echo "Bloqueado: docker destrutivo com alvo calculado (\$(...), variável ou xargs); use o nome literal do container que você criou (D24)." >&2
-    return 1
-  fi
-
-  # Opções e subcomando do compose.
-  for i in "${!resto[@]}"; do
-    palavra="${resto[$i]}"
-    if [ "$pula" -eq 1 ]; then pula=0; continue; fi
-    if [ "$compose" -eq 0 ]; then
-      [ "$palavra" = compose ] && compose=1
-      [[ "$palavra" == -* ]] || [ "$compose" -eq 1 ] || return 0
-      continue
-    fi
-    case "$palavra" in
-      -p|--project-name) projeto="${resto[$((i + 1))]:-}"; pula=1 ;;
-      --project-name=*) projeto="${palavra#*=}" ;;
-      -p?*) projeto="${palavra#-p}" ;;
-      -f|--file|--project-directory|--env-file|--profile|--ansi|--progress|--parallel) pula=1 ;;
-      -*) ;;
-      *) [ -z "$sub" ] && sub="$palavra" ;;
-    esac
-  done
-  [ "$compose" -eq 1 ] || return 0
-  case "$sub" in ls|version|"") return 0 ;; esac
-  if [ -z "$projeto" ] || [[ "$projeto" == *'$'* ]]; then
-    echo "Bloqueado: docker compose sem -p literal; o compose do repositório é o projeto \"gestor\" da instalação de verdade (D24). Use -p <nome-aleatório>." >&2
-    return 1
-  fi
+  [ "$tem_nome" -eq 1 ] || { recusar_docker "run sem --name gf-*"; return 1; }
+  if nome_do_gestor "${imagem%%:*}"; then recusar_docker "run da imagem '$imagem'"; return 1; fi
   return 0
+}
+
+# Subcomandos que miram containers: todos os alvos têm de ser gf-* (nem nome do gestor, nem ID, nem variável).
+checar_alvos() {
+  local sub="$1"; shift
+  local -a a=("$@")
+  local i=0 palavra alvos=0 so_o_primeiro=0
+  case "$sub" in exec|logs|attach) so_o_primeiro=1 ;; esac
+  while [ "$i" -lt "${#a[@]}" ]; do
+    palavra="${a[$i]}"
+    case "$palavra" in
+      -e|--env|-u|--user|-w|--workdir|--env-file|--detach-keys|-t|--time|-s|--signal|--format|--type|-n|--tail|--since|--until)
+        if [ "$palavra" = -t ] && [ "$sub" != stop ] && [ "$sub" != restart ]; then i=$((i + 1)); continue; fi
+        i=$((i + 2)); continue ;;
+      -f)
+        case "$sub" in inspect|stats) i=$((i + 2)) ;; *) i=$((i + 1)) ;; esac
+        continue ;;
+      --privileged) recusar_docker "$sub --privileged"; return 1 ;;
+      -*) i=$((i + 1)); continue ;;
+    esac
+    if [ "$sub" = cp ]; then
+      if [[ "$palavra" == *:* ]]; then nome_nosso "${palavra%%:*}" || { recusar_docker "cp com o container '${palavra%%:*}'"; return 1; }; alvos=1; fi
+    else
+      nome_nosso "$palavra" || { recusar_docker "$sub em '$palavra' (só containers gf-*)"; return 1; }
+      alvos=1
+      [ "$so_o_primeiro" -eq 1 ] && break
+    fi
+    i=$((i + 1))
+  done
+  [ "$alvos" -eq 1 ] || { recusar_docker "$sub sem alvo gf-*"; return 1; }
+}
+
+# docker e docker compose num trecho, de qualquer jeito que sejam chamados.
+checar_trecho_docker() {
+  local i k sub palavra
+  separar_palavras "$1"
+  for palavra in "${TRECHO_P[@]}"; do
+    if [[ "$palavra" == *docker.sock* || "$palavra" == DOCKER_HOST=* || "$palavra" == DOCKER_CONTEXT=* ]]; then
+      recusar_docker "pelo socket ou por outro host/contexto ($palavra)"; return 1
+    fi
+  done
+  achar_programa docker docker-compose podman
+  k="$INDICE_DO_PROGRAMA"
+  [ "$k" -ge 0 ] || return 0
+  alvo_calculado "$k" && { recusar_docker "com alvo calculado (\$(...), variável ou xargs)"; return 1; }
+  COMPOSE_DO_AMBIENTE=""
+  for ((i = 0; i < k; i++)); do
+    [[ "${TRECHO_P[$i]}" == COMPOSE_PROJECT_NAME=* ]] && COMPOSE_DO_AMBIENTE="${TRECHO_P[$i]#*=}"
+  done
+  if [ "${TRECHO_P[$k]##*/}" = docker-compose ]; then checar_compose "${TRECHO_P[@]:k+1}"; return; fi
+  sub="${TRECHO_P[$((k + 1))]:-}"
+  case "$sub" in
+    ""|--version|-v|version|info) return 0 ;;
+    -*) recusar_docker "com opção global antes do subcomando ($sub)"; return 1 ;;
+    compose) checar_compose "${TRECHO_P[@]:k+2}"; return ;;
+    container) k=$((k + 1)); sub="${TRECHO_P[$((k + 1))]:-}" ;;
+    image) k=$((k + 1)); sub="${TRECHO_P[$((k + 1))]:-}"; [ "$sub" = ls ] && sub=images ;;
+  esac
+  case "$sub" in
+    ps|ls|images|search)
+      for palavra in "${TRECHO_P[@]:k+2}"; do
+        if nome_do_gestor "$palavra" || nome_do_gestor "${palavra##*=}"; then recusar_docker "$sub citando '$palavra'"; return 1; fi
+      done ;;
+    pull)
+      for palavra in "${TRECHO_P[@]:k+2}"; do
+        if nome_do_gestor "${palavra%%:*}"; then recusar_docker "pull de '$palavra'"; return 1; fi
+      done ;;
+    build)
+      for ((i = k + 2; i < ${#TRECHO_P[@]}; i++)); do
+        case "${TRECHO_P[$i]}" in
+          -t|--tag) nome_nosso "${TRECHO_P[$((i + 1))]:-}" || { recusar_docker "build com a tag '${TRECHO_P[$((i + 1))]:-}' (use gf-*)"; return 1; } ;;
+          --tag=*) nome_nosso "${TRECHO_P[$i]#*=}" || { recusar_docker "build com a tag '${TRECHO_P[$i]#*=}' (use gf-*)"; return 1; } ;;
+        esac
+      done ;;
+    run|create) checar_run "${TRECHO_P[@]:k+2}" ;;
+    start|stop|restart|kill|rm|pause|unpause|wait|logs|exec|attach|cp|inspect|port|top|stats|diff|export|rename|update)
+      checar_alvos "$sub" "${TRECHO_P[@]:k+2}" ;;
+    *) recusar_docker "$sub (fora da lista: ps, images, pull, build, run, comandos em containers gf-*, compose -p gf-*)" ;;
+  esac
 }
 
 # Comando que o agente vai rodar pelo Bash (hook PreToolUse). Falha se citar caminho de segredo
@@ -226,7 +377,7 @@ checar_trecho_docker() {
 # na instalação de verdade (/opt, docker no projeto gestor, pkill/killall; D24).
 # Mensagem de commit e corpo de PR vão por arquivo (git commit -F, gh pr ... --body-file).
 checar_comando_bash() {
-  local comando="$1" palavra trecho falhou=0 cita_gradle_home=0
+  local comando="$1" palavra trecho falhou=0 cita_gradle_home=0 cd_na_raiz=0
   local -a palavras
   mapfile -t palavras < <(palavras_do_comando "$comando")
   for palavra in "${palavras[@]}"; do
@@ -250,7 +401,19 @@ checar_comando_bash() {
     checar_trecho_gradle "$trecho" || falhou=1
     checar_trecho_docker "$trecho" || falhou=1
     checar_trecho_kill "$trecho" || falhou=1
+    checar_trecho_producao "$trecho" || falhou=1
+    separar_palavras "$trecho"
+    [ "${TRECHO_P[0]:-}" = cd ] && [ "$(printf '%s' "${TRECHO_P[1]:-}" | tr -s '/')" = / ] && cd_na_raiz=1
   done < <(trechos_do_comando "$comando")
+  # cd / e depois um caminho relativo que começa em opt (D24).
+  if [ "$cd_na_raiz" -eq 1 ]; then
+    for palavra in "${palavras[@]}"; do
+      if [[ "$palavra" =~ ^(\./)?opt(/|$) ]]; then
+        echo "Bloqueado: cd / e $palavra chegam a /opt, a instalação de verdade (D24)." >&2
+        falhou=1
+      fi
+    done
+  fi
   return "$falhou"
 }
 

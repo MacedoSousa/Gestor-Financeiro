@@ -14,7 +14,9 @@ caminho="$(printf '%s' "$entrada" | grep -oE '"file_path"[[:space:]]*:[[:space:]
 relativo="${caminho#"$raiz"/}"
 
 # A instalação de verdade (/opt) é só da pessoa (D24).
-if [[ "$caminho" == /opt || "$caminho" == /opt/* ]]; then
+# Normalizado (//opt, /home/x/../../opt): realpath -m não exige que o caminho exista.
+normalizado="$(realpath -m -- "$caminho" 2>/dev/null || printf '%s' "$caminho" | tr -s '/')"
+if [[ "$normalizado" == /opt || "$normalizado" == /opt/* ]]; then
   echo "Bloqueado: $caminho fica em /opt, a instalação de verdade; só a pessoa mexe nela (D24)." >&2
   exit 2
 fi
