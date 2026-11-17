@@ -10,11 +10,15 @@ raiz="${CLAUDE_PROJECT_DIR:-$(cd "$(dirname "$0")/../.." && pwd)}"
 # shellcheck source=scripts/guardas/regras.sh
 source "$raiz/scripts/guardas/regras.sh"
 
-if ! comando="$(jq -r '.tool_input.command // empty' 2>/dev/null)"; then
+entrada="$(cat)"
+if ! comando="$(jq -r '.tool_input.command // empty' 2>/dev/null <<< "$entrada")"; then
   echo "Bloqueado: guardar-bash.sh não conseguiu ler a entrada (jq instalado?)." >&2
   exit 2
 fi
 [ -z "$comando" ] && exit 0
+# O diretório do comando: os caminhos relativos (../../opt) são resolvidos a partir dele (D24).
+GUARDA_CWD="$(jq -r '.cwd // empty' 2>/dev/null <<< "$entrada")"
+export GUARDA_CWD
 
 checar_comando_bash "$comando" || exit 2
 exit 0

@@ -13,7 +13,10 @@ falha() { falhou=$((falhou + 1)); echo "FALHA $1"; }
 espera_sucesso() { local d="$1"; shift; if "$@" >/dev/null 2>&1; then ok "$d"; else falha "$d"; fi; }
 espera_falha()   { local d="$1"; shift; if "$@" >/dev/null 2>&1; then falha "$d"; else ok "$d"; fi; }
 
-tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
+# Em /tmp/gf-*: o docker-gf.sh só aceita caminho do host no repositório, em /tmp/gf-* ou no scratchpad.
+tmp="$(mktemp -d /tmp/gf-guardas.XXXXXX)"; trap 'rm -rf "$tmp"' EXIT
+# Comando visto a partir de um diretório (o cwd que o hook recebe), com HOME fixo.
+com_cwd() { local base="$1"; shift; HOME=/home/x GUARDA_CWD="$base" checar_comando_bash "$@"; }
 sql() { local nome="$1"; shift; printf '%s\n' "$@" > "$tmp/$nome"; echo "$tmp/$nome"; }
 
 # --- regras.sh -------------------------------------------------------------
@@ -122,6 +125,251 @@ espera_falha   "cat .chave-servico.json barrado"  checar_comando_bash "cat .chav
 espera_sucesso "-I e properties fora do trecho do gradlew" checar_comando_bash "./gradlew lint && grep -rnI properties docs"
 espera_sucesso "gradlew depois de ; e ||"         checar_comando_bash "true; ./gradlew lint || echo falhou"
 espera_falha   "flag barrada no 2º trecho do gradlew" checar_comando_bash "cd android && ./gradlew lint --scan | tail"
+
+# D24: a instalação de verdade (/opt, projeto "gestor" do compose, containers gestor-*) é só da pessoa.
+# /opt em qualquer grafia que o texto deixa ver.
+espera_falha   "ls /opt é barrado"                checar_comando_bash "ls /opt"
+espera_falha   "caminho em /opt é barrado"        checar_comando_bash "cat /opt/gestor-financeiro/infra/docker-compose.yml"
+espera_falha   "cd /opt/ é barrado"               checar_comando_bash "cd /opt/ && ls"
+espera_falha   "/opt entre aspas é barrado"       checar_comando_bash "ls \"/opt/gestor-financeiro\""
+espera_falha   "/opt depois de = é barrado"       checar_comando_bash "GF_RAIZ=/opt/gestor-financeiro make"
+espera_falha   "/opt por glob é barrado"          checar_comando_bash "ls /op*/gestor-financeiro"
+espera_falha   "/opt por glob ? é barrado"        checar_comando_bash "ls /o?t"
+espera_falha   "//opt"                            checar_comando_bash "ls //opt/gestor-financeiro"
+espera_falha   "/./opt"                           checar_comando_bash "ls /./opt/gestor-financeiro"
+espera_falha   "/tmp/../opt"                      checar_comando_bash "ls /tmp/../opt"
+espera_falha   "/{opt,}"                          checar_comando_bash "ls /{opt,}/gestor-financeiro"
+espera_falha   "/{o,}pt"                          checar_comando_bash "ls /{o,}pt/gestor-financeiro"
+espera_falha   "git -C/opt"                       checar_comando_bash "git -C/opt/gestor-financeiro log"
+espera_falha   "tar -C/opt"                       checar_comando_bash "tar -C/opt/gestor-financeiro -c infra"
+espera_falha   "../opt"                           checar_comando_bash "cd ../../../opt"
+espera_falha   "PATH com :/opt"                   checar_comando_bash "PATH=/usr/bin:/opt/x ls"
+espera_falha   "rsync host:/opt"                  checar_comando_bash "rsync a localhost:/opt/gestor-financeiro/"
+espera_falha   "cd / e opt relativo"              checar_comando_bash "cd / && ls opt/gestor-financeiro"
+espera_falha   "pushd / e opt relativo"           checar_comando_bash "pushd / && ls opt/x"
+espera_falha   "cd /tmp/.. e opt"                 checar_comando_bash "cd /tmp/.. && ls opt"
+espera_falha   "cd ~/../.. e opt"                 com_cwd /home/x/repo "cd ~/../.. && ls opt"
+espera_falha   "find a partir de /"               checar_comando_bash "find / -name docker-compose.yml 2>/dev/null"
+espera_falha   "grep -r a partir de /"            checar_comando_bash "grep -rn POSTGRES /etc / 2>/dev/null"
+espera_falha   "du /*"                            checar_comando_bash "du -sh /*"
+espera_sucesso "/optar não é /opt"                checar_comando_bash "ls /tmp/optar"
+espera_sucesso "palavra opt solta passa"          checar_comando_bash "grep -rn opt docs"
+espera_sucesso "caminho com /opt no meio passa"   checar_comando_bash "ls frontend/node_modules/x/opt"
+espera_sucesso "find no repositório passa"        checar_comando_bash "find . -name '*.sh'"
+espera_sucesso "chaves em caminho relativo passam" checar_comando_bash "ls src/{a,b}.ts"
+
+# docker: direto só para ler; o resto por scripts/docker-gf.sh.
+espera_sucesso "docker ps passa"                  checar_comando_bash "docker ps --format '{{.Names}}'"
+espera_sucesso "docker images passa"              checar_comando_bash "docker images"
+espera_sucesso "docker version passa"             checar_comando_bash "docker version"
+espera_sucesso "docker-gf.sh passa"               checar_comando_bash "scripts/docker-gf.sh run -d --rm --name gf-qa-pg -e POSTGRES_DB=gestor postgres:17-alpine"
+espera_sucesso "docker-gf.sh com \$PWD passa"     checar_comando_bash "scripts/docker-gf.sh run --rm --name gf-sc -v \"\$PWD/scripts:/mnt/scripts:ro\" koalaman/shellcheck:stable -x a.sh"
+espera_sucesso "grep docker no texto passa"       checar_comando_bash "grep -rn docker infra"
+espera_sucesso "testes do backup passam"          checar_comando_bash "infra/backup/testes/rodar-todos.sh"
+espera_sucesso "testes de subida passam"          checar_comando_bash "infra/testes/testar-subida.sh"
+espera_sucesso "dotnet test passa"                checar_comando_bash "dotnet test backend/tests/GestorFinanceiro.IntegrationTests"
+espera_falha   "docker run direto"                checar_comando_bash "docker run -d --rm --name gf-qa-pg postgres:17-alpine"
+espera_falha   "docker rm direto"                 checar_comando_bash "docker rm -f gf-qa-pg"
+espera_falha   "docker compose direto"            checar_comando_bash "docker compose -p gf-x up -d"
+espera_falha   "docker compose -p gestor"         checar_comando_bash "docker compose -p gestor ps"
+espera_falha   "compose sem -p dentro de infra"   checar_comando_bash "cd infra && docker compose down -v"
+espera_falha   "docker-compose"                   checar_comando_bash "docker-compose -f infra/docker-compose.yml ps"
+espera_falha   "docker exec gestor-*"             checar_comando_bash "docker exec gestor-postgres-1 psql -U postgres"
+espera_falha   "sudo docker"                      checar_comando_bash "sudo docker restart gestor-web-1"
+espera_falha   "env -i docker"                    checar_comando_bash "env -i docker compose down"
+espera_falha   "/usr/bin/env docker"              checar_comando_bash "/usr/bin/env docker compose down"
+espera_falha   "bash -ec com docker"              checar_comando_bash "bash -ec \"docker compose -f infra/docker-compose.yml down\""
+espera_falha   "timeout docker"                   checar_comando_bash "timeout -s KILL 60 docker compose down"
+espera_falha   "eval docker"                      checar_comando_bash "eval docker compose down"
+espera_falha   "xargs docker"                     checar_comando_bash "docker ps -q | xargs -r docker rm -f"
+espera_falha   "docker ps por xargs"              checar_comando_bash "echo x | xargs docker ps"
+espera_falha   "crase com docker"                 checar_comando_bash "\`docker compose -f infra/docker-compose.yml down\`"
+espera_falha   "echo crase docker"                checar_comando_bash "echo \`docker stop gestor-api-1\`"
+espera_falha   "\$(which docker)"                 checar_comando_bash "\$(which docker) compose -f infra/docker-compose.yml down"
+espera_falha   "git rebase -x docker"             checar_comando_bash "git rebase -x 'docker compose down' HEAD~1"
+espera_falha   "sed /e com docker"                checar_comando_bash "sed 's/x/docker compose down/e' a"
+espera_falha   "strace com docker"                checar_comando_bash "strace -o docker -v docker stop gestor-api-1"
+espera_falha   "docker --context antes"           checar_comando_bash "docker --context default ps"
+espera_falha   "curl no docker.sock"              checar_comando_bash "curl --unix-socket /var/run/docker.sock http://localhost/containers/json"
+espera_falha   "DOCKER_HOST"                      checar_comando_bash "DOCKER_HOST=tcp://127.0.0.1:2375 docker ps"
+espera_sucesso "grep docker.sock no texto passa"  checar_comando_bash "grep -rn docker.sock docs"
+
+# kill: só PID literal.
+espera_falha   "pkill"                            checar_comando_bash "pkill -f GestorFinanceiro.Api"
+espera_falha   "killall"                          checar_comando_bash "killall dotnet"
+espera_falha   "env -i pkill"                     checar_comando_bash "env -i pkill -f GestorFinanceiro.Api"
+espera_falha   "/usr/bin/env killall"             checar_comando_bash "/usr/bin/env killall dotnet"
+espera_falha   "echo crase pkill"                 checar_comando_bash "echo \`pkill -f GestorFinanceiro.Api\`"
+espera_falha   "\$(command -v pkill)"             checar_comando_bash "\$(command -v pkill) dotnet"
+# shellcheck disable=SC2016 # o texto do comando, sem expandir, é o que a guarda recebe
+espera_falha   "kill \$(pgrep)"                   checar_comando_bash 'kill $(pgrep -f GestorFinanceiro.Api)'
+espera_falha   "kill com crase"                   checar_comando_bash "kill \`pgrep dotnet\`"
+espera_falha   "pgrep | xargs kill"               checar_comando_bash "pgrep -f GestorFinanceiro.Api | xargs kill"
+espera_falha   "fuser -k"                         checar_comando_bash "fuser -k 5000/tcp"
+espera_sucesso "kill por PID passa"               checar_comando_bash "kill 107430"
+
+# Scripts de produção do backup: só pelos testes.
+espera_falha   "backup.sh direto"                 checar_comando_bash "GF_TMP=/tmp/x infra/backup/backup.sh"
+espera_falha   "restaurar.sh direto"              checar_comando_bash "bash infra/backup/restaurar.sh p.tar.age -i - --instalar"
+espera_falha   "backup.sh por caminho relativo"   checar_comando_bash "cd infra && backup/backup.sh"
+espera_falha   "./backup.sh"                      checar_comando_bash "cd infra/backup && ./backup.sh"
+
+# scripts/docker-gf.sh contra um docker falso: anota a chamada; inspect responde nome e projeto pelo nome pedido.
+mkdir -p "$tmp/docker-gf"
+cat >"$tmp/docker-gf/docker" <<'FALSO'
+#!/usr/bin/env bash
+if [ "$1" = inspect ] && [ "$2" = -f ]; then
+  alvo="${*: -1}"
+  case "$alvo" in gf-*-de-gestor) projeto=gestor ;; gf-*) projeto="" ;; *) exit 1 ;; esac
+  case "$3" in *Name*) echo "/$alvo" ;; *) echo "$projeto" ;; esac
+  exit 0
+fi
+echo "$*" >>"$(dirname "$0")/chamadas"
+FALSO
+chmod +x "$tmp/docker-gf/docker"
+gf() { DOCKER_GF_BIN="$tmp/docker-gf/docker" "$raiz/scripts/docker-gf.sh" "$@"; }
+espera_sucesso "gf: run descartável"              gf run -d --rm --name gf-qa-pg -p 127.0.0.1:55439:5432 -e POSTGRES_DB=gestor postgres:17-alpine
+mkdir -p "$tmp/repo-limpo/scripts"
+espera_sucesso "gf: run com um diretório montado" gf run --rm --name gf-sc -v "$tmp/repo-limpo/scripts:/mnt:ro" -w /mnt koalaman/shellcheck:stable -x a.sh
+espera_falha   "gf: run com a raiz do repositório montada" gf run --rm --name gf-sc -v "$raiz:/mnt:ro" alpine ls
+espera_sucesso "gf: exec no próprio container"   gf exec gf-qa-pg psql -U postgres -d gestor -c "select 1"
+espera_sucesso "gf: logs --tail"                  gf logs --tail 50 gf-qa-pg
+espera_sucesso "gf: rm -f"                        gf rm -f gf-qa-pg
+espera_sucesso "gf: inspect -f"                   gf inspect -f '{{json .State}}' gf-qa-pg
+espera_sucesso "gf: cp do container para /tmp"    gf cp gf-qa-pg:/tmp/x "$tmp/x"
+espera_sucesso "gf: build -t gf-"                 gf build -q -t gf-teste-api:1 "$tmp/repo-limpo"
+espera_falha   "gf: compose não passa por aqui"   gf compose -p gf-teste-1 -f "$raiz/infra/docker-compose.yml" ps
+espera_sucesso "gf: pull"                         gf pull postgres:17-alpine
+espera_falha   "gf: run sem --name"               gf run -d --rm postgres:17-alpine
+espera_falha   "gf: run com --name gestor-"       gf run --name gestor-x alpine true
+espera_falha   "gf: run com opção fora da lista"  gf run --name gf-x --use-api-socket docker:cli docker stop gestor-api-1
+espera_falha   "gf: run com --oom-kill-disable"   gf run --name gf-x --oom-kill-disable --privileged alpine sh
+espera_falha   "gf: run --privileged"             gf run --name gf-x --privileged alpine sh
+espera_falha   "gf: run --network container:"     gf run --name gf-x --network container:gestor-postgres-1 alpine sh
+espera_falha   "gf: run --network=container:"     gf run --name gf-x --network=container:gestor-postgres-1 alpine sh
+espera_falha   "gf: run --pid"                    gf run --name gf-x --pid host alpine sh
+espera_falha   "gf: run -v /run"                  gf run --name gf-x -v /run:/var/run docker:cli docker ps
+espera_falha   "gf: run -v /."                    gf run --name gf-x -v /.:/h alpine ls
+espera_falha   "gf: run -v /var/lib/docker"       gf run --name gf-x -v /var/lib/docker:/d alpine ls
+espera_falha   "gf: run -v volume do gestor"      gf run --name gf-x -v gestor_dados:/d alpine ls
+espera_falha   "gf: run -p em todas as interfaces com IP" gf run --name gf-x -p 0.0.0.0:5432:5432 alpine true
+espera_falha   "gf: run da imagem gestor-api"     gf run --name gf-x gestor-api
+espera_falha   "gf: exec em gestor-*"             gf exec gestor-postgres-1 psql -U postgres
+espera_falha   "gf: exec por ID"                  gf exec 3f2a9c1e psql
+espera_falha   "gf: exec -ite desloca o alvo"     gf exec -ite gf-x gestor-postgres-1 psql
+espera_falha   "gf: exec em gf-* do projeto gestor" gf exec gf-x-de-gestor sh
+espera_falha   "gf: stop /gestor-api-1"           gf stop /gestor-api-1
+espera_falha   "gf: logs por ID"                  gf logs 3f2a9c1e
+espera_falha   "gf: cp de gestor-*"               gf cp gestor-postgres-1:/run/secrets/x "$tmp/x"
+espera_falha   "gf: cp para fora do repo e /tmp"  gf cp gf-qa-pg:/x /home/x
+espera_falha   "gf: build -t gestor-"             gf build -t gestor-api "$tmp/repo-limpo"
+espera_falha   "gf: build -tgestor- colado"       gf build -tgestor-api "$tmp/repo-limpo"
+espera_falha   "gf: compose sem -p"               gf compose -f "$raiz/infra/docker-compose.yml" down
+espera_falha   "gf: compose -p gestor"            gf compose -p gestor ps
+espera_falha   "gf: compose -p depois do -f"      gf compose -f "$raiz/infra/docker-compose.yml" -p gf-x ps
+espera_falha   "gf: compose com /opt"             gf compose -p gf-x -f /opt/gestor-financeiro/infra/docker-compose.yml ps
+espera_falha   "gf: volume"                       gf volume rm algum
+espera_falha   "gf: system prune"                 gf system prune -f
+espera_falha   "gf: pull gestor-api"              gf pull gestor-api
+
+# Revisão da guarda, rodada 3.
+espera_falha   "gf: run com -- antes das opções"  gf run --name gf-x -- --privileged --pid host -v /:/host alpine sh
+espera_falha   "gf: compose run com -v /"         gf compose -p gf-x -f "$raiz/infra/docker-compose.yml" run --rm -v /:/host postgres
+espera_falha   "gf: run -p sem 127.0.0.1"         gf run --name gf-x -p 5432:5432 alpine true
+espera_falha   "gf: run -v /tmp inteiro"          gf run --name gf-x -v /tmp:/t alpine ls
+espera_falha   "gf: run de docker.io/library/gestor-api" gf run --name gf-x docker.io/library/gestor-api
+espera_sucesso "gf: run com volume anônimo"       gf run -d --rm --name gf-qa-pg -v /var/lib/postgresql/data postgres:17-alpine
+espera_sucesso "gf: exec com --color= no comando de dentro" gf exec gf-qa-pg ls --color=never /
+if tail -n1 "$tmp/docker-gf/chamadas" | grep -q -- '--color=never'; then ok "gf: o comando de dentro chega como veio"; else falha "gf: o comando de dentro chega como veio"; fi
+espera_falha   "cd ../../.. e opt relativo"       com_cwd /home/x/repo "cd ../../.. && ls opt/gestor-financeiro"
+espera_falha   "find ../../.."                    com_cwd /home/x/repo "find ../../.. -name docker-compose.yml"
+espera_falha   "find ~/../.."                     com_cwd /home/x/repo "find ~/../.. -name docker-compose.yml"
+espera_falha   "../../../op*"                     com_cwd /home/x/repo "ls ../../../op*/gestor-financeiro"
+espera_falha   "../../../o{p,}t"                  com_cwd /home/x/repo "ls ../../../o{p,}t"
+espera_falha   "timeout 60 find /"                com_cwd /home/x/repo "timeout 60 find / -name x"
+espera_falha   "ln -s / raiz"                     com_cwd /home/x/repo "ln -s / raiz"
+espera_sucesso "../outro passa"                   com_cwd /home/x/repo "ls ../outro"
+espera_sucesso "git add de backup.sh passa"       checar_comando_bash "git add infra/backup/backup.sh"
+espera_sucesso "git diff de restaurar.sh passa"   checar_comando_bash "git diff -- infra/backup/restaurar.sh"
+espera_sucesso "sed -n em backup.sh passa"        checar_comando_bash "sed -n 1,40p infra/backup/backup.sh"
+espera_falha   "testes/../backup.sh"              com_cwd /home/x/repo "infra/backup/testes/../backup.sh"
+espera_falha   "programa por glob"                checar_comando_bash "/usr/bin/dock?r stop gestor-api-1"
+espera_falha   "programa por chaves"              checar_comando_bash "{docker,} stop gestor-api-1"
+espera_falha   "pkill por glob"                   checar_comando_bash "/usr/bin/pkil? dotnet"
+espera_falha   "socket por glob"                  checar_comando_bash "curl --unix-socket /var/run/dock*.sock http://localhost/containers/json"
+espera_falha   "docker quebrado com barra e linha" checar_comando_bash $'doc\
+ker stop gestor-api-1'
+espera_falha   "plugin docker-buildx direto"      checar_comando_bash "/usr/libexec/docker/cli-plugins/docker-buildx build -t gestor-api ."
+espera_falha   "skill"                            checar_comando_bash "skill -KILL dotnet"
+espera_falha   "DOCKER_GF_BIN"                    checar_comando_bash "DOCKER_GF_BIN=/tmp/x.sh scripts/docker-gf.sh ps"
+
+# Revisão da guarda, rodada 4.
+# shellcheck disable=SC2016 # o texto do comando, sem expandir, é o que a guarda recebe
+espera_falha   "cd \$HOME/../.. e opt"            com_cwd /home/x/repo 'cd $HOME/../.. && ls opt/gestor-financeiro'
+# shellcheck disable=SC2016 # idem
+espera_falha   "cd \$PWD/../../.. e opt"          com_cwd /home/x/repo 'cd "$PWD/../../.." && cat opt/gestor-financeiro/infra/docker-compose.yml'
+# shellcheck disable=SC2016 # idem
+espera_falha   "find \${HOME}/../.."              com_cwd /home/x/repo 'find "${HOME}/../.." -name compose.yml'
+espera_falha   "timeout -s KILL antes do backup.sh" checar_comando_bash "GF_TMP=/tmp/gf-x timeout -s KILL 600 infra/backup/backup.sh"
+espera_falha   "nice -n antes do backup.sh"        checar_comando_bash "GF_TMP=/tmp/gf-x nice -n 19 infra/backup/backup.sh"
+espera_falha   "timeout --signal= antes do restaurar.sh" checar_comando_bash "timeout --signal=KILL 60 infra/backup/restaurar.sh p -i -"
+espera_falha   "env -C e ./backup.sh"              com_cwd /home/x/repo "env -C infra/backup ./backup.sh"
+espera_falha   "cd / e glob op*"                   checar_comando_bash "cd / && ls op*"
+espera_falha   "cd / e glob o?t"                   checar_comando_bash "cd / && ls o?t"
+espera_falha   "cd / e grep em *"                  checar_comando_bash "cd / && grep -rn POSTGRES *"
+espera_falha   "cd -P /"                           checar_comando_bash "cd -P / && ls opt/gestor-financeiro"
+espera_falha   "cd -- /"                           checar_comando_bash "cd -- / && ls opt/x"
+espera_falha   "if cd /"                           checar_comando_bash "if cd /; then ls opt/x; fi"
+espera_falha   "{ cd /; }"                         checar_comando_bash "{ cd /; ls opt/x; }"
+espera_falha   "GIT_PAGER com docker"              checar_comando_bash "GIT_PAGER=\"docker stop gestor-api-1\" git log"
+espera_sucesso "git add do docker-compose.yml"     checar_comando_bash "git add infra/docker-compose.yml"
+espera_sucesso "git diff do docker-compose.yml"    checar_comando_bash "git diff origin/main -- infra/docker-compose.yml"
+espera_sucesso "find -name docker-compose.yml"     checar_comando_bash "find . -name docker-compose.yml"
+espera_sucesso "glob no repositório passa"         checar_comando_bash "ls src/*.ts"
+mkdir -p "$tmp/repo-falso/infra/secrets" "$tmp/repo-falso/scripts"
+printf 'x\n' >"$tmp/repo-falso/infra/secrets/pg_senha_app"
+espera_falha   "gf: montar diretório com infra/secrets" gf run --rm --name gf-x -v "$tmp/repo-falso:/m:ro" alpine ls /m
+espera_sucesso "gf: montar subdiretório sem segredo"  gf run --rm --name gf-x -v "$tmp/repo-falso/scripts:/m:ro" alpine ls /m
+
+# Revisão da guarda, rodada 5.
+espera_falha   "gf: montar infra/secrets direto"   gf run --rm --name gf-x -v "$tmp/repo-falso/infra/secrets:/s:ro" alpine ls /s
+espera_falha   "gf: montar infra/ (pai dos segredos)" gf run --rm --name gf-x -v "$tmp/repo-falso/infra:/i:ro" alpine ls /i
+espera_falha   "gf: montar infra/secrets do repositório" gf run --rm --name gf-x -v "$raiz/infra/secrets:/s:ro" alpine ls /s
+espera_falha   "gf: montar infra/ do repositório" gf run --rm --name gf-x -v "$raiz/infra:/i:ro" alpine ls /i
+espera_sucesso "find -name backup.sh passa"        checar_comando_bash "find . -name backup.sh"
+espera_sucesso "chmod +x enviar.sh passa"          checar_comando_bash "chmod +x infra/backup/enviar.sh"
+espera_sucesso "bash -n backup.sh passa"           checar_comando_bash "bash -n infra/backup/backup.sh"
+espera_sucesso "[ -x backup.sh ] passa"            checar_comando_bash "[ -x infra/backup/backup.sh ]"
+espera_falha   "cd / e find sem caminho"           checar_comando_bash "cd / && find -name docker-compose.yml"
+espera_falha   "cd / e grep -rn sem caminho"       checar_comando_bash "cd / && grep -rn POSTGRES"
+espera_falha   "cd / e rg"                         checar_comando_bash "cd / && rg senha"
+espera_falha   "cd / e du -sh"                     checar_comando_bash "cd / && du -sh"
+espera_falha   "cd / e ls -R"                      checar_comando_bash "cd / && ls -R"
+espera_sucesso "cd / e ls sem -R passa"            checar_comando_bash "cd / && ls"
+espera_falha   "cd - conta como /"                  com_cwd /home/x/repo "cd / && cd ~ && cd - && find -name docker-compose.yml"
+espera_falha   "gf: montar o /tmp/claude-* inteiro" gf run --rm --name gf-x -v /tmp/claude-1000:/m alpine ls /m
+espera_sucesso "gf: montar o scratchpad da sessão" gf run --rm --name gf-x -v /tmp/claude-0/p/s/scratchpad/sub:/m alpine true
+mkdir -p "$tmp/ctx/infra/secrets" "$tmp/ctx/scripts"; printf 'leia-me\n' >"$tmp/ctx/infra/secrets/README.md"
+espera_sucesso "gf: build com o README de infra/secrets" gf build -q -t gf-api "$tmp/ctx"
+mkdir -p "$tmp/ctx2/infra/secrets"; printf 'leia-me\n' >"$tmp/ctx2/infra/secrets/README.md"; printf 'x\n' >"$tmp/ctx2/infra/secrets/pg_senha_app"
+espera_falha   "gf: build com segredo ao lado do README" gf build -q -t gf-api "$tmp/ctx2"
+if [ "$(id -u)" -ne 0 ]; then
+  mkdir -p "$tmp/ctx3/infra/secrets"; chmod 000 "$tmp/ctx3/infra/secrets"
+  espera_falha "gf: build com infra/secrets ilegível" gf build -q -t gf-api "$tmp/ctx3"
+  chmod 700 "$tmp/ctx3/infra/secrets"
+fi
+espera_falha   "find ~- sozinho"                    com_cwd /home/x/repo "cd / && cd ~ && find ~- -name docker-compose.yml"
+espera_falha   "cd ~- e opt"                        com_cwd /home/x/repo "cd / && cd ~ && cd ~- && ls opt"
+espera_falha   "ls ~-/opt"                          com_cwd /home/x/repo "ls ~-/opt"
+espera_falha   "popd conta como /"                  com_cwd /home/x/repo "cd / && pushd ~ && popd && find -name docker-compose.yml"
+espera_falha   "cd -P -"                            com_cwd /home/x/repo "cd / && cd ~ && cd -P - && find -name x"
+espera_falha   "find ~root/.."                      com_cwd /home/x/repo "find ~root/.. -name docker-compose.yml"
+# shellcheck disable=SC2016 # o texto do comando, sem expandir, é o que a guarda recebe
+espera_falha   "cd \$OLDPWD e opt"                 com_cwd /home/x/repo 'cd $OLDPWD && ls opt'
+# shellcheck disable=SC2016 # idem
+espera_falha   "find \$OLDPWD"                     com_cwd /home/x/repo 'find $OLDPWD -name x'
+# shellcheck disable=SC2016 # idem
+espera_falha   "cd \${PWD}/../../.. e opt"         com_cwd /home/x/repo 'cd ${PWD}/../../.. && ls opt'
 
 # .gitignore cobre os segredos do app.
 for ignorado in android/app/release.jks android/release.keystore android/keystore.properties android/local.properties a/x.p12; do
@@ -288,6 +536,10 @@ confere_hook "hook do Claude barra segredo" 2 '{"file_path":"'"$raiz"'/infra/sec
 confere_hook "hook do Claude deixa .env.example" 0 '{"file_path":"'"$raiz"'/infra/.env.example","content":"a"}'
 confere_hook "hook do Claude deixa teste citar DELETE" 0 '{"file_path":"'"$raiz"'/backend/tests/A.cs","new_string":"DELETE FROM x"}'
 confere_hook "hook do Claude barra editar keystore.properties" 2 '{"file_path":"'"$raiz"'/android/keystore.properties","content":"a"}'
+confere_hook "hook do Claude barra editar em /opt" 2 '{"file_path":"/opt/gestor-financeiro/infra/docker-compose.yml","new_string":"a"}'
+confere_hook "hook do Claude barra escrever em /opt" 2 '{"file_path":"/opt/x.txt","content":"a"}'
+confere_hook "hook do Claude barra //opt" 2 '{"file_path":"//opt/x.txt","content":"a"}'
+confere_hook "hook do Claude barra /home/../../opt" 2 '{"file_path":"/home/pedo/../../opt/x.txt","content":"a"}'
 
 hook_bash="$raiz/.claude/hooks/guardar-bash.sh"
 roda_hook_bash() { printf '%s' "$1" | CLAUDE_PROJECT_DIR="$raiz" "$hook_bash" >/dev/null 2>&1; echo $?; }
@@ -297,6 +549,9 @@ confere_bash "hook Bash barra gradlew --scan"      2 '{"tool_name":"Bash","tool_
 confere_bash "hook Bash barra ler keystore.properties" 2 '{"tool_name":"Bash","tool_input":{"command":"cat \"android/keystore.properties\""}}'
 confere_bash "hook Bash barra ler ~/.android"      2 '{"tool_name":"Bash","tool_input":{"command":"ls -la ~/.android/"}}'
 confere_bash "hook Bash deixa git status"          0 '{"tool_name":"Bash","tool_input":{"command":"git status"}}'
+confere_bash "hook Bash barra /opt"                2 '{"tool_name":"Bash","tool_input":{"command":"ls /opt/gestor-financeiro"}}'
+confere_bash "hook Bash barra docker no gestor"    2 '{"tool_name":"Bash","tool_input":{"command":"docker compose -p gestor down"}}'
+confere_bash "hook Bash barra pkill"               2 '{"tool_name":"Bash","tool_input":{"command":"pkill -f GestorFinanceiro.Api"}}'
 confere_bash "hook Bash deixa entrada sem comando" 0 '{"tool_name":"Bash","tool_input":{}}'
 confere_bash "hook Bash barra entrada malformada"  2 'nao-e-json'
 # Sem jq no PATH o hook tem de bloquear, nunca deixar passar.
