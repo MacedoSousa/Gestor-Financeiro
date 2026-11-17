@@ -52,10 +52,17 @@ internal sealed class DiferencaDoGrupo(LancamentosDbContext db, IUsuarioAtual at
     }
 
     /// <summary>A diferença de agora: o valor no banco da última leitura menos o saldo do sistema hoje (o que já foi gravado).</summary>
-    public async Task<long> DeAgoraAsync(ItemAConferir item, CancellationToken ct)
+    public async Task<long> DeAgoraAsync(ItemAConferir item, CancellationToken ct) =>
+        await DeAgoraAsync(item, await contas.ObterAsync(item.ContaId, ct) ?? throw new InvalidOperationException("Grupo não encontrado no casal."), ct);
+
+    /// <summary>
+    /// O mesmo, com o grupo já lido: quem troca o saldo inicial usa o mesmo retrato para a diferença e para o saldo esperado
+    /// (revisão do E6b pela D25, rodada 2).
+    /// </summary>
+    public async Task<long> DeAgoraAsync(ItemAConferir item, ContaResumo grupo, CancellationToken ct)
     {
         if (item.ValorBancoCentavos is not { } noBanco) throw new InvalidOperationException("Só a diferença do grupo tem valor no banco.");
-        var grupo = await contas.ObterAsync(item.ContaId, ct) ?? throw new InvalidOperationException("Grupo não encontrado no casal.");
+        if (grupo.Id != item.ContaId) throw new ArgumentException("O grupo é o do item.", nameof(grupo));
         return checked(noBanco - (await saldos.SaldosAsync([grupo], Brasilia.Hoje(relogio), ct))[grupo.Id]);
     }
 

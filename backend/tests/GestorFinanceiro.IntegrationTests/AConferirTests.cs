@@ -42,7 +42,7 @@ public partial class AConferirTests(PostgresFixture pg)
         public ValueTask DisposeAsync() => Api.DisposeAsync();
     }
 
-    private async Task<Ctx> IniciarAsync()
+    private async Task<Ctx> IniciarAsync(Action<IServiceCollection>? mais = null)
     {
         var fixo = new CasalFixo();
         var banco = await pg.NovoBancoAsync();
@@ -50,6 +50,7 @@ public partial class AConferirTests(PostgresFixture pg)
         {
             s.AddSingleton(fixo);
             s.AddScoped<IUsuarioAtual, UsuarioDoTeste>();
+            mais?.Invoke(s);
         });
         var pedido = new CadastroDoCasalDto(
             api.CodigoInstalacao, "Família Teste",

@@ -1,7 +1,9 @@
 using System.Net;
 using System.Text.Json;
+using GestorFinanceiro.Modules.Contas.Contracts;
 using GestorFinanceiro.Modules.Lancamentos.Contracts;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Npgsql;
 
 namespace GestorFinanceiro.IntegrationTests;
@@ -325,6 +327,40 @@ public partial class AConferirTests
 
         await tx.CommitAsync();
         await leitura;
+        Assert.Equal("10000|ABERTO|-|true", await DiferencasAsync(c));
+    }
+
+    /// <summary>A correção da D22 (sob a trava do Integracoes) grava o saldo inicial logo antes da troca do "ajustar".</summary>
+    private sealed class D22NoMeio(IContasLigadas real, long saldoDaD22) : IContasLigadas
+    {
+        public Task<ResultadoDaContaLigada> CriarAsync(NovaContaLigada pedido, CancellationToken ct) => real.CriarAsync(pedido, ct);
+        public Task<bool> MarcarLigadaAsync(Guid contaId, CancellationToken ct) => real.MarcarLigadaAsync(contaId, ct);
+        public Task DefinirSaldoInicialAsync(Guid contaId, long centavos, DateOnly em, CancellationToken ct) =>
+            real.DefinirSaldoInicialAsync(contaId, centavos, em, ct);
+        public async Task<bool> TrocarSaldoInicialAsync(Guid contaId, long esperadoCentavos, long novoCentavos, CancellationToken ct)
+        {
+            await real.DefinirSaldoInicialAsync(contaId, saldoDaD22, new DateOnly(2026, 11, 1), ct);
+            return await real.TrocarSaldoInicialAsync(contaId, esperadoCentavos, novoCentavos, ct);
+        }
+        public Task<bool> ArquivarAsync(Guid contaId, CancellationToken ct) => real.ArquivarAsync(contaId, ct);
+        public Task<ResultadoDoDesligar> DesligarAsync(Guid contaId, CancellationToken ct) => real.DesligarAsync(contaId, ct);
+    }
+
+    /// <summary>
+    /// Revisão do E6b pela D25, rodada 2: a correção da D22 grava o saldo inicial entre a leitura do "ajustar" e a troca; a
+    /// troca compara com o retrato lido e recusa (409); o saldo da D22 fica e o item continua aberto.
+    /// </summary>
+    [Fact]
+    public async Task Ajustar_com_o_saldo_inicial_trocado_no_meio_da_409_e_nao_grava()
+    {
+        await using var c = await IniciarAsync(s => s.Replace(ServiceDescriptor.Scoped<IContasLigadas>(sp =>
+            new D22NoMeio(ActivatorUtilities.CreateInstance<GestorFinanceiro.Modules.Contas.Aplicacao.ContasLigadas>(sp), 1_004_000))));
+        await ConferirGrupoAsync(c, 1_010_000);
+
+        var r = await ResolverDiferencaAsync(c, (await ItemDoGrupoAsync(c)).GetProperty("id").GetGuid(), new { opcao = "AJUSTAR_SALDO_INICIAL" });
+
+        Assert.Equal(HttpStatusCode.Conflict, r.StatusCode);
+        Assert.Equal(1_004_000, await EscalarAsync<long>(c.Banco, $"SELECT saldo_inicial_centavos FROM contas.contas WHERE id = '{c.Grupo}'"));
         Assert.Equal("10000|ABERTO|-|true", await DiferencasAsync(c));
     }
 

@@ -245,7 +245,10 @@ internal sealed class AConferir(LancamentosDbContext db, IUsuarioAtual atual, IC
         if (!item.Aberto)
             return (opcao == item.Resolucao ? new ResultadoDeLancamento.Feito() : new ResultadoDeLancamento.Recusado(TituloJaResolvido, 409), false);
 
-        var agora = await diferencaDoGrupo.DeAgoraAsync(item, ct);
+        // Um retrato só do grupo, lido depois da trava do casal: a diferença de agora e o saldo inicial esperado da troca vêm
+        // dele (revisão do E6b pela D25, rodada 2); a correção da D22, sob outra trava, que gravar depois faz a troca dar 409.
+        var grupo = await contas.ObterAsync(item.ContaId, ct) ?? throw new InvalidOperationException("Grupo não encontrado no casal.");
+        var agora = await diferencaDoGrupo.DeAgoraAsync(item, grupo, ct);
         if (agora == 0)
         {
             // Já bate (o ajuste foi gravado e o item não fechou, ou o saldo mudou por outro caminho): fecha, sem lançar de novo.
@@ -260,8 +263,6 @@ internal sealed class AConferir(LancamentosDbContext db, IUsuarioAtual atual, IC
             if (mudou) item.Recalcular(agora);
             return (new ResultadoDeLancamento.Recusado(TituloDiferencaMudou, 409), mudou);
         }
-        // Relido depois da trava do casal: o saldo inicial de agora, para a troca abaixo.
-        var grupo = await contas.ObterAsync(item.ContaId, ct) ?? throw new InvalidOperationException("Grupo não encontrado no casal.");
 
         var hoje = Brasilia.Hoje(relogio);
         switch (opcao)
