@@ -16,6 +16,11 @@ Dados (hoje = 2026-11-11 no teste):
 - aplicações (/investments): nenhuma, a não ser que a variável PLUGGY_FALSO_INVESTIMENTOS aponte
   para um JSON sintético com a lista de "results". O arquivo é relido a cada requisição, para
   mudar o balance (ou deixá-lo nulo) entre duas sincronizações (D21).
+- movimentos da E6: só quando existe o arquivo apontado por PLUGGY_FALSO_E6 (relido a cada requisição),
+  para o testador cobrir no navegador os três tipos de reconhecimento. Entram a poupança "p1" da mesma
+  pessoa e, na corrente: transferência para ela com par (k-5/p-1, 06/11) e sem par (k-6), aplicação (k-7),
+  resgate (k-8) e o lado da corrente do pagamento da fatura fechada (k-9, par do c-2 em 10/10). O k-4
+  (fatura de 05/11) continua sem par: vai para "A conferir".
 """
 import json
 import os
@@ -65,6 +70,32 @@ TRANSACOES = {
         tx("c-3", "2026-11-01T00:00:00.000Z", 1000.00, "DEBIT"),
         tx("c-4", "2026-11-10T03:00:00.000Z", 200.00, "DEBIT", status="PENDING"),
         tx("c-5", "2026-12-05T13:00:00.000Z", 300.00, "DEBIT", parcela=(2, 3)),
+    ],
+}
+
+CONTAS_E6 = [
+    {"id": "p1", "type": "BANK", "subtype": "SAVINGS_ACCOUNT", "name": "Poupança Sintética",
+     "number": "88888-8", "balance": 2800.00, "bankData": {"transferNumber": "0001/88888-8"}},
+]
+
+MESMA_PESSOA = ("04000000", "Same person transfer")
+
+TRANSACOES_E6 = {
+    "k1": [
+        tx("k-5", "2026-11-06T13:00:00.000Z", -800.00, "DEBIT", descricao="Transferência sintética para a poupança",
+           categoria=MESMA_PESSOA),
+        tx("k-6", "2026-11-07T13:00:00.000Z", -150.00, "DEBIT", descricao="Pix sintético para mim",
+           categoria=MESMA_PESSOA),
+        tx("k-7", "2026-11-09T13:00:00.000Z", -1000.00, "DEBIT", descricao="Aplicação CDB sintético",
+           categoria=("03000000", "Investments")),
+        tx("k-8", "2026-11-10T13:00:00.000Z", 400.00, "CREDIT", descricao="Resgate CDB sintético",
+           categoria=("03060000", "Proceeds interests and dividends")),
+        tx("k-9", "2026-10-10T13:00:00.000Z", -500.00, "DEBIT", descricao="Pagamento fatura outubro sintética",
+           categoria=("05100000", "Credit card payment")),
+    ],
+    "p1": [
+        tx("p-1", "2026-11-06T13:00:00.000Z", 800.00, "CREDIT", descricao="Transferência sintética da corrente",
+           categoria=MESMA_PESSOA),
     ],
 }
 
@@ -122,9 +153,11 @@ class Pluggy(BaseHTTPRequestHandler):
                                     "connector": {"id": 600, "name": "MeuPluggy"},
                                     "consentExpiresAt": "2027-11-11T00:00:00.000Z"})
         if url.path == "/accounts" and q.get("itemId") == ITEM:
-            return self._json(200, {"results": CONTAS, "total": len(CONTAS)})
+            contas = CONTAS + (CONTAS_E6 if com_e6() else [])
+            return self._json(200, {"results": contas, "total": len(contas)})
         if url.path == "/v2/transactions":
-            todas = TRANSACOES.get(q.get("accountId"), [])
+            conta = q.get("accountId")
+            todas = TRANSACOES.get(conta, []) + (TRANSACOES_E6.get(conta, []) if com_e6() else [])
             todas = [t for t in todas if t["date"][:10] >= q.get("dateFrom", "0000")]
             if q.get("after") == "pagina-2":
                 return self._json(200, {"results": todas[2:], "next": None})
@@ -138,6 +171,12 @@ class Pluggy(BaseHTTPRequestHandler):
         if url.path == "/transactions":
             return self._json(410, {"message": "gone"})
         return self._json(404, {"message": "não existe"})
+
+
+def com_e6():
+    """Os movimentos da E6 valem enquanto existir o arquivo de PLUGGY_FALSO_E6."""
+    arquivo = os.environ.get("PLUGGY_FALSO_E6")
+    return bool(arquivo) and os.path.exists(arquivo)
 
 
 def investimentos():

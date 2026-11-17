@@ -202,6 +202,38 @@ internal sealed class Transacao : Entidade, ICasalScoped
         DescricaoCifrada = cofre.Cifrar(pendente.LerDescricao(cofre), Cofre.Aad(Tabela, ColunaDescricao, Id));
     }
 
+    /// <summary>
+    /// Parear como transferência (D9, D10, Tarefa 6.1): a linha vira uma perna do par, com o mesmo grupo da outra; mantém o
+    /// id, a data e o valor; a categoria sai (transferência não tem categoria e não conta no uso nem na receita do orçamento) e
+    /// ela passa a REVISADA (o sistema decidiu, ou o casal em "A conferir"). A auditoria do banco grava a mudança.
+    /// </summary>
+    public void VirarPernaDeTransferencia(Guid grupoId)
+    {
+        if (Natureza == NaturezaDaTransacao.Transferencia) throw new InvalidOperationException("Já é transferência.");
+        if (Parcela is not null) throw new InvalidOperationException("Parcela não vira transferência.");
+        Natureza = NaturezaDaTransacao.Transferencia;
+        GrupoId = grupoId;
+        CategoriaId = null;
+        Revisao = RevisaoDaTransacao.Revisada;
+    }
+
+    /// <summary>"É gasto" ou "é receita" em "A conferir": o casal decide a categoria (a natureza é a do sinal).</summary>
+    public void DecidirCategoria(Guid categoriaId)
+    {
+        if (Natureza == NaturezaDaTransacao.Transferencia) throw new InvalidOperationException("Transferência não tem categoria.");
+        CategoriaId = categoriaId;
+        Revisao = RevisaoDaTransacao.Revisada;
+    }
+
+    /// <summary>Lançamento criado pelo sistema (D12): o lado de um par resolvido em "A conferir" (par:&lt;id&gt;).</summary>
+    public static Transacao CriarDoSistema(Guid casalId, Guid contaId, Guid? categoriaId, DateOnly data, long valorComSinal,
+        NaturezaDaTransacao natureza, string descricao, string chave, Guid? grupoId, DateOnly? faturaVencimento, ICofre cofre)
+    {
+        if (valorComSinal == 0) throw new ArgumentException("O valor não pode ser zero.", nameof(valorComSinal));
+        return Montar(casalId, contaId, categoriaId, data, new Dinheiro(valorComSinal), natureza, descricao, null, OrigemDaTransacao.Sistema,
+            chave, null, faturaVencimento, grupoId, null, null, cofre);
+    }
+
     /// <summary>Apagar com 2 sincronizações completas seguidas sem a linha (D19).</summary>
     internal const short AusenciasParaApagar = 2;
 

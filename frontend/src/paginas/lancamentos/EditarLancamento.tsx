@@ -19,6 +19,9 @@ import {
   ehEstorno,
   exigeEscolhaDeCategoria,
   type TipoDeEntrada,
+  deOndeVeio,
+  fimDaNotaDoImportado,
+  oQueSeMudaNoImportado,
 } from "../../lib/lancamentos";
 import { Alerta, Campo, CampoSelecao } from "../Campo";
 
@@ -160,16 +163,14 @@ export function EditarLancamento({
       <h2 id="titulo-editar" className="dialogo-titulo">
         {transferencia ? "Editar transferência" : "Editar lançamento"}
       </h2>
-      {transferencia && (
+      {transferencia && !doBanco && (
         <p className="cartao-nota">
           A mudança vale para as duas contas da transferência.
         </p>
       )}
       {doBanco && (
         <p className="cartao-nota">
-          {l.origem === "MANUAL"
-            ? "Esta conta agora vem do banco. Lançado à mão antes de ligar"
-            : "Veio do banco"}
+          {deOndeVeio(l)}
           :{" "}
           <span className="num">
             {formatarReais(Math.abs(n(l.valorCentavos)))}
@@ -178,11 +179,9 @@ export function EditarLancamento({
           {l.confirmacao === "A_CONFIRMAR"
             ? ", ainda a confirmar no banco"
             : ""}
-          . Aqui você escolhe a categoria e, se quiser, a descrição
-          {l.revisao === "A_REVISAR"
-            ? "; salvar marca como revisado e o lançamento passa a contar no orçamento"
-            : ""}
-          .
+          . {oQueSeMudaNoImportado(transferencia)}
+          {fimDaNotaDoImportado(l)}
+          .{transferencia ? " A mudança vale para as duas contas da transferência." : ""}
           {apagavel
             ? " Se ele repete um lançamento que veio do banco, apague."
             : ""}

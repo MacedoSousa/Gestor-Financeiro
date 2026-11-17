@@ -247,7 +247,8 @@ export function RevisarImportados() {
           </h2>
           {/* D23: o que a etapa 6 reconhece não aparece aqui (a mesma frase da recusa da API). */}
           <p className="cartao-nota" style={{ margin: 0 }}>
-            Pagamento de fatura e transferência entre as contas de vocês são reconhecidos na próxima etapa; não entram no orçamento.
+            Pagamento de fatura e transferência entre as contas de vocês são reconhecidos sozinhos ou vão para “A conferir”; não entram no orçamento.{" "}
+            <Link to="/lancamentos/a-conferir">Ver o que está a conferir</Link>
           </p>
           {carregando && <p className="cartao-nota">Carregando…</p>}
           {grupos.isError && <p className="alerta-form">{grupos.error.message}</p>}

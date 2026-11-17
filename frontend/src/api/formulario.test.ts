@@ -26,11 +26,20 @@ describe("títulos da API que vão para a tela", () => {
   });
 
   it("os da revisão em lote e da D23 passam", async () => {
-    const d23 = "Pagamento de fatura e transferência entre as contas de vocês são reconhecidos na próxima etapa; não entram no orçamento.";
+    const d23 = "Pagamento de fatura e transferência entre as contas de vocês são reconhecidos sozinhos ou vão para “A conferir”; não entram no orçamento.";
     expect(await mensagem(400, { title: d23 })).toBe(d23);
     expect(await mensagem(409, { title: "Algum lançamento do lote já foi revisado. Atualize a página." })).toBe(
       "Algum lançamento do lote já foi revisado. Atualize a página.",
     );
+  });
+
+  it("os de “A conferir” (E6) passam", async () => {
+    for (const titulo of [
+      "O outro lado ainda não veio do banco nessa conta. Tente depois da próxima sincronização.",
+      "Há mais de um lançamento que pode ser o outro lado nessa conta. Resolva pelo extrato.",
+      "Este lançamento já não está disponível. Atualize a página.",
+    ])
+      expect(await mensagem(409, { title: titulo })).toBe(titulo);
   });
 
   it("os do banco escolhido pelo código (D18) passam", async () => {

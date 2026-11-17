@@ -5,6 +5,7 @@ import { useContas } from "../api/contas";
 import { n } from "../api/formulario";
 import { hojeIso, useCategorias, useExtrato, type FiltroDoExtrato, type Lancamento } from "../api/lancamentos";
 import { useARevisar } from "../api/revisao";
+import { useAConferir } from "../api/aConferir";
 import { formatarReais } from "../lib/dinheiro";
 import { contasParaLancar, edicaoEmContaLigada } from "../lib/lancamentos";
 import { nomeDoMes, somarMeses } from "../lib/mes";
@@ -59,6 +60,8 @@ export function Lancamentos() {
   const categorias = useCategorias();
   const aRevisar = useARevisar();
   const haARevisar = (aRevisar.data?.length ?? 0) > 0;
+  const aConferir = useAConferir();
+  const quantosAConferir = aConferir.data?.length ?? 0;
   const [mes, setMes] = useState(() => hojeIso().slice(0, 7));
   const [titular, setTitular] = useState<Titular>();
   const [origem, setOrigem] = useState<"MANUAL" | "OPEN_FINANCE">();
@@ -122,6 +125,12 @@ export function Lancamentos() {
       {haARevisar && (
         <p className="faixa-aviso">
           Há lançamentos do banco a revisar: eles só entram no orçamento depois. <Link to="/lancamentos/revisar">Revisar importados</Link>
+        </p>
+      )}
+      {quantosAConferir > 0 && (
+        <p className="faixa-aviso">
+          {quantosAConferir === 1 ? "1 item" : `${quantosAConferir} itens`} que o sistema não decidiu sozinho.{" "}
+          <Link to="/lancamentos/a-conferir">A conferir</Link>
         </p>
       )}
 

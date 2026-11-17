@@ -37,6 +37,9 @@ public static class LancamentosModule
         services.AddScoped<ServicoDeTransferencias>();
         services.AddScoped<ServicoDeConciliacao>();
         services.AddScoped<SugestaoDeCategoria>();
+        services.AddScoped<Pareamento>();
+        services.AddScoped<Reconhecimento>();
+        services.AddScoped<AConferir>();
         services.AddScoped<IImportacaoDeLancamentos, Importacao>();
         services.AddScoped<Revisao>();
         return services;
@@ -47,5 +50,6 @@ public static class LancamentosModule
         .MapEndpointsDeSaldos()
         .MapEndpointsDeLancamentos()
         .MapEndpointsDeTransferencias()
-        .MapEndpointsDeConciliacao();
+        .MapEndpointsDeConciliacao()
+        .MapEndpointsDeAConferir();
 }

@@ -21,7 +21,7 @@ internal sealed class Revisao(LancamentosDbContext db, IUsuarioAtual atual, ICof
 
     /// <summary>D23: o que a etapa 6 reconhece não é revisado nem mapeado à mão até lá (a tela mostra a mesma frase).</summary>
     internal const string TituloReconhecidoNaProximaEtapa =
-        "Pagamento de fatura e transferência entre as contas de vocês são reconhecidos na próxima etapa; não entram no orçamento.";
+        "Pagamento de fatura e transferência entre as contas de vocês são reconhecidos sozinhos ou vão para “A conferir”; não entram no orçamento.";
     private static readonly string[] Aplicacoes = ["SO_ESTA", "SEMPRE", "SEMPRE_DO_BANCO"];
 
     public async Task<IReadOnlyList<GrupoARevisarDto>?> ListarAsync(CancellationToken ct)

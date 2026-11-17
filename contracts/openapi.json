@@ -1901,6 +1901,91 @@
         }
       }
     },
+    "/api/v1/a-conferir": {
+      "get": {
+        "tags": [
+          "Lancamentos"
+        ],
+        "summary": "Itens abertos de \"A conferir\", com as opções de cada um. Nada é descartado: resolvido sai da lista e fica guardado.",
+        "operationId": "ListarAConferir",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ItemAConferirDto"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/a-conferir/{id}/resolucao": {
+      "post": {
+        "tags": [
+          "Lancamentos"
+        ],
+        "summary": "Resolve um item: TRANSFERENCIA, APORTE ou RESGATE (com contaId), GASTO ou RECEITA (com categoriaId), CIENTE. DEIXAR_PARA_DEPOIS mantém aberto. Repetir num item resolvido não faz nada. Opção que não é do item dá 400.",
+        "operationId": "ResolverAConferir",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResolucaoDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/orcamento": {
       "get": {
         "tags": [
@@ -4865,6 +4950,59 @@
           }
         }
       },
+      "ItemAConferirDto": {
+        "required": [
+          "id",
+          "tipo",
+          "contaId",
+          "contaApelido",
+          "data",
+          "valorCentavos",
+          "descricao",
+          "opcoes"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "tipo": {
+            "type": "string"
+          },
+          "contaId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "contaApelido": {
+            "type": "string"
+          },
+          "data": {
+            "type": "string",
+            "format": "date"
+          },
+          "valorCentavos": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "descricao": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "opcoes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
       "ItemDto": {
         "required": [
           "id",
@@ -5035,6 +5173,10 @@
           "confirmacao": {
             "type": "string",
             "default": "CONFIRMADA"
+          },
+          "entreContas": {
+            "type": "boolean",
+            "default": false
           }
         }
       },
@@ -6206,6 +6348,36 @@
           },
           "codigo": {
             "type": "string"
+          }
+        }
+      },
+      "ResolucaoDto": {
+        "required": [
+          "opcao",
+          "contaId",
+          "categoriaId"
+        ],
+        "type": "object",
+        "properties": {
+          "opcao": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "contaId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "categoriaId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
           }
         }
       },
