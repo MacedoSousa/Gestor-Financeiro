@@ -452,6 +452,60 @@ public class SincronizacaoTests(PostgresFixture pg)
         Assert.Equal(10_000, doGrupo.GetProperty("diferencaCentavos").GetInt64());
     }
 
+    /// <summary>"valor|banco|estado|resolucao (ou -)" dos itens de diferença do grupo (D25), pela chave.</summary>
+    private static Task<string> DiferencasDoGrupoAsync(Ctx c) => EscalarAsync<string>(c.Banco,
+        "SELECT coalesce(string_agg(valor_centavos || '|' || valor_banco_centavos || '|' || estado || '|' || coalesce(resolucao, '-'), ';' ORDER BY chave), '') " +
+        "FROM lancamentos.itens_a_conferir WHERE tipo = 'DIFERENCA_DO_GRUPO'");
+
+    /// <summary>
+    /// D25 do CEO: a sincronização leva a diferença do grupo (só ACTIVE − saldo do sistema) para "A conferir": um item por
+    /// grupo, recalculado a cada leitura, fechado sozinho quando zera. Nada é lançado.
+    /// </summary>
+    [Fact]
+    public async Task Sincronizacao_leva_a_diferenca_do_grupo_para_a_conferir_sem_lancar()
+    {
+        await using var c = await IniciarAsync();
+        var (item, itemPluggy, grupo) = await NascerComGrupoAsync(c);
+        await SincronizarOkAsync(c, item);
+        Assert.Equal("", await DiferencasDoGrupoAsync(c));
+
+        c.Pluggy.AtualizarInvestimento(itemPluggy, new InvestimentoPluggy("cdb-sintetico-1", "FIXED_INCOME", "CDB", "CDB 110%", 2_010_000));
+        await SincronizarOkAsync(c, item);
+        Assert.Equal("10000|2510050|ABERTO|-", await DiferencasDoGrupoAsync(c));
+
+        c.Pluggy.AtualizarInvestimento(itemPluggy, new InvestimentoPluggy("cdb-sintetico-1", "FIXED_INCOME", "CDB", "CDB 110%", 2_015_000));
+        await SincronizarOkAsync(c, item);
+        Assert.Equal("15000|2515050|ABERTO|-", await DiferencasDoGrupoAsync(c));
+        var naCaixa = (await JsonAsync(await c.Bruno.GetAsync("/api/v1/a-conferir"))).EnumerateArray().Single();
+        Assert.Equal(grupo, naCaixa.GetProperty("contaId").GetGuid());
+        Assert.Equal(15_000, naCaixa.GetProperty("valorCentavos").GetInt64());
+
+        c.Pluggy.AtualizarInvestimento(itemPluggy, new InvestimentoPluggy("cdb-sintetico-1", "FIXED_INCOME", "CDB", "CDB 110%", 2_000_000));
+        await SincronizarOkAsync(c, item);
+        Assert.Equal("0|2500050|RESOLVIDO|RESOLVIDO_PELO_BANCO", await DiferencasDoGrupoAsync(c));
+        Assert.Equal(0L, await EscalarAsync<long>(c.Banco, $"SELECT count(*) FROM lancamentos.transacoes WHERE conta_id = '{grupo}'"));
+        Assert.Equal(2_500_050, await EscalarAsync<long>(c.Banco, $"SELECT saldo_inicial_centavos FROM contas.contas WHERE id = '{grupo}'"));
+    }
+
+    /// <summary>D25: aplicação que não é ACTIVE fica fora da diferença; sem saber o valor de todas, o item não muda.</summary>
+    [Fact]
+    public async Task Diferenca_do_grupo_so_conta_as_ativas_e_espera_o_valor()
+    {
+        await using var c = await IniciarAsync();
+        var (item, itemPluggy, _) = await NascerComGrupoAsync(c);
+        c.Pluggy.AtualizarInvestimento(itemPluggy, new InvestimentoPluggy("cdb-sintetico-1", "FIXED_INCOME", "CDB", "CDB 110%", 2_010_000));
+        await SincronizarOkAsync(c, item);
+        Assert.Equal("10000|2510050|ABERTO|-", await DiferencasDoGrupoAsync(c));
+
+        c.Pluggy.AtualizarInvestimento(itemPluggy, new InvestimentoPluggy("cdb-sintetico-2", "FIXED_INCOME", "CDB", "CDB 120%", 500_050, Status: "TOTAL_WITHDRAWAL"));
+        await SincronizarOkAsync(c, item);
+        Assert.Equal("-490050|2010000|ABERTO|-", await DiferencasDoGrupoAsync(c));
+
+        c.Pluggy.AtualizarInvestimento(itemPluggy, new InvestimentoPluggy("cdb-sintetico-1", "FIXED_INCOME", "CDB", "CDB 110%", null));
+        await SincronizarOkAsync(c, item);
+        Assert.Equal("-490050|2010000|ABERTO|-", await DiferencasDoGrupoAsync(c));
+    }
+
     /// <summary>D21, item 4: balance sem valor numa aplicação não derruba a sincronização; o grupo fica sem conferência.</summary>
     [Fact]
     public async Task Aplicacao_sem_valor_no_banco_nao_derruba_a_sincronizacao()

@@ -716,47 +716,46 @@ Task<Guid?> CriarParManualAsync(Guid transacaoImportadaId, Guid contaManualId, C
   - `Aplicacao_vai_para_a_conferir_como_aporte`.
 - [ ] **Passo 2:** rodar → FALHA. Implementar. Rodar → PASSA. Commit "Lancamentos: transferência e pagamento de fatura reconhecidos".
 
-### Tarefa 6.3: Rendimento automático do grupo de investimento
+### Tarefa 6.3: Diferença do grupo de investimento em "A conferir" (CEO, D25)
+
+**CEO, D25 (17/11):** E6b **sem rendimento automático**. Esta versão substitui as regras de rendimento automático desta
+tarefa (a D12 da spec na parte do rendimento calculado e da espera pelo aporte, as "Ordens D21 e D22" que estavam aqui e
+o ajuste automático do saldo inicial pelo primeiro valor de uma aplicação) e as decisões Q1 a Q5 da D24 (aplicação nova,
+diferença negativa fechada pelo banco, ponto de partida e diferença acumulada, IR/IOF). Ficam a D21 "só ACTIVE" e a D22
+(refazer o saldo inicial), que já estão no main.
 
 **Arquivos:**
-- Criar: `Lancamentos/Aplicacao/RendimentoAutomatico.cs`
-- Modificar: `Sincronizacao.cs`, que soma os saldos das aplicações por `conta_id` e chama o rendimento
-- Teste: `backend/tests/GestorFinanceiro.IntegrationTests/RendimentoAutomaticoTests.cs`
+- Criar: `db/migrations/V0022__a_conferir_diferenca_do_grupo.sql` e `Lancamentos/Aplicacao/DiferencaDoGrupo.cs`
+- Modificar: `Sincronizacao.cs` (Integracoes), `AConferir.cs`, `ItemAConferir.cs`, `IImportacaoDeLancamentos.cs`, `ResolucaoDto` e a tela "A conferir"
+- Teste: `AConferirDiferencaDoGrupoTests.cs` e `SincronizacaoTests.cs`
 
-**Interfaces (em `IImportacaoDeLancamentos`):**
-- `Task RegistrarSaldoDoBancoAsync(Guid contaId, DateOnly dia, long saldoDoBancoCentavos, CancellationToken ct)`;
-- `Task<bool> TemMovimentoAConferirAsync(IReadOnlyCollection<Guid> contasIds, CancellationToken ct)`: há item `APORTE_OU_RESGATE` aberto em alguma dessas contas.
+**Interface (em `IImportacaoDeLancamentos`):** `Task ConferirDiferencaDoGrupoAsync(Guid grupoId, DateOnly dia, long valorNoBancoCentavos, CancellationToken ct)`.
 
 **Regras:**
-- A `Sincronizacao` (Integracoes) segura o rendimento **só dos grupos do mesmo item** (decisão 3). Antes de chamar `RegistrarSaldoDoBancoAsync` para os grupos de um item, ela chama `TemMovimentoAConferirAsync` com as contas CONTA daquele item. Se der verdadeiro, pula os grupos desse item; os grupos de outros items seguem.
-- Senão, diferença = saldo do banco − saldo do sistema no dia:
-  - maior que 0 → receita "Rendimentos", origem `SISTEMA`, chave `rendimento:<conta>:<dia>`. Se a chave já existe no dia, **atualiza** o valor para `valor atual + diferença` (decisão de 18h58);
-  - menor que 0 → item `DIFERENCA_NEGATIVA`, chave `diferenca:<conta>:<dia em que abriu>`. Enquanto houver um aberto para a conta, ele é atualizado (valor e data da última leitura), em vez de abrir outro.
-- Opções da diferença negativa (decisão 4): só `IR_IOF_TAXA` e `DEIXAR_PARA_DEPOIS`. Não existe "resgate não identificado".
-- Resolução `IR_IOF_TAXA` → despesa origem `SISTEMA`, chave `ajuste-investimento:<conta>:<dia>`, na categoria escolhida, criada ou atualizada pela chave; o item fica `RESOLVIDO`.
-- Resolução `DEIXAR_PARA_DEPOIS` → nenhum lançamento; o item continua `ABERTO` em "A conferir".
+1. Por grupo, no máximo **um** item aberto `DIFERENCA_DO_GRUPO` (índice parcial único), recalculado a cada sincronização:
+   valor no banco (só aplicações ACTIVE) − saldo do sistema. Diferença zero fecha o item sozinho, resolução
+   `RESOLVIDO_PELO_BANCO`, sem lançamento (a auditoria é a da tabela). A sincronização nunca lança nada. Grupo arquivado,
+   ou com aplicação de situação desconhecida ou ativa sem valor, não mexe no item.
+2. Ações do item (nada é lançado sem a ação do casal; o valor usado é o de agora, e se mudou desde a tela é 409):
+   - positiva: "é rendimento" (`RENDIMENTO`: receita na categoria de papel Rendimentos, data de hoje, chave
+     `rendimento:<conta>:<dia>`, soma no dia) ou "parear com aporte/resgate" (`PAREAR_MOVIMENTO`);
+   - negativa: "IR/IOF ou taxa" (`IR_IOF_TAXA`: despesa na categoria escolhida, chave `ajuste-investimento:<conta>:<dia>`,
+     soma no dia; outra categoria no mesmo dia é 409), "parear com aporte/resgate" ou "deixar para depois";
+   - só no primeiro item de cada grupo: "ajustar o saldo inicial" (`AJUSTAR_SALDO_INICIAL`, pelo Contas, absoluto).
+   - "Parear" escolhe um item `APORTE_OU_RESGATE` aberto (`movimentoId`); ele vira o par corrente ↔ grupo e o item da
+     diferença é recalculado: zerou, fecha (`PAREADO_COM_MOVIMENTO`); sobrou, continua aberto com o resto. Aporte ou
+     resgate resolvido pela própria corrente também recalcula o item do grupo.
+3. Sem janela de dias, tolerância ou espera por aporte.
 
-- Ordens D21 e D22 do CEO (13/11):
-  - o primeiro valor de uma aplicação que estava sem valor ajusta o saldo inicial do grupo e nunca vira rendimento (D21);
-  - ler o saldo do grupo depois de lançar o rendimento (D21);
-  - grupo só reúne aplicações do mesmo banco (D21);
-  - lançar rendimento usa a mesma trava de conta da correção da D22;
-  - diferença negativa num grupo não refeito pode ser sobra da D22, não rendimento.
+- [x] **Passo 1:** testes que falham: um item por grupo e recálculo; fechamento sozinho; cada ação (rendimento, IR/IOF,
+  parear com aporte, parear com resgate deixando o resto, deixar para depois, ajustar só no primeiro, ajustar de novo depois
+  da queda); valor velho dá 409; grupo arquivado dá 409; isolamento entre casais; a sincronização leva a diferença sem lançar.
+- [x] **Passo 2:** rodar → FALHA. Implementar. Rodar → PASSA.
+- [x] **Passo 3:** front "A conferir" com as opções da diferença. Regerar o cliente.
 
-- [ ] **Passo 1:** testes que falham:
-  - `Diferenca_positiva_vira_rendimento`;
-  - `Segunda_sincronizacao_do_dia_atualiza_o_mesmo_rendimento`;
-  - `Diferenca_negativa_vai_para_a_conferir_e_nunca_some`;
-  - `IR_IOF_cria_despesa_na_categoria_escolhida`;
-  - `Deixar_para_depois_nao_lanca_e_mantem_aberto`;
-  - `Diferenca_negativa_aberta_e_atualizada_nao_duplicada`;
-  - `Resgate_nao_identificado_nao_e_opcao`: a opção é recusada com 400;
-  - `Aporte_pendente_segura_so_os_grupos_do_mesmo_item`: aporte aberto na corrente do item A → grupo do item A sem rendimento; grupo do item B com rendimento;
-  - `Rendimento_nao_entra_na_receita_do_orcamento` (regra existente).
-- [ ] **Passo 2:** rodar → FALHA. Implementar. Rodar → PASSA.
-- [ ] **Passo 3:** front "A conferir", com as opções por tipo. Regerar o cliente. Commit "Lancamentos: rendimento automático e A conferir no front".
+**Pronto quando:** verde, e o QA resolveu no navegador uma diferença positiva (rendimento), uma negativa (IR/IOF) e um par com aporte.
 
-**Pronto quando:** verde, e o QA resolveu uma transferência, um pagamento de fatura e uma diferença negativa no navegador.
+**Fora do E6b (CEO, D25), tarefa à parte depois:** juntar uma aplicação nova a um grupo existente pela tela.
 
 ---
 
@@ -852,8 +851,8 @@ Decisões sobre o "Para o CEO" da primeira versão deste plano (PR #30). Elas va
 
 1. **Nome do banco** (CEO 11/11 19h). O nome digitado nunca entra na trava de conta repetida. A trava usa agência e conta, mais o código do banco se a medição mostrar que ele vem da Pluggy. O nome serve só ao apelido. → Tarefas 1.0 (item 7 da medição), 1.3 (`ContaPluggy.CodigoDoBanco`) e 3.2.
 2. **Mapa de categorias** (CEO 11/11 19h). Editável em "Revisar importados", com o botão "sempre que o banco disser <categoria>"; sem aprendizado silencioso. → Tarefa 5.2.
-3. **Aporte pendente** (CEO 11/11 19h). Segura o rendimento só dos grupos do mesmo item. → Tarefa 6.3.
-4. **Diferença negativa** (CEO 11/11 19h). "Resgate não identificado" sai. Ficam "IR/IOF ou taxa" (despesa na categoria escolhida, chave `ajuste-investimento`) e "deixar para depois" (fica em "A conferir", sem lançamento). → Tarefas 6.1 e 6.3.
+3. **Aporte pendente** (CEO 11/11 19h). Segura o rendimento só dos grupos do mesmo item. → Tarefa 6.3. *Substituída pela D25 (17/11): não há rendimento automático nem espera.*
+4. **Diferença negativa** (CEO 11/11 19h). "Resgate não identificado" sai. Ficam "IR/IOF ou taxa" (despesa na categoria escolhida, chave `ajuste-investimento`) e "deixar para depois" (fica em "A conferir", sem lançamento). → Tarefas 6.1 e 6.3. *Vale também na D25, mais "parear com aporte/resgate".*
 5. **Descrição depois da revisão** (CEO 11/11 19h). Passa a ser do casal, como a categoria. → Tarefa 4.3.
 6. **Portador do cartão por HMAC** (CEO 11/11 19h): confirmado. → Tarefa 3.2.
 7. **Arquivar conta ligada** (CEO 11/11 19h). Desliga a sincronização do vínculo e mantém o histórico. Desarquivar religa e importa o período que ficou de fora. Apagar continua recusado. → Tarefas 3.1, 3.2 (`importado_ate`) e 4.5.

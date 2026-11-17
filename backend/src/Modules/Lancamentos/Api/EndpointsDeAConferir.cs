@@ -31,8 +31,10 @@ internal static class EndpointsDeAConferir
                 var outro => throw new UnreachableException(outro.GetType().Name),
             })
         .WithName("ResolverAConferir")
-        .WithSummary("Resolve um item: TRANSFERENCIA, APORTE ou RESGATE (com contaId), GASTO ou RECEITA (com categoriaId), CIENTE. " +
-                     "DEIXAR_PARA_DEPOIS mantém aberto. Repetir num item resolvido não faz nada. Opção que não é do item dá 400.")
+        .WithSummary("Resolve um item: TRANSFERENCIA, APORTE ou RESGATE (com contaId), GASTO, RECEITA ou IR_IOF_TAXA (com categoriaId), " +
+                     "PAREAR_MOVIMENTO (com movimentoId), RENDIMENTO, AJUSTAR_SALDO_INICIAL, CIENTE. DEIXAR_PARA_DEPOIS mantém aberto. " +
+                     "Repetir a mesma opção num item resolvido não faz nada; outra opção dá 409. Diferença do grupo que mudou desde a tela dá 409. " +
+                     "Opção que não é do item dá 400.")
         .ProducesProblem(StatusCodes.Status400BadRequest)
         .ProducesProblem(StatusCodes.Status409Conflict);
 

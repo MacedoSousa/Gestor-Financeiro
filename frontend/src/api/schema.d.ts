@@ -1779,6 +1779,8 @@ export interface components {
             contaId: null | string;
             /** Format: uuid */
             categoriaId: null | string;
+            /** Format: uuid */
+            movimentoId?: null | string;
         };
         RespostaDeLoginComPasskeyDto: {
             id: string;

@@ -51,12 +51,17 @@ const TITULOS: ReadonlySet<string> = new Set([
   "O outro lado ainda não veio do banco nessa conta. Tente depois da próxima sincronização.",
   "Há mais de um lançamento que pode ser o outro lado nessa conta. Resolva pelo extrato.",
   "Este lançamento já não está disponível. Atualize a página.",
+  "Este item já foi resolvido. Atualize a página.",
+  "O grupo foi arquivado ou não vem mais do banco. Atualize a página.",
+  "A diferença deste grupo mudou desde que a tela foi aberta. Confira de novo.",
 ]);
 
 /** Títulos com o nome do cônjuge ou do grupo: só no formato exato, com o nome curto e sem ponto no meio. */
 const PADROES: readonly RegExp[] = [
   /^Esta conta já vem da conexão de [^.]{1,60}\.$/u,
   /^Não deu para ligar o grupo [^.]{1,60} à meta escolhida\.$/u,
+  // D25: o ajuste de IR/IOF do dia já está noutra categoria (o nome é do casal).
+  /^O ajuste deste dia já está em “[^“”]{1,60}”\. Escolha a mesma, ou mude a categoria do ajuste em Lançamentos\.$/u,
 ];
 
 /** O título pode ir para a tela? Só os fixos acima e os padrões com nome. */

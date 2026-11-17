@@ -19,7 +19,7 @@ namespace GestorFinanceiro.IntegrationTests;
 /// Dados sintéticos; relógio em 05/11/2026 (quinta-feira).
 /// </summary>
 [Collection("postgres")]
-public class AConferirTests(PostgresFixture pg)
+public partial class AConferirTests(PostgresFixture pg)
 {
     private static readonly DateOnly Desde = new(2026, 1, 1);
     private const string Fatura = "05100000";

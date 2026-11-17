@@ -157,3 +157,18 @@ Numeração dos itens da revisão. Esta seção prevalece sobre as anteriores.
 - **D21 (auditoria):** o campo `ip` registra `sistema:integracoes` nas gravações do job; sem coluna nova.
 - **D27 (regra 9 e Identidade):** a exceção que o código já tem passa para o `CLAUDE.md`: o `Identidade` pode desligar o filtro `Casal` só nos fluxos anteriores à sessão (login, sessões, pedido de dispositivo, recuperação, primeiro acesso). O plano acrescenta um teste de arquitetura que lista os lugares permitidos.
 - **D28 (instalação de root):** `/opt/gestor-financeiro` passa a pertencer ao root (menos `infra/data/` e os arquivos da API com dono 1654). Operações na instalação de verdade são só da pessoa, com `sudo` (`sudo git -C /opt/gestor-financeiro pull`, `sudo docker compose ...`). Agentes trabalham só em `~/Gestor-Financeiro` e `~/gf-qa`, nunca em `/opt`. Risco aceito e registrado: estar no grupo `docker` equivale a ser root (ADR-013); a troca de dono impede a alteração por engano, não um ataque de quem já roda como o usuário.
+
+### Ordem do CEO, D25 (17/11): E6b sem rendimento automático
+
+Prevalece sobre a D12 na parte do rendimento (o "rendimento do dia calculado depois que não houver aporte pendente" e a
+"diferença positiva → Rendimentos" automática), sobre as regras de rendimento automático da Tarefa 6.3 do plano (inclusive
+o ajuste automático do saldo inicial pelo primeiro valor de uma aplicação) e sobre as decisões Q1 a Q5 da D24.
+
+1. Por grupo de investimento, no máximo **um item aberto** em "A conferir", recalculado a cada sincronização: valor no banco
+   (só ACTIVE) − saldo do sistema. Diferença zero fecha o item sozinho ("resolvido pelo banco"), sem lançamento e com auditoria.
+2. Ações do item: positiva → "é rendimento" (receita Rendimentos, data de hoje, chave `rendimento:<conta>:<dia>`) ou
+   "parear com aporte/resgate"; negativa → "IR/IOF ou taxa" (despesa, chave `ajuste-investimento:<conta>:<dia>`), "parear
+   com aporte/resgate" ou "deixar para depois"; só no primeiro item de cada grupo → "ajustar o saldo inicial". **Nada é
+   lançado sem a ação do casal.**
+3. Sem janela de dias, tolerância ou espera por aporte.
+4. Fora do E6b, tarefa à parte depois: juntar aplicação nova a um grupo existente pela tela.

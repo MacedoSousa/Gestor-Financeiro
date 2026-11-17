@@ -14,9 +14,9 @@ export function useAConferir() {
 }
 
 /** Resolve um item. Repetir num item já resolvido não faz nada (a API responde 204). */
-export const resolverItem = (id: string, opcao: string, contaId: string | null, categoriaId: string | null) =>
+export const resolverItem = (id: string, opcao: string, contaId: string | null, categoriaId: string | null, movimentoId: string | null = null) =>
   chamarFormulario(
-    () => api.POST("/api/v1/a-conferir/{id}/resolucao", { params: { path: { id } }, body: { opcao, contaId, categoriaId } }),
+    () => api.POST("/api/v1/a-conferir/{id}/resolucao", { params: { path: { id } }, body: { opcao, contaId, categoriaId, movimentoId } }),
     "Não foi possível resolver. Tente de novo.",
     "Este item já não existe. Atualize a página.",
   );

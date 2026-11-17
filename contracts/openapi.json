@@ -6378,6 +6378,13 @@
               "string"
             ],
             "format": "uuid"
+          },
+          "movimentoId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
           }
         }
       },

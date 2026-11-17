@@ -1,10 +1,10 @@
-/** Lógica de exibição da caixa "A conferir" (Fase 2, Tarefas 6.1 e 6.2). Nenhum valor é calculado aqui: vêm da API. */
+/** Lógica de exibição da caixa "A conferir" (Fase 2, Tarefas 6.1 a 6.3). Nenhum valor é calculado aqui: vêm da API. */
 
 type ItemBasico = { tipo: string; valorCentavos: number | string };
 type ContaBasica = { id: string; tipo: string; arquivada: boolean };
 type CategoriaBasica = { id: string; tipo: string; arquivada: boolean };
 
-export type Pede = "conta" | "categoria" | "nada";
+export type Pede = "conta" | "categoria" | "movimento" | "nada";
 
 export function tituloDoItem(item: ItemBasico): string {
   const saida = Number(item.valorCentavos) < 0;
@@ -17,6 +17,8 @@ export function tituloDoItem(item: ItemBasico): string {
       return "Compra a confirmar que o banco tirou";
     case "PENDENTE_SEM_PAR":
       return "Compra a confirmar sem uma definitiva única";
+    case "DIFERENCA_DO_GRUPO":
+      return saida ? "O banco mostra menos que o sistema no investimento" : "O banco mostra mais que o sistema no investimento";
     default:
       return "Item a conferir";
   }
@@ -28,6 +30,10 @@ const ROTULOS: Record<string, string> = {
   RECEITA: "É receita",
   APORTE: "É aporte num investimento",
   RESGATE: "É resgate de um investimento",
+  RENDIMENTO: "É rendimento",
+  IR_IOF_TAXA: "É IR, IOF ou taxa",
+  PAREAR_MOVIMENTO: "Veio de um aporte ou resgate",
+  AJUSTAR_SALDO_INICIAL: "Ajustar o saldo inicial do grupo",
   CIENTE: "Ciente",
   DEIXAR_PARA_DEPOIS: "Deixar para depois",
 };
@@ -36,7 +42,8 @@ export const rotuloDaOpcao = (opcao: string): string => ROTULOS[opcao] ?? opcao;
 
 export function oQuePede(opcao: string): Pede {
   if (opcao === "TRANSFERENCIA" || opcao === "APORTE" || opcao === "RESGATE") return "conta";
-  if (opcao === "GASTO" || opcao === "RECEITA") return "categoria";
+  if (opcao === "GASTO" || opcao === "RECEITA" || opcao === "IR_IOF_TAXA") return "categoria";
+  if (opcao === "PAREAR_MOVIMENTO") return "movimento";
   return "nada";
 }
 
@@ -67,7 +74,12 @@ export function contaSugerida(opcao: string, contaDoItem: string, contas: readon
   return unica && outras.length === 0 ? unica.id : "";
 }
 
-/** Categorias não arquivadas: receita para "é receita", despesa para "é gasto". */
+/** D25: a diferença do grupo se pareia com um aporte ou resgate ainda aberto em "A conferir" (a API recusa o resto). */
+export function movimentosAbertos<I extends { tipo: string }>(itens: readonly I[]): I[] {
+  return itens.filter((i) => i.tipo === "APORTE_OU_RESGATE");
+}
+
+/** Categorias não arquivadas: receita para "é receita", despesa para "é gasto" e "IR, IOF ou taxa". */
 export function categoriasDaOpcao<C extends CategoriaBasica>(opcao: string, categorias: readonly C[]): C[] {
   if (oQuePede(opcao) !== "categoria") return [];
   const tipo = opcao === "RECEITA" ? "RECEITA" : "DESPESA";
@@ -85,6 +97,14 @@ export function textoDaResolucao(opcao: string): string {
     case "GASTO":
     case "RECEITA":
       return "Resolvido: o lançamento passa a contar no orçamento.";
+    case "RENDIMENTO":
+      return "Resolvido: a diferença entrou como rendimento.";
+    case "IR_IOF_TAXA":
+      return "Resolvido: a despesa foi lançada no investimento.";
+    case "AJUSTAR_SALDO_INICIAL":
+      return "Resolvido: o saldo inicial do grupo foi ajustado.";
+    case "PAREAR_MOVIMENTO":
+      return "Pareado: o aporte ou resgate entrou no grupo. Se sobrou diferença, ela continua aqui.";
     case "DEIXAR_PARA_DEPOIS":
       return "Fica em “A conferir” para depois.";
     default:

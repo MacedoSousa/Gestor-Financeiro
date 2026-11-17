@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { avisoDaConta, contaSugerida, contasDaOpcao, categoriasDaOpcao, oQuePede, rotuloDaOpcao, textoDaResolucao, tituloDoItem } from "./aConferir";
+import {
+  avisoDaConta,
+  contaSugerida,
+  contasDaOpcao,
+  categoriasDaOpcao,
+  movimentosAbertos,
+  oQuePede,
+  rotuloDaOpcao,
+  textoDaResolucao,
+  tituloDoItem,
+} from "./aConferir";
 
 const conta = (id: string, tipo: string, arquivada = false) => ({ id, apelido: id, tipo, arquivada });
 const contas = [
@@ -83,5 +93,29 @@ describe("A conferir (Tarefas 6.1 e 6.2)", () => {
     expect(textoDaResolucao("RECEITA")).toBe("Resolvido: o lançamento passa a contar no orçamento.");
     expect(textoDaResolucao("CIENTE")).toBe("Resolvido.");
     expect(textoDaResolucao("DEIXAR_PARA_DEPOIS")).toBe("Fica em “A conferir” para depois.");
+  });
+
+  it("6.3 (CEO, D25): a diferença do grupo de investimento e as ações do casal", () => {
+    expect(tituloDoItem({ tipo: "DIFERENCA_DO_GRUPO", valorCentavos: 100 })).toBe("O banco mostra mais que o sistema no investimento");
+    expect(tituloDoItem({ tipo: "DIFERENCA_DO_GRUPO", valorCentavos: "-100" })).toBe("O banco mostra menos que o sistema no investimento");
+    expect(rotuloDaOpcao("RENDIMENTO")).toBe("É rendimento");
+    expect(rotuloDaOpcao("IR_IOF_TAXA")).toBe("É IR, IOF ou taxa");
+    expect(rotuloDaOpcao("PAREAR_MOVIMENTO")).toBe("Veio de um aporte ou resgate");
+    expect(rotuloDaOpcao("AJUSTAR_SALDO_INICIAL")).toBe("Ajustar o saldo inicial do grupo");
+    expect(oQuePede("RENDIMENTO")).toBe("nada");
+    expect(oQuePede("AJUSTAR_SALDO_INICIAL")).toBe("nada");
+    expect(oQuePede("IR_IOF_TAXA")).toBe("categoria");
+    expect(oQuePede("PAREAR_MOVIMENTO")).toBe("movimento");
+    expect(categoriasDaOpcao("IR_IOF_TAXA", categorias).map((c) => c.id)).toEqual(["mercado"]);
+    expect(contasDaOpcao("PAREAR_MOVIMENTO", "cdb", contas)).toEqual([]);
+    expect(textoDaResolucao("RENDIMENTO")).toBe("Resolvido: a diferença entrou como rendimento.");
+    expect(textoDaResolucao("IR_IOF_TAXA")).toBe("Resolvido: a despesa foi lançada no investimento.");
+    expect(textoDaResolucao("AJUSTAR_SALDO_INICIAL")).toBe("Resolvido: o saldo inicial do grupo foi ajustado.");
+    expect(textoDaResolucao("PAREAR_MOVIMENTO")).toBe("Pareado: o aporte ou resgate entrou no grupo. Se sobrou diferença, ela continua aqui.");
+  });
+
+  it("6.3 (CEO, D25): só os aportes e resgates abertos servem para parear", () => {
+    const item = (id: string, tipo: string) => ({ id, tipo, valorCentavos: -100 });
+    expect(movimentosAbertos([item("a", "APORTE_OU_RESGATE"), item("b", "DIFERENCA_DO_GRUPO"), item("c", "TRANSFERENCIA_SEM_PAR"), item("d", "APORTE_OU_RESGATE")]).map((i) => i.id)).toEqual(["a", "d"]);
   });
 });

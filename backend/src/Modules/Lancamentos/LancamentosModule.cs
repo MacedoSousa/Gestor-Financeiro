@@ -39,6 +39,7 @@ public static class LancamentosModule
         services.AddScoped<SugestaoDeCategoria>();
         services.AddScoped<Pareamento>();
         services.AddScoped<Reconhecimento>();
+        services.AddScoped<DiferencaDoGrupo>();
         services.AddScoped<AConferir>();
         services.AddScoped<IImportacaoDeLancamentos, Importacao>();
         services.AddScoped<Revisao>();

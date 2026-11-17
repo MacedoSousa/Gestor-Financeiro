@@ -207,7 +207,7 @@ describe("textos da sincronização (Tarefa 4.5)", () => {
     expect(textoDoGrupoNoBanco(2_510_050, 10_000)).toEqual({
       antes: "No banco hoje: ",
       valor: "R$\u00a025.100,50",
-      depois: " · o rendimento entra no sistema na próxima etapa",
+      depois: " · a diferença vai para “A conferir”",
     });
     expect(textoDoGrupoNoBanco(2_500_050, null)).toBeNull();
     expect(textoDoGrupoNoBanco(null, null)).toBeNull();

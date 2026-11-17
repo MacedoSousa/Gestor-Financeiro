@@ -38,6 +38,9 @@ describe("títulos da API que vão para a tela", () => {
       "O outro lado ainda não veio do banco nessa conta. Tente depois da próxima sincronização.",
       "Há mais de um lançamento que pode ser o outro lado nessa conta. Resolva pelo extrato.",
       "Este lançamento já não está disponível. Atualize a página.",
+      "Este item já foi resolvido. Atualize a página.",
+      "O grupo foi arquivado ou não vem mais do banco. Atualize a página.",
+      "A diferença deste grupo mudou desde que a tela foi aberta. Confira de novo.",
     ])
       expect(await mensagem(409, { title: titulo })).toBe(titulo);
   });
@@ -47,6 +50,12 @@ describe("títulos da API que vão para a tela", () => {
       "Escolha o banco desta conexão antes de ver as contas.",
     );
     expect(await mensagem(409, { title: "O banco desta conexão já foi escolhido." })).toBe("O banco desta conexão já foi escolhido.");
+  });
+
+  it("o do ajuste do dia em outra categoria passa com o nome da categoria (D25)", async () => {
+    const t = "O ajuste deste dia já está em “Casa e contas”. Escolha a mesma, ou mude a categoria do ajuste em Lançamentos.";
+    expect(await mensagem(409, { title: t })).toBe(t);
+    expect(await mensagem(409, { title: "O ajuste deste dia já está em “x”. Outra coisa." })).toBe("genérica");
   });
 
   it("os com nome passam só no formato exato", async () => {

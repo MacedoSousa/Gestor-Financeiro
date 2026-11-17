@@ -12,4 +12,5 @@ public sealed record ItemAConferirDto(Guid Id, string Tipo, Guid ContaId, string
 /// <param name="Opcao">Uma das opções do item.</param>
 /// <param name="ContaId">TRANSFERENCIA, APORTE e RESGATE: a outra conta do par.</param>
 /// <param name="CategoriaId">GASTO e RECEITA: a categoria.</param>
-public sealed record ResolucaoDto(string? Opcao, Guid? ContaId, Guid? CategoriaId);
+/// <param name="MovimentoId">PAREAR_MOVIMENTO (diferença do grupo, D25): o item de aporte ou resgate aberto que vira o par com o grupo.</param>
+public sealed record ResolucaoDto(string? Opcao, Guid? ContaId, Guid? CategoriaId, Guid? MovimentoId = null);

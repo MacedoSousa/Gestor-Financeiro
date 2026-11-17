@@ -19,7 +19,7 @@ namespace GestorFinanceiro.Modules.Lancamentos.Aplicacao;
 /// valor, descrição ou id do banco vai para log ou exceção.
 /// </summary>
 internal sealed class Importacao(LancamentosDbContext db, IUsuarioAtual atual, IConsultaDeContas contas, ICofre cofre,
-    SugestaoDeCategoria sugestao, Reconhecimento reconhecimento)
+    SugestaoDeCategoria sugestao, Reconhecimento reconhecimento, DiferencaDoGrupo diferencaDoGrupo)
     : IImportacaoDeLancamentos
 {
     /// <summary>Pendente → definitiva: a data da definitiva fica até 3 dias da pendente (spec, números da Fase 2).</summary>
@@ -172,6 +172,9 @@ internal sealed class Importacao(LancamentosDbContext db, IUsuarioAtual atual, I
     }
 
     public Task ReconhecerMovimentosAsync(DateOnly desde, CancellationToken ct) => reconhecimento.ReconhecerAsync(desde, ct);
+
+    public Task ConferirDiferencaDoGrupoAsync(Guid grupoId, DateOnly dia, long valorNoBancoCentavos, CancellationToken ct) =>
+        diferencaDoGrupo.ConferirAsync(grupoId, dia, valorNoBancoCentavos, ct);
 
     /// <summary>Mesma conta (já filtrada), mesmo valor, data até 3 dias e descrição do banco parecida (a do casal não conta).</summary>
     private bool Par(Transacao pendente, Transacao definitiva) =>

@@ -139,7 +139,7 @@ export function textoDaDiferenca(centavos: number | null | undefined): FraseComV
 
 /**
  * Grupo de investimento (D21): o valor no banco, só quando difere do saldo do sistema na última sincronização. Nada é
- * lançado: o rendimento entra no sistema na próxima etapa (E6).
+ * lançado: a diferença vai para "A conferir", e o casal decide (E6b, CEO, D25).
  */
 export function textoDoGrupoNoBanco(
   valorNoBancoCentavos: number | null | undefined,
@@ -149,7 +149,7 @@ export function textoDoGrupoNoBanco(
   return {
     antes: "No banco hoje: ",
     valor: formatarReais(valorNoBancoCentavos),
-    depois: " · o rendimento entra no sistema na próxima etapa",
+    depois: " · a diferença vai para “A conferir”",
   };
 }
 

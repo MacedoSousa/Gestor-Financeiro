@@ -225,7 +225,20 @@ internal sealed class Transacao : Entidade, ICasalScoped
         Revisao = RevisaoDaTransacao.Revisada;
     }
 
-    /// <summary>Lançamento criado pelo sistema (D12): o lado de um par resolvido em "A conferir" (par:&lt;id&gt;).</summary>
+    /// <summary>
+    /// Rendimento ou ajuste de investimento (IR/IOF ou taxa) do sistema que já existe no dia, pela chave: soma o de outro item
+    /// resolvido no mesmo dia (CEO, D25). Cada item só se resolve uma vez, então somar não duplica.
+    /// </summary>
+    public void SomarNoDia(long valorComSinal)
+    {
+        if (Origem != OrigemDaTransacao.Sistema || Natureza is not (NaturezaDaTransacao.Receita or NaturezaDaTransacao.Despesa))
+            throw new InvalidOperationException("Só rendimento ou ajuste do sistema soma no dia.");
+        if (valorComSinal == 0 || (Natureza == NaturezaDaTransacao.Receita) != (valorComSinal > 0))
+            throw new ArgumentException("O sinal é o do lançamento.", nameof(valorComSinal));
+        ValorCentavos = checked(ValorCentavos + valorComSinal);
+    }
+
+    /// <summary>Lançamento criado pelo sistema (D12, D25): o lado de um par resolvido em "A conferir" (par:&lt;id&gt;), o rendimento ou o ajuste do grupo.</summary>
     public static Transacao CriarDoSistema(Guid casalId, Guid contaId, Guid? categoriaId, DateOnly data, long valorComSinal,
         NaturezaDaTransacao natureza, string descricao, string chave, Guid? grupoId, DateOnly? faturaVencimento, ICofre cofre)
     {
