@@ -70,7 +70,7 @@ internal sealed class ServicoDeConciliacao(LancamentosDbContext db, IUsuarioAtua
             return new ResultadoDaConciliacao.Feita(new ConciliacaoDto(diferenca == 0 ? Confere : Menor, diferenca, null));
         }
 
-        var categoriaId = await CategoriaDeRendimentosAsync(casalId, ct);
+        var categoriaId = await CategoriaDeRendimentosAsync(db, casalId, ct);
         var receita = Transacao.CriarReceita(casalId, conta.Id, categoriaId, hoje, new Dinheiro(diferenca), Descricao, null,
             OrigemDaTransacao.Manual, "conciliacao:" + Guid.CreateVersion7().ToString("D"), atual.UsuarioId, null, cofre);
         db.Transacoes.Add(receita);
@@ -97,7 +97,7 @@ internal sealed class ServicoDeConciliacao(LancamentosDbContext db, IUsuarioAtua
     /// (a V0009 pula quem já tinha uma despesa "Rendimentos"), cria "Rendimentos", ou "Rendimentos (conciliação)" se o
     /// nome estiver tomado. Roda dentro da transação com o lock do casal.
     /// </summary>
-    private async Task<Guid> CategoriaDeRendimentosAsync(Guid casalId, CancellationToken ct)
+    internal static async Task<Guid> CategoriaDeRendimentosAsync(LancamentosDbContext db, Guid casalId, CancellationToken ct)
     {
         var existente = await db.Categorias.AsNoTracking()
             .Where(c => c.Papel == PapelDeCategoria.Rendimentos).Select(c => (Guid?)c.Id).FirstOrDefaultAsync(ct);

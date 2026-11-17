@@ -19,7 +19,7 @@ namespace GestorFinanceiro.IntegrationTests;
 /// Dados sintéticos; relógio em 05/11/2026 (quinta-feira).
 /// </summary>
 [Collection("postgres")]
-public class AConferirTests(PostgresFixture pg)
+public partial class AConferirTests(PostgresFixture pg)
 {
     private static readonly DateOnly Desde = new(2026, 1, 1);
     private const string Fatura = "05100000";
@@ -42,7 +42,7 @@ public class AConferirTests(PostgresFixture pg)
         public ValueTask DisposeAsync() => Api.DisposeAsync();
     }
 
-    private async Task<Ctx> IniciarAsync()
+    private async Task<Ctx> IniciarAsync(Action<IServiceCollection>? mais = null)
     {
         var fixo = new CasalFixo();
         var banco = await pg.NovoBancoAsync();
@@ -50,6 +50,7 @@ public class AConferirTests(PostgresFixture pg)
         {
             s.AddSingleton(fixo);
             s.AddScoped<IUsuarioAtual, UsuarioDoTeste>();
+            mais?.Invoke(s);
         });
         var pedido = new CadastroDoCasalDto(
             api.CodigoInstalacao, "Família Teste",

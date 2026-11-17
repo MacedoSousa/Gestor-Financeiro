@@ -70,7 +70,9 @@ export function exigeEscolhaDeCategoria(l: Pick<Lancamento, "revisao" | "categor
 export function deOndeVeio(l: { origem: string; natureza: string }): string {
   if (l.origem === "MANUAL") return "Esta conta agora vem do banco. Lançado à mão antes de ligar";
   if (l.origem !== "SISTEMA") return "Veio do banco";
-  return "Criado pelo sistema como o outro lado, ao resolver em “A conferir”";
+  return l.natureza === "TRANSFERENCIA"
+    ? "Criado pelo sistema como o outro lado, ao resolver em “A conferir”"
+    : "Lançado pelo sistema ao resolver a diferença do investimento em “A conferir”";
 }
 
 /** Transferência do banco não tem categoria (D9): no editor, só a descrição muda. */

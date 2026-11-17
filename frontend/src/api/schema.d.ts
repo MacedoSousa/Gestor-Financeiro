@@ -719,7 +719,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Resolve um item: TRANSFERENCIA, APORTE ou RESGATE (com contaId), GASTO ou RECEITA (com categoriaId), CIENTE. DEIXAR_PARA_DEPOIS mantém aberto. Repetir num item resolvido não faz nada. Opção que não é do item dá 400. */
+        /** Resolve um item: TRANSFERENCIA, APORTE ou RESGATE (com contaId), GASTO, RECEITA ou IR_IOF_TAXA (com categoriaId), PAREAR_MOVIMENTO (com movimentoId), RENDIMENTO, AJUSTAR_SALDO_INICIAL, CIENTE. DEIXAR_PARA_DEPOIS mantém aberto. Repetir a mesma opção num item resolvido não faz nada; outra opção dá 409. Diferença do grupo que mudou desde a tela dá 409. Opção que não é do item dá 400. */
         post: operations["ResolverAConferir"];
         delete?: never;
         options?: never;
@@ -1779,6 +1779,10 @@ export interface components {
             contaId: null | string;
             /** Format: uuid */
             categoriaId: null | string;
+            /** Format: uuid */
+            movimentoId?: null | string;
+            /** Format: int64 */
+            valorCentavos?: null | number | string;
         };
         RespostaDeLoginComPasskeyDto: {
             id: string;

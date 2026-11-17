@@ -99,6 +99,8 @@ describe("de onde veio o lançamento de conta ligada (testador da E6, rodada 2)"
     expect(deOndeVeio({ origem: "OPEN_FINANCE", natureza: "DESPESA" })).toBe("Veio do banco");
     expect(deOndeVeio({ origem: "MANUAL", natureza: "DESPESA" })).toBe("Esta conta agora vem do banco. Lançado à mão antes de ligar");
     expect(deOndeVeio({ origem: "SISTEMA", natureza: "TRANSFERENCIA" })).toBe("Criado pelo sistema como o outro lado, ao resolver em “A conferir”");
+    expect(deOndeVeio({ origem: "SISTEMA", natureza: "RECEITA" })).toBe("Lançado pelo sistema ao resolver a diferença do investimento em “A conferir”");
+    expect(deOndeVeio({ origem: "SISTEMA", natureza: "DESPESA" })).toBe("Lançado pelo sistema ao resolver a diferença do investimento em “A conferir”");
   });
 });
 

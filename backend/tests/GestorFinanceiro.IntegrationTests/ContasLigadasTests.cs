@@ -313,4 +313,66 @@ public class ContasLigadasTests(PostgresFixture pg)
 
         Assert.False(await EscalarAsync<bool>(c.Banco, $"SELECT ligada_em IS NOT NULL FROM contas.contas WHERE id = '{manual}'"));
     }
+
+    /// <summary>
+    /// E6 (D22, D25): a correção do saldo inicial e o arquivamento tomam a trava da conta (ChaveDeTrava.Conta), a mesma dos
+    /// lançamentos do Lancamentos no grupo: enquanto outra transação a segura, eles esperam.
+    /// </summary>
+    [Fact]
+    public async Task Saldo_inicial_e_arquivamento_esperam_a_trava_da_conta()
+    {
+        await using var c = await IniciarAsync();
+        var id = Guid.CreateVersion7();
+        Assert.IsType<ResultadoDaContaLigada.Pronta>(await CriarLigadaAsync(c, Corrente(id)));
+
+        await using var outra = new NpgsqlConnection(c.Banco.ConexaoSuperusuario);
+        await outra.OpenAsync();
+        await using var tx = await outra.BeginTransactionAsync();
+        await using (var trava = new NpgsqlCommand($"SELECT pg_advisory_xact_lock(hashtextextended('{ChaveDeTrava.Conta(id)}', 0))", outra, tx))
+            await trava.ExecuteNonQueryAsync();
+
+        await using var escopo = c.Api.Services.CreateAsyncScope();
+        var ligadas = escopo.ServiceProvider.GetRequiredService<IContasLigadas>();
+        var definir = ligadas.DefinirSaldoInicialAsync(id, 12_345, InicioDoHistorico, CancellationToken.None);
+        await Task.Delay(1_000);
+        Assert.False(definir.IsCompleted);
+
+        await tx.CommitAsync();
+        await definir;
+        Assert.Equal(12_345, await EscalarAsync<long>(c.Banco, $"SELECT saldo_inicial_centavos FROM contas.contas WHERE id = '{id}'"));
+
+        await using var outra2 = new NpgsqlConnection(c.Banco.ConexaoSuperusuario);
+        await outra2.OpenAsync();
+        await using var tx2 = await outra2.BeginTransactionAsync();
+        await using (var trava = new NpgsqlCommand($"SELECT pg_advisory_xact_lock(hashtextextended('{ChaveDeTrava.Conta(id)}', 0))", outra2, tx2))
+            await trava.ExecuteNonQueryAsync();
+        await using var escopo2 = c.Api.Services.CreateAsyncScope();
+        var arquivar = escopo2.ServiceProvider.GetRequiredService<IContasLigadas>().ArquivarAsync(id, CancellationToken.None);
+        await Task.Delay(1_000);
+        Assert.False(arquivar.IsCompleted);
+        await tx2.CommitAsync();
+        Assert.True(await arquivar);
+    }
+
+    /// <summary>
+    /// D25, "ajustar o saldo inicial" (revisão do E6b pela D25, achado 1): a troca só vale se o saldo inicial ainda é o que o
+    /// casal viu; se a correção da D22 (ou outro ajuste) mudou antes, nada é gravado.
+    /// </summary>
+    [Fact]
+    public async Task Trocar_o_saldo_inicial_so_vale_com_o_saldo_esperado()
+    {
+        await using var c = await IniciarAsync();
+        var id = Guid.CreateVersion7();
+        Assert.IsType<ResultadoDaContaLigada.Pronta>(await CriarLigadaAsync(c, Corrente(id)));
+        await using var escopo = c.Api.Services.CreateAsyncScope();
+        var ligadas = escopo.ServiceProvider.GetRequiredService<IContasLigadas>();
+        await ligadas.DefinirSaldoInicialAsync(id, 10_000, InicioDoHistorico, CancellationToken.None);
+
+        Assert.False(await ligadas.TrocarSaldoInicialAsync(id, 9_999, 15_000, CancellationToken.None));
+        Assert.Equal(10_000, await EscalarAsync<long>(c.Banco, $"SELECT saldo_inicial_centavos FROM contas.contas WHERE id = '{id}'"));
+
+        Assert.True(await ligadas.TrocarSaldoInicialAsync(id, 10_000, 15_000, CancellationToken.None));
+        Assert.Equal(15_000, await EscalarAsync<long>(c.Banco, $"SELECT saldo_inicial_centavos FROM contas.contas WHERE id = '{id}'"));
+        Assert.False(await ligadas.TrocarSaldoInicialAsync(id, 10_000, 15_000, CancellationToken.None));
+    }
 }

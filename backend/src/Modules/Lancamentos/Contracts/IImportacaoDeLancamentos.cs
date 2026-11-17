@@ -58,4 +58,13 @@ public interface IImportacaoDeLancamentos
     /// úteis); aplicação e resgate na corrente também (D12). Item sem par que ganha par é resolvido sozinho.
     /// </summary>
     Task ReconhecerMovimentosAsync(DateOnly desde, CancellationToken ct);
+
+    /// <summary>
+    /// Diferença do grupo de investimento (Tarefa 6.3, CEO, D25): na trava da conta, diferença = valor no banco (só as
+    /// aplicações ACTIVE) − saldo do sistema no dia. O grupo tem no máximo um item aberto em "A conferir", criado ou
+    /// atualizado aqui (valor, valor no banco e dia); diferença zero fecha o item ("resolvido pelo banco"). Nada é lançado:
+    /// rendimento, IR/IOF, par e ajuste do saldo inicial são ações do casal.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">A conta não é um grupo de investimento ligado do casal.</exception>
+    Task ConferirDiferencaDoGrupoAsync(Guid grupoId, DateOnly dia, long valorNoBancoCentavos, CancellationToken ct);
 }

@@ -6,15 +6,42 @@ import { resolverItem, useAConferir, type ItemAConferir } from "../api/aConferir
 import { useContas, type Conta } from "../api/contas";
 import { n } from "../api/formulario";
 import { useCategorias, type Categoria } from "../api/lancamentos";
-import { avisoDaConta, categoriasDaOpcao, contaSugerida, contasDaOpcao, oQuePede, rotuloDaOpcao, textoDaResolucao, tituloDoItem } from "../lib/aConferir";
+import {
+  avisoDaConta,
+  categoriasDaOpcao,
+  contaSugerida,
+  contasDaOpcao,
+  movimentosDoGrupo,
+  oQuePede,
+  rotuloDaOpcao,
+  rotuloDoMovimento,
+  textoDaResolucao,
+  tituloDoItem,
+} from "../lib/aConferir";
 import { formatarReais } from "../lib/dinheiro";
 import { Alerta, CampoSelecao } from "./Campo";
 
 const mensagem = (e: unknown) => (e instanceof ErroDeApi ? e.message : "Não foi possível resolver. Tente de novo.");
 const diaEMes = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
+const comSinal = (centavos: number) => `${centavos < 0 ? "−" : "+"}${formatarReais(Math.abs(centavos))}`;
+const ROTULO_DA_ESCOLHA = { conta: "Com qual conta", categoria: "Categoria", movimento: "Qual aporte ou resgate" } as const;
+const VAZIO_DA_ESCOLHA = { conta: "Escolha a conta", categoria: "Escolha a categoria", movimento: "Escolha o aporte ou resgate" } as const;
+const FALTA_DA_ESCOLHA = { conta: "Escolha a outra conta.", categoria: "Escolha a categoria.", movimento: "Escolha o aporte ou resgate." } as const;
 
 /** Um item: escolhe a opção (e a conta ou a categoria, quando ela pede) e resolve. */
-function ItemDaCaixa({ item, contas, categorias, aoResolver }: { item: ItemAConferir; contas: Conta[]; categorias: Categoria[]; aoResolver: (texto: string) => void }) {
+function ItemDaCaixa({
+  item,
+  contas,
+  categorias,
+  movimentos,
+  aoResolver,
+}: {
+  item: ItemAConferir;
+  contas: Conta[];
+  categorias: Categoria[];
+  movimentos: ItemAConferir[];
+  aoResolver: (texto: string) => void;
+}) {
   const consultas = useQueryClient();
   const [opcao, setOpcao] = useState("");
   const [escolha, setEscolha] = useState("");
@@ -32,7 +59,9 @@ function ItemDaCaixa({ item, contas, categorias, aoResolver }: { item: ItemAConf
   const escolhas =
     pede === "conta"
       ? contasDaOpcao(opcao, item.contaId, contas).map((c) => ({ valor: c.id, rotulo: c.apelido }))
-      : categoriasDaOpcao(opcao, categorias).map((c) => ({ valor: c.id, rotulo: c.nome }));
+      : pede === "movimento"
+        ? movimentosDoGrupo(movimentos, contas.find((c) => c.id === item.contaId)).map((m) => ({ valor: m.id, rotulo: rotuloDoMovimento(m) }))
+        : categoriasDaOpcao(opcao, categorias).map((c) => ({ valor: c.id, rotulo: c.nome }));
 
   async function resolver(e: FormEvent) {
     e.preventDefault();
@@ -43,7 +72,7 @@ function ItemDaCaixa({ item, contas, categorias, aoResolver }: { item: ItemAConf
       return;
     }
     if (pede !== "nada" && !escolha) {
-      setFalta(pede === "conta" ? "Escolha a outra conta." : "Escolha a categoria.");
+      setFalta(FALTA_DA_ESCOLHA[pede]);
       form.current?.querySelector<HTMLSelectElement>("select")?.focus();
       return;
     }
@@ -51,7 +80,15 @@ function ItemDaCaixa({ item, contas, categorias, aoResolver }: { item: ItemAConf
     setErro(undefined);
     setAviso(undefined);
     try {
-      await resolverItem(item.id, opcao, pede === "conta" ? escolha : null, pede === "categoria" ? escolha : null);
+      await resolverItem(
+        item.id,
+        opcao,
+        pede === "conta" ? escolha : null,
+        pede === "categoria" ? escolha : null,
+        pede === "movimento" ? escolha : null,
+        // D25: o valor que a tela mostrou; se a diferença mudou, nada é lançado (409).
+        item.tipo === "DIFERENCA_DO_GRUPO" ? item.valorCentavos : null,
+      );
       if (opcao === "DEIXAR_PARA_DEPOIS") {
         setAviso(textoDaResolucao(opcao));
         // O item fica: o foco volta ao botão (o fieldset desabilitado durante o envio o tinha tirado).
@@ -65,6 +102,8 @@ function ItemDaCaixa({ item, contas, categorias, aoResolver }: { item: ItemAConf
     } catch (falha) {
       setErro(mensagem(falha));
       setTentativa((t) => t + 1);
+      // O item pode ter mudado (valor novo da diferença, resolvido por outra tela): a lista volta a ser a da API.
+      void consultas.invalidateQueries({ queryKey: ["a-conferir"] });
     } finally {
       setOcupado(false);
     }
@@ -78,10 +117,7 @@ function ItemDaCaixa({ item, contas, categorias, aoResolver }: { item: ItemAConf
           <span className="cartao-nota">
             {item.descricao ? `${titulo} · ` : ""}
             {item.contaApelido} · <span className="num">{diaEMes(item.data)}</span> ·{" "}
-            <span className={`num${valor > 0 ? " valor-positivo" : ""}`}>
-              {valor < 0 ? "−" : "+"}
-              {formatarReais(Math.abs(valor))}
-            </span>
+            <span className={`num${valor > 0 ? " valor-positivo" : ""}`}>{comSinal(valor)}</span>
           </span>
         </div>
         <Alerta mensagem={erro} tentativa={tentativa} />
@@ -124,7 +160,7 @@ function ItemDaCaixa({ item, contas, categorias, aoResolver }: { item: ItemAConf
           )}
           {pede !== "nada" && (
             <CampoSelecao
-              rotulo={pede === "conta" ? "Com qual conta" : "Categoria"}
+              rotulo={ROTULO_DA_ESCOLHA[pede]}
               valor={escolha}
               aoMudar={(v) => {
                 setEscolha(v);
@@ -132,13 +168,17 @@ function ItemDaCaixa({ item, contas, categorias, aoResolver }: { item: ItemAConf
                 setErro(undefined);
               }}
               erro={falta && opcao ? falta : undefined}
-              opcoes={[{ valor: "", rotulo: pede === "conta" ? "Escolha a conta" : "Escolha a categoria" }, ...escolhas]}
+              opcoes={[{ valor: "", rotulo: VAZIO_DA_ESCOLHA[pede] }, ...escolhas]}
               nota={
                 pede === "conta" && escolhas.length === 0
                   ? "Nenhuma conta serve. Crie uma conta de poupança ou investimento em Contas."
                   : pede === "conta"
                     ? avisoDaConta(opcao, escolha, contas)
-                    : undefined
+                    : pede === "movimento" && escolhas.length === 0
+                      ? "Nenhum aporte ou resgate em aberto. Atualize a página."
+                      : pede === "movimento"
+                        ? "O aporte ou resgate entra no grupo; se a diferença não zerar, o resto continua aqui."
+                        : undefined
               }
             />
           )}
@@ -151,7 +191,7 @@ function ItemDaCaixa({ item, contas, categorias, aoResolver }: { item: ItemAConf
   );
 }
 
-/** "A conferir" (Fase 2, D11, Tarefas 6.1 e 6.2): o que o sistema não decidiu sozinho. Nada é descartado. */
+/** "A conferir" (Fase 2, D11, Tarefas 6.1 a 6.3): o que o sistema não decidiu sozinho. Nada é descartado. */
 export function AConferir() {
   const itens = useAConferir();
   const contas = useContas();
@@ -165,6 +205,7 @@ export function AConferir() {
   };
   const carregando = itens.isPending || contas.isPending || categorias.isPending;
   const lista = itens.data ?? [];
+  const movimentos = lista.filter((i) => i.tipo === "APORTE_OU_RESGATE");
 
   return (
     <>
@@ -198,7 +239,7 @@ export function AConferir() {
           {contas.data && categorias.data && lista.length > 0 && (
             <ul className="lista-itens">
               {lista.map((i) => (
-                <ItemDaCaixa key={i.id} item={i} contas={contas.data} categorias={categorias.data} aoResolver={aoResolver} />
+                <ItemDaCaixa key={i.id} item={i} contas={contas.data} categorias={categorias.data} movimentos={movimentos} aoResolver={aoResolver} />
               ))}
             </ul>
           )}
@@ -212,6 +253,12 @@ export function AConferir() {
             <p className="cartao-nota" style={{ margin: 0 }}>
               Transferência entre as contas de vocês e pagamento de fatura são reconhecidos sozinhos quando o outro lado chega do banco. O
               que fica sem par, a aplicação e o resgate vêm para cá.
+            </p>
+            <p className="cartao-nota" style={{ margin: 0 }}>
+              No investimento, cada sincronização compara o banco com o sistema. Se não batem, o grupo ganha um item aqui, que acompanha o
+              banco e some sozinho quando os dois voltam a bater. Nada é lançado sem vocês: digam se é rendimento, IR, IOF ou taxa, ou de
+              qual aporte ou resgate veio. No primeiro item de cada grupo dá também para ajustar o saldo inicial, quando a diferença já
+              existia quando o grupo começou.
             </p>
             <p className="cartao-nota" style={{ margin: 0 }}>
               Transferência, aporte e resgate não contam no orçamento. Nada é apagado: o que você resolve sai daqui e fica guardado.

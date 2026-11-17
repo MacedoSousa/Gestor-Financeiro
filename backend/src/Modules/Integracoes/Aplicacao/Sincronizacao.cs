@@ -212,8 +212,9 @@ internal sealed partial class Sincronizacao(
     /// <summary>
     /// D21 e D22: cada aplicação nascida (num grupo) guarda o balance e a situação que o banco mandou agora; cada grupo com
     /// aplicação deste item guarda a diferença entre a soma das aplicações ATIVA dele (de qualquer item) e o saldo do
-    /// sistema. Grupo arquivado, ou com aplicação de situação desconhecida, ou ativa sem valor, fica sem conferência. Nada é
-    /// lançado: o rendimento entra no sistema na E6. Grupo marcado pela V0019 refaz o saldo inicial uma vez (D22).
+    /// sistema. Grupo arquivado, ou com aplicação de situação desconhecida, ou ativa sem valor, fica sem conferência. Grupo
+    /// marcado pela V0019 refaz o saldo inicial uma vez (D22). E6b (CEO, D25): nada é lançado; a diferença de cada grupo
+    /// conferido vai para "A conferir" (um item por grupo, recalculado; zero fecha), pelo contrato do Lancamentos.
     /// </summary>
     private async Task ConferirInvestimentosAsync(AcessoAoItem a, LeituraDoBanco leitura, IReadOnlyDictionary<Guid, ContaResumo> doCasal,
         DateOnly hoje, CancellationToken ct)
@@ -243,6 +244,7 @@ internal sealed partial class Sincronizacao(
         var deOutrosItems = await db.Vinculos
             .Where(v => v.ItemId != a.Item.Id && v.Tipo == TipoDeVinculo.Investimento && v.ContaId != null && grupos.Contains(v.ContaId.Value))
             .ToListAsync(ct);
+        var conferidos = new List<(Guid Grupo, long NoBanco)>();
         foreach (var membros in desteItem.Concat(deOutrosItems).GroupBy(v => v.ContaId!.Value))
         {
             var lista = membros.ToList();
@@ -281,9 +283,26 @@ internal sealed partial class Sincronizacao(
             }
 
             foreach (var m in lista) m.ConferirGrupo(!arquivado && valor is { } v ? v - saldoDoSistema : null);
+            if (!arquivado && valor is { } noBanco) conferidos.Add((grupo.Id, noBanco));
         }
         await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
+
+        // D25: depois da trava do casal (o Lancamentos grava noutra conexão, com a trava da conta e a auditoria do casal). Ele
+        // relê o saldo do sistema sob a trava da conta; nada é lançado.
+        foreach (var (grupoId, noBanco) in conferidos)
+        {
+            // Um grupo que falha (deixou de ser ligado entre a leitura e esta chamada, por exemplo) não para os outros; a próxima
+            // leitura o recalcula.
+            try
+            {
+                await importacao.ConferirDiferencaDoGrupoAsync(grupoId, hoje, noBanco, ct);
+            }
+            catch (Exception e) when (e is not OperationCanceledException || !ct.IsCancellationRequested)
+            {
+                DiferencaDoGrupoFalhou(log, grupoId, e.GetType().Name);
+            }
+        }
     }
 
     /// <summary>
@@ -367,6 +386,9 @@ internal sealed partial class Sincronizacao(
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Sincronização: o reconhecimento de transferências do item {Item} falhou (slot {Slot}, {Tipo}).")]
     private static partial void ReconhecimentoFalhou(ILogger logger, int slot, Guid item, string tipo);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Sincronização: a diferença do grupo {Conta} não foi para \"A conferir\" ({Tipo}).")]
+    private static partial void DiferencaDoGrupoFalhou(ILogger logger, Guid conta, string tipo);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Sincronização: a conferência dos investimentos do item {Item} falhou (slot {Slot}, {Tipo}).")]
     private static partial void InvestimentosFalharam(ILogger logger, int slot, Guid item, string tipo);

@@ -60,6 +60,14 @@ public interface IContasLigadas
     Task DefinirSaldoInicialAsync(Guid contaId, long centavos, DateOnly em, CancellationToken ct);
 
     /// <summary>
+    /// "Ajustar o saldo inicial" do grupo em "A conferir" (CEO, D25): na trava da conta, troca o saldo inicial para
+    /// <paramref name="novoCentavos"/> só se ele ainda é <paramref name="esperadoCentavos"/> (o que o casal viu). Falso, sem
+    /// gravar, se ele mudou (a correção da D22 ou outro ajuste veio antes). A data não muda. Só conta ligada.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">A conta não existe no casal ou não é ligada.</exception>
+    Task<bool> TrocarSaldoInicialAsync(Guid contaId, long esperadoCentavos, long novoCentavos, CancellationToken ct);
+
+    /// <summary>
     /// Arquiva uma conta ligada (grupo de investimento sem nenhuma aplicação ativa no banco, D22). Continua ligada e com o
     /// histórico; o casal pode desarquivar. Falso se ela não existe no casal ou não é ligada.
     /// </summary>
