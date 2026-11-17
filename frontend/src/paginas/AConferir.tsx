@@ -11,9 +11,10 @@ import {
   categoriasDaOpcao,
   contaSugerida,
   contasDaOpcao,
-  movimentosAbertos,
+  movimentosDoGrupo,
   oQuePede,
   rotuloDaOpcao,
+  rotuloDoMovimento,
   textoDaResolucao,
   tituloDoItem,
 } from "../lib/aConferir";
@@ -59,10 +60,7 @@ function ItemDaCaixa({
     pede === "conta"
       ? contasDaOpcao(opcao, item.contaId, contas).map((c) => ({ valor: c.id, rotulo: c.apelido }))
       : pede === "movimento"
-        ? movimentos.map((m) => ({
-            valor: m.id,
-            rotulo: `${m.descricao || tituloDoItem(m)} · ${m.contaApelido} · ${diaEMes(m.data)} · ${comSinal(n(m.valorCentavos))}`,
-          }))
+        ? movimentosDoGrupo(movimentos, contas.find((c) => c.id === item.contaId)).map((m) => ({ valor: m.id, rotulo: rotuloDoMovimento(m) }))
         : categoriasDaOpcao(opcao, categorias).map((c) => ({ valor: c.id, rotulo: c.nome }));
 
   async function resolver(e: FormEvent) {
@@ -207,7 +205,7 @@ export function AConferir() {
   };
   const carregando = itens.isPending || contas.isPending || categorias.isPending;
   const lista = itens.data ?? [];
-  const movimentos = movimentosAbertos(lista);
+  const movimentos = lista.filter((i) => i.tipo === "APORTE_OU_RESGATE");
 
   return (
     <>
@@ -259,7 +257,8 @@ export function AConferir() {
             <p className="cartao-nota" style={{ margin: 0 }}>
               No investimento, cada sincronização compara o banco com o sistema. Se não batem, o grupo ganha um item aqui, que acompanha o
               banco e some sozinho quando os dois voltam a bater. Nada é lançado sem vocês: digam se é rendimento, IR, IOF ou taxa, ou de
-              qual aporte ou resgate veio.
+              qual aporte ou resgate veio. No primeiro item de cada grupo dá também para ajustar o saldo inicial, quando a diferença já
+              existia quando o grupo começou.
             </p>
             <p className="cartao-nota" style={{ margin: 0 }}>
               Transferência, aporte e resgate não contam no orçamento. Nada é apagado: o que você resolve sai daqui e fica guardado.

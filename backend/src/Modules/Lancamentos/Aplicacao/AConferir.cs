@@ -33,7 +33,14 @@ internal sealed class AConferir(LancamentosDbContext db, IUsuarioAtual atual, IC
     /// As opções do item. A linha que o banco tirou, ou que já virou transferência por outro caminho, não tem mais o que
     /// decidir: só "Ciente" (revisão do E6a, D1; antes, toda opção dava 409 e o item ficava aberto para sempre).
     /// </summary>
-    /// <param name="haMovimento">Há aporte ou resgate aberto em "A conferir": a diferença do grupo pode ser pareada com ele (D25).</param>
+    /// <param name="linhaIndisponivel">
+    /// A linha do item sumiu ou já é transferência; na diferença do grupo, o grupo foi arquivado ou deixou de ser ligado: só
+    /// "Ciente" (testador do E6b pela D25, Importante 2).
+    /// </param>
+    /// <param name="haMovimento">
+    /// Há aporte ou resgate aberto em "A conferir", de data a partir do saldo inicial do grupo: a diferença pode ser pareada com
+    /// ele (D25; o de antes já está no saldo inicial, testador do E6b pela D25, Importante 3).
+    /// </param>
     internal static IReadOnlyList<string> Opcoes(ItemAConferir item, bool linhaIndisponivel = false, bool haMovimento = false) => linhaIndisponivel
         ? [ResolucaoDoItem.Ciente]
         : item.Tipo == TipoDeItemAConferir.DiferencaDoGrupo ? OpcoesDaDiferenca(item, haMovimento)
@@ -61,6 +68,16 @@ internal sealed class AConferir(LancamentosDbContext db, IUsuarioAtual atual, IC
         return opcoes;
     }
 
+    private static bool GrupoDisponivel(ContaResumo? grupo) => grupo is { Ligada: true, Arquivada: false, Tipo: "INVESTIMENTO" };
+
+    /// <summary>O aporte ou resgate que pode explicar a diferença do grupo: de data a partir do saldo inicial dele.</summary>
+    private static bool ServeAoGrupo(ItemAConferir movimento, ContaResumo grupo) => movimento.Data >= grupo.SaldoInicialEm;
+
+    private static IReadOnlyList<string> OpcoesDoGrupo(ItemAConferir item, ContaResumo? grupo, IEnumerable<ItemAConferir> movimentos) =>
+        GrupoDisponivel(grupo)
+            ? Opcoes(item, haMovimento: movimentos.Any(m => ServeAoGrupo(m, grupo!)))
+            : Opcoes(item, linhaIndisponivel: true);
+
     public async Task<IReadOnlyList<ItemAConferirDto>?> ListarAsync(CancellationToken ct)
     {
         if (atual.CasalId is null) return null;
@@ -70,12 +87,15 @@ internal sealed class AConferir(LancamentosDbContext db, IUsuarioAtual atual, IC
         // Sob o filtro SoftDelete: a pendente que sumiu (apagada) não mostra descrição (regra 9).
         var transacoes = await db.Transacoes.AsNoTracking().Where(t => ids.Contains(t.Id)).ToDictionaryAsync(t => t.Id, ct);
         var doCasal = (await contas.ListarAsync(ct)).ToDictionary(c => c.Id);
-        var haMovimento = itens.Any(i => i.Tipo == TipoDeItemAConferir.AporteOuResgate);
+        var movimentos = itens.Where(i => i.Tipo == TipoDeItemAConferir.AporteOuResgate).ToList();
         return itens.Select(i =>
             {
                 var linha = i.TransacaoId is { } t ? transacoes.GetValueOrDefault(t) : null;
                 return new ItemAConferirDto(i.Id, i.Tipo, i.ContaId, doCasal.GetValueOrDefault(i.ContaId)?.Apelido ?? "Conta removida", i.Data,
-                    i.ValorCentavos, linha?.LerDescricaoDoBanco(cofre), Opcoes(i, Indisponivel(i, linha), haMovimento));
+                    i.ValorCentavos, linha?.LerDescricaoDoBanco(cofre),
+                    i.Tipo == TipoDeItemAConferir.DiferencaDoGrupo
+                        ? OpcoesDoGrupo(i, doCasal.GetValueOrDefault(i.ContaId), movimentos)
+                        : Opcoes(i, Indisponivel(i, linha)));
             })
             .ToList();
     }
@@ -98,8 +118,25 @@ internal sealed class AConferir(LancamentosDbContext db, IUsuarioAtual atual, IC
             if (!item.Aberto)
                 return pedido.Opcao == item.Resolucao ? new ResultadoDeLancamento.Feito() : new ResultadoDeLancamento.Recusado(TituloJaResolvido, 409);
             var linhaDoItem = item.TransacaoId is { } idDaLinha ? await db.Transacoes.AsNoTracking().FirstOrDefaultAsync(t => t.Id == idDaLinha, ct) : null;
-            var haMovimento = await db.ItensAConferir.AnyAsync(i => i.Tipo == TipoDeItemAConferir.AporteOuResgate && i.Estado == "ABERTO", ct);
-            if (pedido.Opcao is not { } opcao || !Opcoes(item, Indisponivel(item, linhaDoItem), haMovimento).Contains(opcao, StringComparer.Ordinal))
+            IReadOnlyList<string> opcoes;
+            if (item.Tipo == TipoDeItemAConferir.DiferencaDoGrupo)
+            {
+                var grupo = await contas.ObterAsync(item.ContaId, ct);
+                // Grupo arquivado ou que deixou de ser ligado: "Ciente" fecha o item sem lançar; o resto é tela velha (409).
+                if (!GrupoDisponivel(grupo))
+                {
+                    if (pedido.Opcao != ResolucaoDoItem.Ciente) return new ResultadoDeLancamento.Recusado(TituloGrupoIndisponivel, 409);
+                    item.Resolver(ResolucaoDoItem.Ciente);
+                    await db.SaveChangesAsync(ct);
+                    await tx.CommitAsync(ct);
+                    return new ResultadoDeLancamento.Feito();
+                }
+                var movimentos = await db.ItensAConferir.AsNoTracking()
+                    .Where(i => i.Tipo == TipoDeItemAConferir.AporteOuResgate && i.Estado == "ABERTO").ToListAsync(ct);
+                opcoes = OpcoesDoGrupo(item, grupo, movimentos);
+            }
+            else opcoes = Opcoes(item, Indisponivel(item, linhaDoItem));
+            if (pedido.Opcao is not { } opcao || !opcoes.Contains(opcao, StringComparer.Ordinal))
                 return Invalido("opcao", "Escolha uma das opções deste item.");
             if (opcao == ResolucaoDoItem.DeixarParaDepois) return new ResultadoDeLancamento.Feito();
             if (item.Tipo == TipoDeItemAConferir.DiferencaDoGrupo)
@@ -233,7 +270,8 @@ internal sealed class AConferir(LancamentosDbContext db, IUsuarioAtual atual, IC
                 ? await db.ItensAConferir.FirstOrDefaultAsync(i => i.Id == idDoMovimento && i.Tipo == TipoDeItemAConferir.AporteOuResgate
                                                                    && i.Estado == "ABERTO", ct)
                 : null;
-            if (movimento is null) return (Invalido("movimentoId", "Escolha um aporte ou resgate em aberto."), false);
+            if (movimento is null || !ServeAoGrupo(movimento, (await contas.ObterAsync(item.ContaId, ct))!))
+                return (Invalido("movimentoId", "Escolha um aporte ou resgate em aberto, de depois do saldo inicial do grupo."), false);
         }
 
         // "Ajustar o saldo inicial" chama o Contas, que grava noutra conexão com a trava da conta (e a auditoria do casal): esta

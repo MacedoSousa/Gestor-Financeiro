@@ -422,9 +422,12 @@ public partial class AConferirTests
         Assert.Equal(["RENDIMENTO", "AJUSTAR_SALDO_INICIAL"], Opcoes(await ItemDoGrupoAsync(c)));
     }
 
-    /// <summary>Grupo arquivado: o item não lança nada (409) e a leitura não o mexe.</summary>
+    /// <summary>
+    /// Grupo arquivado: o item não lança nada (409 na tela velha) e a leitura não o mexe; a tela oferece só "Ciente", que o
+    /// fecha sem lançamento (testador do E6b pela D25, Importante 2: antes ele ficava aberto para sempre).
+    /// </summary>
     [Fact]
-    public async Task Item_de_grupo_arquivado_da_409()
+    public async Task Item_de_grupo_arquivado_so_oferece_ciente_e_nao_lanca()
     {
         await using var c = await IniciarAsync();
         await ConferirGrupoAsync(c, 1_010_000);
@@ -435,7 +438,33 @@ public partial class AConferirTests
         Assert.Equal(HttpStatusCode.Conflict, (await ResolverDiferencaAsync(c, item, new { opcao = "AJUSTAR_SALDO_INICIAL" })).StatusCode);
         await ConferirGrupoAsync(c, 1_020_000);
         Assert.Equal("10000|ABERTO|-|true", await DiferencasAsync(c));
+        Assert.Equal(["CIENTE"], Opcoes(await ItemDoGrupoAsync(c)));
+
+        Assert.Equal(HttpStatusCode.NoContent, (await ResolverDiferencaAsync(c, item, new { opcao = "CIENTE" })).StatusCode);
+        Assert.Equal("10000|RESOLVIDO|CIENTE|true", await DiferencasAsync(c));
         Assert.Equal(0L, await DoSistemaNoGrupoAsync(c));
+        Assert.Equal(1_000_000, await EscalarAsync<long>(c.Banco, $"SELECT saldo_inicial_centavos FROM contas.contas WHERE id = '{c.Grupo}'"));
+    }
+
+    /// <summary>
+    /// Testador do E6b pela D25, Importante 3: o aporte ou resgate de antes do saldo inicial do grupo já está nele; parear com
+    /// ele não mudaria a diferença. Ele não é oferecido, e pedir dá 400.
+    /// </summary>
+    [Fact]
+    public async Task Movimento_de_antes_do_saldo_inicial_do_grupo_nao_serve_para_parear()
+    {
+        await using var c = await IniciarAsync();
+        await ImportarAsync(c, c.Corrente, Linha("tx-aplicacao-antiga", -10_000, data: "2026-10-30", descricao: "APLICACAO CDB", codigo: Aplicacao));
+        await ReconhecerAsync(c);
+        await ConferirGrupoAsync(c, 1_010_000);
+        Assert.Equal(["RENDIMENTO", "AJUSTAR_SALDO_INICIAL"], Opcoes(await ItemDoGrupoAsync(c)));
+
+        var r = await ResolverDiferencaAsync(c, (await ItemDoGrupoAsync(c)).GetProperty("id").GetGuid(),
+            new { opcao = "PAREAR_MOVIMENTO", movimentoId = await ItemDeMovimentoAsync(c) });
+
+        Assert.Equal(HttpStatusCode.BadRequest, r.StatusCode);
+        Assert.Equal("10000|ABERTO|-|true", await DiferencasAsync(c));
+        Assert.Equal("DIFERENCA_DO_GRUPO|ABERTO|-;APORTE_OU_RESGATE|ABERTO|-", await ItensAsync(c));
     }
 
     /// <summary>Outra opção num item já resolvido (pelo banco, pelo outro cônjuge, numa tela velha) é 409; a mesma, 204.</summary>

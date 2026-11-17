@@ -1,5 +1,7 @@
 /** Lógica de exibição da caixa "A conferir" (Fase 2, Tarefas 6.1 a 6.3). Nenhum valor é calculado aqui: vêm da API. */
 
+import { formatarReais } from "./dinheiro";
+
 type ItemBasico = { tipo: string; valorCentavos: number | string };
 type ContaBasica = { id: string; tipo: string; arquivada: boolean };
 type CategoriaBasica = { id: string; tipo: string; arquivada: boolean };
@@ -74,9 +76,20 @@ export function contaSugerida(opcao: string, contaDoItem: string, contas: readon
   return unica && outras.length === 0 ? unica.id : "";
 }
 
-/** D25: a diferença do grupo se pareia com um aporte ou resgate ainda aberto em "A conferir" (a API recusa o resto). */
-export function movimentosAbertos<I extends { tipo: string }>(itens: readonly I[]): I[] {
-  return itens.filter((i) => i.tipo === "APORTE_OU_RESGATE");
+/**
+ * D25: a diferença do grupo se pareia com um aporte ou resgate ainda aberto em "A conferir", de data a partir do saldo
+ * inicial do grupo (o de antes já está nele; a API recusa o resto). Sem o grupo, nenhum.
+ */
+export function movimentosDoGrupo<I extends { tipo: string; data: string }>(itens: readonly I[], grupo: { saldoInicialEm: string } | undefined): I[] {
+  if (!grupo) return [];
+  return itens.filter((i) => i.tipo === "APORTE_OU_RESGATE" && i.data >= grupo.saldoInicialEm);
+}
+
+/** O aporte ou resgate na escolha do par: do ponto de vista do grupo (aporte entra, resgate sai), sem o sinal da corrente. */
+export function rotuloDoMovimento(m: ItemBasico & { data: string; contaApelido: string; descricao?: string | null }): string {
+  const valor = Number(m.valorCentavos);
+  const dia = `${m.data.slice(8, 10)}/${m.data.slice(5, 7)}`;
+  return `${m.descricao || tituloDoItem(m)} · ${m.contaApelido} · ${dia} · ${valor < 0 ? "aporte" : "resgate"} de ${formatarReais(Math.abs(valor))}`;
 }
 
 /** Categorias não arquivadas: receita para "é receita", despesa para "é gasto" e "IR, IOF ou taxa". */

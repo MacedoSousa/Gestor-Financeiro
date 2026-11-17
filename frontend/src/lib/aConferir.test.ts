@@ -4,7 +4,8 @@ import {
   contaSugerida,
   contasDaOpcao,
   categoriasDaOpcao,
-  movimentosAbertos,
+  movimentosDoGrupo,
+  rotuloDoMovimento,
   oQuePede,
   rotuloDaOpcao,
   textoDaResolucao,
@@ -114,8 +115,18 @@ describe("A conferir (Tarefas 6.1 e 6.2)", () => {
     expect(textoDaResolucao("PAREAR_MOVIMENTO")).toBe("Pareado: o aporte ou resgate entrou no grupo. Se sobrou diferença, ela continua aqui.");
   });
 
-  it("6.3 (CEO, D25): só os aportes e resgates abertos servem para parear", () => {
-    const item = (id: string, tipo: string) => ({ id, tipo, valorCentavos: -100 });
-    expect(movimentosAbertos([item("a", "APORTE_OU_RESGATE"), item("b", "DIFERENCA_DO_GRUPO"), item("c", "TRANSFERENCIA_SEM_PAR"), item("d", "APORTE_OU_RESGATE")]).map((i) => i.id)).toEqual(["a", "d"]);
+  it("6.3 (CEO, D25): só os aportes e resgates abertos, de depois do saldo inicial do grupo, servem para parear", () => {
+    const item = (id: string, tipo: string, data = "2026-11-03") => ({ id, tipo, data, valorCentavos: -100 });
+    const itens = [item("a", "APORTE_OU_RESGATE"), item("b", "DIFERENCA_DO_GRUPO"), item("c", "TRANSFERENCIA_SEM_PAR"), item("d", "APORTE_OU_RESGATE")];
+    expect(movimentosDoGrupo(itens, { saldoInicialEm: "2026-11-01" }).map((i) => i.id)).toEqual(["a", "d"]);
+    // O de antes do saldo inicial do grupo já está nele (a API recusa): não aparece.
+    expect(movimentosDoGrupo([item("velho", "APORTE_OU_RESGATE", "2026-10-31"), item("dia", "APORTE_OU_RESGATE", "2026-11-01")], { saldoInicialEm: "2026-11-01" }).map((i) => i.id)).toEqual(["dia"]);
+    expect(movimentosDoGrupo(itens, undefined)).toEqual([]);
+  });
+
+  it("6.3 (CEO, D25): o aporte ou resgate aparece do ponto de vista do grupo, sem o sinal da corrente", () => {
+    const m = { tipo: "APORTE_OU_RESGATE", data: "2026-11-03", contaApelido: "Itaú Corrente · Ana" };
+    expect(rotuloDoMovimento({ ...m, valorCentavos: -100_000, descricao: "APLICACAO CDB" })).toBe("APLICACAO CDB · Itaú Corrente · Ana · 03/11 · aporte de R$\u00a01.000,00");
+    expect(rotuloDoMovimento({ ...m, valorCentavos: "4000", descricao: null })).toBe("Resgate · Itaú Corrente · Ana · 03/11 · resgate de R$\u00a040,00");
   });
 });
