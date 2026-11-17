@@ -88,20 +88,30 @@ internal sealed class ContasLigadas(ContasDbContext db, IUsuarioAtual atual, Ser
         return true;
     }
 
+    /// <summary>
+    /// Na trava da conta (ChaveDeTrava.Conta, a mesma do rendimento automático no Lancamentos, E6): a correção do saldo inicial
+    /// (D3, D21, D22) e um rendimento do mesmo grupo nunca se cruzam.
+    /// </summary>
     public async Task DefinirSaldoInicialAsync(Guid contaId, long centavos, DateOnly em, CancellationToken ct)
     {
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
+        await db.Database.ExecuteSqlAsync($"SELECT pg_advisory_xact_lock(hashtextextended({ChaveDeTrava.Conta(contaId)}, 0))", ct);
         var conta = await db.Contas.FirstOrDefaultAsync(c => c.Id == contaId, ct)
             ?? throw new InvalidOperationException("Conta não encontrada no casal.");
         conta.DefinirSaldoInicialDoBanco(new Dinheiro(centavos), em);
         await db.SaveChangesAsync(ct);
+        await tx.CommitAsync(ct);
     }
 
     public async Task<bool> ArquivarAsync(Guid contaId, CancellationToken ct)
     {
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
+        await db.Database.ExecuteSqlAsync($"SELECT pg_advisory_xact_lock(hashtextextended({ChaveDeTrava.Conta(contaId)}, 0))", ct);
         var conta = await db.Contas.FirstOrDefaultAsync(c => c.Id == contaId, ct);
         if (conta is not { Ligada: true }) return false;
         conta.Arquivar();
         await db.SaveChangesAsync(ct);
+        await tx.CommitAsync(ct);
         return true;
     }
 
