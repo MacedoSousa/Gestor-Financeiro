@@ -467,6 +467,33 @@ public partial class AConferirTests
         Assert.Equal("DIFERENCA_DO_GRUPO|ABERTO|-;APORTE_OU_RESGATE|ABERTO|-", await ItensAsync(c));
     }
 
+    /// <summary>
+    /// Revisão do E6b pela D25, rodada 4: com um aporte que serve (a opção aparece por ele), pedir o de antes do saldo inicial
+    /// (tela velha, pedido à mão) dá 400 na checagem do próprio movimento; nada é pareado.
+    /// </summary>
+    [Fact]
+    public async Task Pedido_com_o_movimento_de_antes_do_saldo_inicial_e_recusado_mesmo_com_outro_que_serve()
+    {
+        await using var c = await IniciarAsync();
+        await ImportarAsync(c, c.Corrente,
+            Linha("tx-aplicacao-antiga", -10_000, data: "2026-10-30", descricao: "APLICACAO CDB", codigo: Aplicacao),
+            Linha("tx-aplicacao-nova", -7_000, data: "2026-11-03", descricao: "APLICACAO CDB", codigo: Aplicacao));
+        await ReconhecerAsync(c);
+        await ConferirGrupoAsync(c, 1_010_000);
+        Assert.Contains("PAREAR_MOVIMENTO", Opcoes(await ItemDoGrupoAsync(c)));
+        var antigo = await EscalarAsync<Guid>(c.Banco,
+            $"SELECT id FROM lancamentos.itens_a_conferir WHERE transacao_id = '{await IdAsync(c, "tx-aplicacao-antiga")}'");
+
+        var r = await ResolverDiferencaAsync(c, (await ItemDoGrupoAsync(c)).GetProperty("id").GetGuid(),
+            new { opcao = "PAREAR_MOVIMENTO", movimentoId = antigo });
+
+        Assert.Equal(HttpStatusCode.BadRequest, r.StatusCode);
+        Assert.Equal("10000|ABERTO|-|true", await DiferencasAsync(c));
+        Assert.Equal(0L, await DoSistemaNoGrupoAsync(c));
+        Assert.Equal(2L, await EscalarAsync<long>(c.Banco,
+            "SELECT count(*) FROM lancamentos.itens_a_conferir WHERE tipo = 'APORTE_OU_RESGATE' AND estado = 'ABERTO'"));
+    }
+
     /// <summary>Outra opção num item já resolvido (pelo banco, pelo outro cônjuge, numa tela velha) é 409; a mesma, 204.</summary>
     [Fact]
     public async Task Outra_opcao_num_item_resolvido_da_409()

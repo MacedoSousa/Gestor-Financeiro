@@ -259,7 +259,7 @@ internal sealed class AConferir(LancamentosDbContext db, IUsuarioAtual atual, IC
     private async Task<(ResultadoDeLancamento Resultado, bool Gravar)> ResolverDiferencaAsync(Guid casalId, ItemAConferir item, string opcao,
         ResolucaoDto pedido, CancellationToken ct)
     {
-        if (await contas.ObterAsync(item.ContaId, ct) is not { Ligada: true, Arquivada: false, Tipo: "INVESTIMENTO" })
+        if (await contas.ObterAsync(item.ContaId, ct) is not { Ligada: true, Arquivada: false, Tipo: "INVESTIMENTO" } grupoNaEntrada)
             return (new ResultadoDeLancamento.Recusado(TituloGrupoIndisponivel, 409), false);
         if (pedido.ValorCentavos is not { } visto) return (Invalido("valorCentavos", "Atualize a página e tente de novo."), false);
 
@@ -270,7 +270,7 @@ internal sealed class AConferir(LancamentosDbContext db, IUsuarioAtual atual, IC
                 ? await db.ItensAConferir.FirstOrDefaultAsync(i => i.Id == idDoMovimento && i.Tipo == TipoDeItemAConferir.AporteOuResgate
                                                                    && i.Estado == "ABERTO", ct)
                 : null;
-            if (movimento is null || !ServeAoGrupo(movimento, (await contas.ObterAsync(item.ContaId, ct))!))
+            if (movimento is null || !ServeAoGrupo(movimento, grupoNaEntrada))
                 return (Invalido("movimentoId", "Escolha um aporte ou resgate em aberto, de depois do saldo inicial do grupo."), false);
         }
 
