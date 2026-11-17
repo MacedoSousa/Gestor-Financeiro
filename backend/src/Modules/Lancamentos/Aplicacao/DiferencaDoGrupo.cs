@@ -22,6 +22,9 @@ internal sealed class DiferencaDoGrupo(LancamentosDbContext db, IUsuarioAtual at
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         try
         {
+            // Casal → conta, a ordem do módulo: a leitura espera a resolução em "A conferir" (que segura a trava do casal, e no
+            // "ajustar o saldo inicial" chama o Contas sem a da conta), e nunca troca o item no meio dela (revisão do E6b, achado 1).
+            await db.Database.ExecuteSqlAsync($"SELECT pg_advisory_xact_lock(hashtextextended('lancamentos.casal:' || {casalId}::text, 0))", ct);
             await TravaDeConta.TomarAsync(db, [grupoId], ct);
             var grupo = await contas.ObterAsync(grupoId, ct);
             if (grupo is not { Ligada: true, Tipo: "INVESTIMENTO" }) throw new InvalidOperationException("Diferença só de grupo de investimento ligado do casal.");

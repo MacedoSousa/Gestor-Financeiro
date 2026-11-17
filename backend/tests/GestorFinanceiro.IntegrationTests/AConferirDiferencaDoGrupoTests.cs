@@ -41,6 +41,16 @@ public partial class AConferirTests
         (await JsonAsync(await c.Cliente.GetAsync("/api/v1/a-conferir"))).EnumerateArray()
             .Single(i => i.GetProperty("tipo").GetString() == "APORTE_OU_RESGATE").GetProperty("id").GetGuid();
 
+    /// <summary>Resolve como a tela: com o valor que ela mostra do item (o que o casal viu), se o item está na lista.</summary>
+    private static async Task<HttpResponseMessage> ResolverDiferencaAsync(Ctx c, Guid item, object corpo)
+    {
+        var json = System.Text.Json.Nodes.JsonNode.Parse(JsonSerializer.Serialize(corpo))!.AsObject();
+        var naTela = (await JsonAsync(await c.Cliente.GetAsync("/api/v1/a-conferir"))).EnumerateArray()
+            .Where(i => i.GetProperty("id").GetGuid() == item).Select(i => (long?)i.GetProperty("valorCentavos").GetInt64()).FirstOrDefault();
+        if (naTela is { } visto && !json.ContainsKey("valorCentavos")) json["valorCentavos"] = visto;
+        return await ResolverAsync(c, item, json);
+    }
+
     // ------------------------------------------------------------------ recálculo e fechamento sozinho
 
     /// <summary>D25, 1: um item aberto por grupo, recalculado a cada leitura (valor e dia); nada é lançado.</summary>
@@ -132,8 +142,8 @@ public partial class AConferirTests
 
         var item = (await ItemDoGrupoAsync(c)).GetProperty("id").GetGuid();
         var mercado = await CategoriaAsync(c.Cliente, "Mercado");
-        Assert.Equal(HttpStatusCode.BadRequest, (await ResolverAsync(c, item, new { opcao = "IR_IOF_TAXA", categoriaId = mercado })).StatusCode);
-        Assert.Equal(HttpStatusCode.BadRequest, (await ResolverAsync(c, item, new { opcao = "DEIXAR_PARA_DEPOIS" })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await ResolverDiferencaAsync(c, item, new { opcao = "IR_IOF_TAXA", categoriaId = mercado })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await ResolverDiferencaAsync(c, item, new { opcao = "DEIXAR_PARA_DEPOIS" })).StatusCode);
         Assert.Equal(0L, await DoSistemaNoGrupoAsync(c));
     }
 
@@ -144,7 +154,7 @@ public partial class AConferirTests
         await using var c = await IniciarAsync();
         await ConferirGrupoAsync(c, 1_010_000, Hoje.AddDays(-2));
 
-        var r = await ResolverAsync(c, (await ItemDoGrupoAsync(c)).GetProperty("id").GetGuid(), new { opcao = "RENDIMENTO" });
+        var r = await ResolverDiferencaAsync(c, (await ItemDoGrupoAsync(c)).GetProperty("id").GetGuid(), new { opcao = "RENDIMENTO" });
 
         Assert.Equal(HttpStatusCode.NoContent, r.StatusCode);
         Assert.Equal("10000|RESOLVIDO|RENDIMENTO|true", await DiferencasAsync(c));
@@ -163,11 +173,11 @@ public partial class AConferirTests
     {
         await using var c = await IniciarAsync();
         await ConferirGrupoAsync(c, 1_010_000);
-        await ResolverAsync(c, (await ItemDoGrupoAsync(c)).GetProperty("id").GetGuid(), new { opcao = "RENDIMENTO" });
+        await ResolverDiferencaAsync(c, (await ItemDoGrupoAsync(c)).GetProperty("id").GetGuid(), new { opcao = "RENDIMENTO" });
         await ConferirGrupoAsync(c, 1_012_000);
 
         Assert.Equal(HttpStatusCode.NoContent,
-            (await ResolverAsync(c, (await ItemDoGrupoAsync(c)).GetProperty("id").GetGuid(), new { opcao = "RENDIMENTO" })).StatusCode);
+            (await ResolverDiferencaAsync(c, (await ItemDoGrupoAsync(c)).GetProperty("id").GetGuid(), new { opcao = "RENDIMENTO" })).StatusCode);
 
         Assert.Equal(12_000, await EscalarAsync<long>(c.Banco,
             $"SELECT valor_centavos FROM lancamentos.transacoes WHERE origem = 'SISTEMA' AND id_externo = 'rendimento:{c.Grupo}:2026-11-05'"));
@@ -184,9 +194,9 @@ public partial class AConferirTests
         await ConferirGrupoAsync(c, 995_000);
         var item = (await ItemDoGrupoAsync(c)).GetProperty("id").GetGuid();
 
-        Assert.Equal(HttpStatusCode.BadRequest, (await ResolverAsync(c, item, new { opcao = "IR_IOF_TAXA" })).StatusCode);
-        Assert.Equal(HttpStatusCode.BadRequest, (await ResolverAsync(c, item, new { opcao = "IR_IOF_TAXA", categoriaId = salario })).StatusCode);
-        Assert.Equal(HttpStatusCode.NoContent, (await ResolverAsync(c, item, new { opcao = "IR_IOF_TAXA", categoriaId = mercado })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await ResolverDiferencaAsync(c, item, new { opcao = "IR_IOF_TAXA" })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await ResolverDiferencaAsync(c, item, new { opcao = "IR_IOF_TAXA", categoriaId = salario })).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await ResolverDiferencaAsync(c, item, new { opcao = "IR_IOF_TAXA", categoriaId = mercado })).StatusCode);
 
         Assert.Equal("-5000|RESOLVIDO|IR_IOF_TAXA|true", await DiferencasAsync(c));
         var chave = $"ajuste-investimento:{c.Grupo}:2026-11-05";
@@ -196,8 +206,8 @@ public partial class AConferirTests
         await ConferirGrupoAsync(c, 992_000);
         var segundo = (await ItemDoGrupoAsync(c)).GetProperty("id").GetGuid();
         var outra = await CategoriaAsync(c.Cliente, "Casa e contas");
-        Assert.Equal(HttpStatusCode.Conflict, (await ResolverAsync(c, segundo, new { opcao = "IR_IOF_TAXA", categoriaId = outra })).StatusCode);
-        Assert.Equal(HttpStatusCode.NoContent, (await ResolverAsync(c, segundo, new { opcao = "IR_IOF_TAXA", categoriaId = mercado })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await ResolverDiferencaAsync(c, segundo, new { opcao = "IR_IOF_TAXA", categoriaId = outra })).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await ResolverDiferencaAsync(c, segundo, new { opcao = "IR_IOF_TAXA", categoriaId = mercado })).StatusCode);
         Assert.Equal(-8_000, await EscalarAsync<long>(c.Banco, $"SELECT valor_centavos FROM lancamentos.transacoes WHERE id_externo = '{chave}'"));
     }
 
@@ -208,7 +218,7 @@ public partial class AConferirTests
         await using var c = await IniciarAsync();
         await ConferirGrupoAsync(c, 995_000);
 
-        var r = await ResolverAsync(c, (await ItemDoGrupoAsync(c)).GetProperty("id").GetGuid(), new { opcao = "DEIXAR_PARA_DEPOIS" });
+        var r = await ResolverDiferencaAsync(c, (await ItemDoGrupoAsync(c)).GetProperty("id").GetGuid(), new { opcao = "DEIXAR_PARA_DEPOIS" });
 
         Assert.Equal(HttpStatusCode.NoContent, r.StatusCode);
         Assert.Equal("-5000|ABERTO|-|true", await DiferencasAsync(c));
@@ -223,7 +233,7 @@ public partial class AConferirTests
         await ConferirGrupoAsync(c, 1_010_000);
 
         Assert.Equal(HttpStatusCode.NoContent,
-            (await ResolverAsync(c, (await ItemDoGrupoAsync(c)).GetProperty("id").GetGuid(), new { opcao = "AJUSTAR_SALDO_INICIAL" })).StatusCode);
+            (await ResolverDiferencaAsync(c, (await ItemDoGrupoAsync(c)).GetProperty("id").GetGuid(), new { opcao = "AJUSTAR_SALDO_INICIAL" })).StatusCode);
 
         Assert.Equal("10000|RESOLVIDO|AJUSTAR_SALDO_INICIAL|true", await DiferencasAsync(c));
         Assert.Equal(1_010_000, await EscalarAsync<long>(c.Banco, $"SELECT saldo_inicial_centavos FROM contas.contas WHERE id = '{c.Grupo}'"));
@@ -233,7 +243,7 @@ public partial class AConferirTests
         var segundo = await ItemDoGrupoAsync(c);
         Assert.Equal(["RENDIMENTO"], Opcoes(segundo));
         Assert.Equal(HttpStatusCode.BadRequest,
-            (await ResolverAsync(c, segundo.GetProperty("id").GetGuid(), new { opcao = "AJUSTAR_SALDO_INICIAL" })).StatusCode);
+            (await ResolverDiferencaAsync(c, segundo.GetProperty("id").GetGuid(), new { opcao = "AJUSTAR_SALDO_INICIAL" })).StatusCode);
         Assert.Equal(1_010_000, await EscalarAsync<long>(c.Banco, $"SELECT saldo_inicial_centavos FROM contas.contas WHERE id = '{c.Grupo}'"));
     }
 
@@ -249,7 +259,7 @@ public partial class AConferirTests
         var item = (await ItemDoGrupoAsync(c)).GetProperty("id").GetGuid();
         await EscalarAsync<int>(c.Banco, $"UPDATE contas.contas SET saldo_inicial_centavos = 1010000 WHERE id = '{c.Grupo}' RETURNING 1");
 
-        Assert.Equal(HttpStatusCode.NoContent, (await ResolverAsync(c, item, new { opcao = "AJUSTAR_SALDO_INICIAL" })).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await ResolverDiferencaAsync(c, item, new { opcao = "AJUSTAR_SALDO_INICIAL" })).StatusCode);
 
         Assert.Equal(1_010_000, await EscalarAsync<long>(c.Banco, $"SELECT saldo_inicial_centavos FROM contas.contas WHERE id = '{c.Grupo}'"));
         Assert.Equal("RESOLVIDO|AJUSTAR_SALDO_INICIAL", await EscalarAsync<string>(c.Banco,
@@ -265,13 +275,57 @@ public partial class AConferirTests
         var item = (await ItemDoGrupoAsync(c)).GetProperty("id").GetGuid();
         await EscalarAsync<int>(c.Banco, $"UPDATE contas.contas SET saldo_inicial_centavos = 1004000 WHERE id = '{c.Grupo}' RETURNING 1");
 
-        Assert.Equal(HttpStatusCode.Conflict, (await ResolverAsync(c, item, new { opcao = "RENDIMENTO" })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await ResolverDiferencaAsync(c, item, new { opcao = "RENDIMENTO" })).StatusCode);
         Assert.Equal("6000|ABERTO|-|true", await DiferencasAsync(c));
         Assert.Equal(0L, await DoSistemaNoGrupoAsync(c));
         await EscalarAsync<int>(c.Banco, $"UPDATE contas.contas SET saldo_inicial_centavos = 1010000 WHERE id = '{c.Grupo}' RETURNING 1");
-        Assert.Equal(HttpStatusCode.Conflict, (await ResolverAsync(c, item, new { opcao = "RENDIMENTO" })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await ResolverDiferencaAsync(c, item, new { opcao = "RENDIMENTO" })).StatusCode);
         Assert.Equal("0|RESOLVIDO|RESOLVIDO_PELO_BANCO|true", await DiferencasAsync(c));
         Assert.Equal(0L, await DoSistemaNoGrupoAsync(c));
+    }
+
+    /// <summary>
+    /// D25, 2 (revisão do E6b pela D25, achado 2): a sincronização mudou o valor entre a tela e o clique; o pedido traz o valor
+    /// que o casal viu, e nada é lançado com o valor que ele não viu (409). Com o valor novo, vale.
+    /// </summary>
+    [Fact]
+    public async Task Sincronizacao_que_muda_o_valor_entre_a_tela_e_o_clique_da_409()
+    {
+        await using var c = await IniciarAsync();
+        await ConferirGrupoAsync(c, 1_010_000);
+        var item = (await ItemDoGrupoAsync(c)).GetProperty("id").GetGuid();
+        await ConferirGrupoAsync(c, 1_012_000);
+
+        Assert.Equal(HttpStatusCode.Conflict, (await ResolverAsync(c, item, new { opcao = "RENDIMENTO", valorCentavos = 10_000L })).StatusCode);
+        Assert.Equal(0L, await DoSistemaNoGrupoAsync(c));
+        Assert.Equal(HttpStatusCode.BadRequest, (await ResolverAsync(c, item, new { opcao = "RENDIMENTO" })).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await ResolverAsync(c, item, new { opcao = "RENDIMENTO", valorCentavos = 12_000L })).StatusCode);
+        Assert.Equal(12_000, await EscalarAsync<long>(c.Banco,
+            $"SELECT valor_centavos FROM lancamentos.transacoes WHERE origem = 'SISTEMA' AND id_externo = 'rendimento:{c.Grupo}:2026-11-05'"));
+    }
+
+    /// <summary>
+    /// Revisão do E6b pela D25, achado 1: a leitura da sincronização espera a trava do casal no Lancamentos (a mesma da
+    /// resolução em "A conferir"); o "ajustar o saldo inicial" nunca usa um valor que a leitura está trocando.
+    /// </summary>
+    [Fact]
+    public async Task Leitura_do_grupo_espera_a_trava_do_casal()
+    {
+        await using var c = await IniciarAsync();
+        var casal = await EscalarAsync<Guid>(c.Banco, "SELECT casal_id FROM identidade.usuarios WHERE nome_completo = 'Ana Teste'");
+        await using var outra = new NpgsqlConnection(c.Banco.ConexaoSuperusuario);
+        await outra.OpenAsync();
+        await using var tx = await outra.BeginTransactionAsync();
+        await using (var trava = new NpgsqlCommand($"SELECT pg_advisory_xact_lock(hashtextextended('lancamentos.casal:' || '{casal}', 0))", outra, tx))
+            await trava.ExecuteNonQueryAsync();
+
+        var leitura = ConferirGrupoAsync(c, 1_010_000);
+        await Task.Delay(1_000);
+        Assert.False(leitura.IsCompleted);
+
+        await tx.CommitAsync();
+        await leitura;
+        Assert.Equal("10000|ABERTO|-|true", await DiferencasAsync(c));
     }
 
     /// <summary>D25, 2: "parear com aporte": o aporte aberto na corrente vira o par com o grupo; zerou, o item fecha.</summary>
@@ -285,9 +339,9 @@ public partial class AConferirTests
         var movimento = await ItemDeMovimentoAsync(c);
         var item = (await ItemDoGrupoAsync(c)).GetProperty("id").GetGuid();
 
-        Assert.Equal(HttpStatusCode.BadRequest, (await ResolverAsync(c, item, new { opcao = "PAREAR_MOVIMENTO" })).StatusCode);
-        Assert.Equal(HttpStatusCode.BadRequest, (await ResolverAsync(c, item, new { opcao = "PAREAR_MOVIMENTO", movimentoId = item })).StatusCode);
-        Assert.Equal(HttpStatusCode.NoContent, (await ResolverAsync(c, item, new { opcao = "PAREAR_MOVIMENTO", movimentoId = movimento })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await ResolverDiferencaAsync(c, item, new { opcao = "PAREAR_MOVIMENTO" })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await ResolverDiferencaAsync(c, item, new { opcao = "PAREAR_MOVIMENTO", movimentoId = item })).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await ResolverDiferencaAsync(c, item, new { opcao = "PAREAR_MOVIMENTO", movimentoId = movimento })).StatusCode);
 
         Assert.Equal("0|RESOLVIDO|PAREADO_COM_MOVIMENTO|true", await DiferencasAsync(c));
         Assert.Equal("RESOLVIDO|APORTE", await EscalarAsync<string>(c.Banco,
@@ -309,7 +363,7 @@ public partial class AConferirTests
         await ConferirGrupoAsync(c, 990_000);
         var item = (await ItemDoGrupoAsync(c)).GetProperty("id").GetGuid();
 
-        var r = await ResolverAsync(c, item, new { opcao = "PAREAR_MOVIMENTO", movimentoId = await ItemDeMovimentoAsync(c) });
+        var r = await ResolverDiferencaAsync(c, item, new { opcao = "PAREAR_MOVIMENTO", movimentoId = await ItemDeMovimentoAsync(c) });
 
         Assert.Equal(HttpStatusCode.NoContent, r.StatusCode);
         Assert.Equal("-6000|ABERTO|-|true", await DiferencasAsync(c));
@@ -326,7 +380,7 @@ public partial class AConferirTests
         await ReconhecerAsync(c);
         await ConferirGrupoAsync(c, 1_012_000);
 
-        Assert.Equal(HttpStatusCode.NoContent, (await ResolverAsync(c, await ItemDeMovimentoAsync(c), new { opcao = "APORTE", contaId = c.Grupo })).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await ResolverDiferencaAsync(c, await ItemDeMovimentoAsync(c), new { opcao = "APORTE", contaId = c.Grupo })).StatusCode);
 
         Assert.Equal("2000|ABERTO|-|true", await DiferencasAsync(c));
         Assert.Equal(["RENDIMENTO", "AJUSTAR_SALDO_INICIAL"], Opcoes(await ItemDoGrupoAsync(c)));
@@ -341,8 +395,9 @@ public partial class AConferirTests
         var item = (await ItemDoGrupoAsync(c)).GetProperty("id").GetGuid();
         await EscalarAsync<int>(c.Banco, $"UPDATE contas.contas SET arquivada = true WHERE id = '{c.Grupo}' RETURNING 1");
 
-        Assert.Equal(HttpStatusCode.Conflict, (await ResolverAsync(c, item, new { opcao = "RENDIMENTO" })).StatusCode);
-        Assert.Equal(HttpStatusCode.Conflict, (await ResolverAsync(c, item, new { opcao = "AJUSTAR_SALDO_INICIAL" })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await ResolverDiferencaAsync(c, item, new { opcao = "RENDIMENTO" })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await ResolverDiferencaAsync(c, item, new { opcao = "AJUSTAR_SALDO_INICIAL" })).StatusCode);
+        await ConferirGrupoAsync(c, 1_020_000);
         Assert.Equal("10000|ABERTO|-|true", await DiferencasAsync(c));
         Assert.Equal(0L, await DoSistemaNoGrupoAsync(c));
     }
@@ -354,10 +409,10 @@ public partial class AConferirTests
         await using var c = await IniciarAsync();
         await ConferirGrupoAsync(c, 1_010_000);
         var item = (await ItemDoGrupoAsync(c)).GetProperty("id").GetGuid();
-        Assert.Equal(HttpStatusCode.NoContent, (await ResolverAsync(c, item, new { opcao = "RENDIMENTO" })).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await ResolverDiferencaAsync(c, item, new { opcao = "RENDIMENTO" })).StatusCode);
 
-        Assert.Equal(HttpStatusCode.NoContent, (await ResolverAsync(c, item, new { opcao = "RENDIMENTO" })).StatusCode);
-        Assert.Equal(HttpStatusCode.Conflict, (await ResolverAsync(c, item, new { opcao = "AJUSTAR_SALDO_INICIAL" })).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await ResolverDiferencaAsync(c, item, new { opcao = "RENDIMENTO" })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await ResolverDiferencaAsync(c, item, new { opcao = "AJUSTAR_SALDO_INICIAL" })).StatusCode);
         Assert.Equal(1L, await DoSistemaNoGrupoAsync(c));
     }
 
@@ -384,7 +439,7 @@ public partial class AConferirTests
         Assert.DoesNotContain(alheio.ToString(), corpo, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("777700", corpo, StringComparison.Ordinal);
         Assert.Equal(10_000, (await ItemDoGrupoAsync(c)).GetProperty("valorCentavos").GetInt64());
-        Assert.Equal(HttpStatusCode.NotFound, (await ResolverAsync(c, alheio, new { opcao = "RENDIMENTO" })).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await ResolverDiferencaAsync(c, alheio, new { opcao = "RENDIMENTO" })).StatusCode);
         Assert.Equal("ABERTO", await EscalarAsync<string>(c.Banco, $"SELECT estado FROM lancamentos.itens_a_conferir WHERE id = '{alheio}'"));
     }
 }

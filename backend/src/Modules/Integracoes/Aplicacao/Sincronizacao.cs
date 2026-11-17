@@ -291,7 +291,18 @@ internal sealed partial class Sincronizacao(
         // D25: depois da trava do casal (o Lancamentos grava noutra conexão, com a trava da conta e a auditoria do casal). Ele
         // relê o saldo do sistema sob a trava da conta; nada é lançado.
         foreach (var (grupoId, noBanco) in conferidos)
-            await importacao.ConferirDiferencaDoGrupoAsync(grupoId, hoje, noBanco, ct);
+        {
+            // Um grupo que falha (deixou de ser ligado entre a leitura e esta chamada, por exemplo) não para os outros; a próxima
+            // leitura o recalcula.
+            try
+            {
+                await importacao.ConferirDiferencaDoGrupoAsync(grupoId, hoje, noBanco, ct);
+            }
+            catch (Exception e) when (e is not OperationCanceledException || !ct.IsCancellationRequested)
+            {
+                DiferencaDoGrupoFalhou(log, grupoId, e.GetType().Name);
+            }
+        }
     }
 
     /// <summary>
@@ -375,6 +386,9 @@ internal sealed partial class Sincronizacao(
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Sincronização: o reconhecimento de transferências do item {Item} falhou (slot {Slot}, {Tipo}).")]
     private static partial void ReconhecimentoFalhou(ILogger logger, int slot, Guid item, string tipo);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Sincronização: a diferença do grupo {Conta} não foi para \"A conferir\" ({Tipo}).")]
+    private static partial void DiferencaDoGrupoFalhou(ILogger logger, Guid conta, string tipo);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Sincronização: a conferência dos investimentos do item {Item} falhou (slot {Slot}, {Tipo}).")]
     private static partial void InvestimentosFalharam(ILogger logger, int slot, Guid item, string tipo);

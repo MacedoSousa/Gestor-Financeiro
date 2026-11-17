@@ -215,15 +215,16 @@ internal sealed class AConferir(LancamentosDbContext db, IUsuarioAtual atual, IC
 
     /// <summary>
     /// As ações da diferença do grupo (D25, 2). O valor usado é sempre o de agora (valor no banco da última leitura − saldo do
-    /// sistema hoje): se mudou desde a tela, o item é atualizado e nada é lançado (409); se zerou, o item fecha. Devolve se a
+    /// sistema hoje), e tem de ser o que a tela mostrou (pedido.ValorCentavos): se mudou, o item é atualizado e nada é lançado
+    /// (409); se zerou, o item fecha. A leitura da sincronização espera a trava do casal, que quem chama segura. Devolve se a
     /// transação deve ser gravada.
     /// </summary>
     private async Task<(ResultadoDeLancamento Resultado, bool Gravar)> ResolverDiferencaAsync(Guid casalId, ItemAConferir item, string opcao,
         ResolucaoDto pedido, CancellationToken ct)
     {
-        var grupo = await contas.ObterAsync(item.ContaId, ct);
-        if (grupo is not { Ligada: true, Arquivada: false, Tipo: "INVESTIMENTO" })
+        if (await contas.ObterAsync(item.ContaId, ct) is not { Ligada: true, Arquivada: false, Tipo: "INVESTIMENTO" })
             return (new ResultadoDeLancamento.Recusado(TituloGrupoIndisponivel, 409), false);
+        if (pedido.ValorCentavos is not { } visto) return (Invalido("valorCentavos", "Atualize a página e tente de novo."), false);
 
         ItemAConferir? movimento = null;
         if (opcao == ResolucaoDoItem.ParearMovimento)
@@ -253,11 +254,14 @@ internal sealed class AConferir(LancamentosDbContext db, IUsuarioAtual atual, IC
             item.Resolver(ajuste ? ResolucaoDoItem.AjustarSaldoInicial : ResolucaoDoItem.ResolvidoPeloBanco);
             return (ajuste ? new ResultadoDeLancamento.Feito() : new ResultadoDeLancamento.Recusado(TituloDiferencaMudou, 409), true);
         }
-        if (agora != item.ValorCentavos)
+        if (agora != item.ValorCentavos || agora != visto)
         {
-            item.Recalcular(agora);
-            return (new ResultadoDeLancamento.Recusado(TituloDiferencaMudou, 409), true);
+            var mudou = agora != item.ValorCentavos;
+            if (mudou) item.Recalcular(agora);
+            return (new ResultadoDeLancamento.Recusado(TituloDiferencaMudou, 409), mudou);
         }
+        // Relido depois da trava do casal: o saldo inicial de agora, para a troca abaixo.
+        var grupo = await contas.ObterAsync(item.ContaId, ct) ?? throw new InvalidOperationException("Grupo não encontrado no casal.");
 
         var hoje = Brasilia.Hoje(relogio);
         switch (opcao)
@@ -269,8 +273,10 @@ internal sealed class AConferir(LancamentosDbContext db, IUsuarioAtual atual, IC
                 if (await LancarAjusteAsync(casalId, item, pedido.CategoriaId, hoje, ct) is { } recusa) return (recusa, false);
                 break;
             case ResolucaoDoItem.AjustarSaldoInicial:
-                // Absoluto: repetir depois de uma queda recalcula zero acima e só fecha.
-                await contasLigadas.DefinirSaldoInicialAsync(grupo.Id, checked(grupo.SaldoInicialCentavos + agora), grupo.SaldoInicialEm, ct);
+                // Compara e troca na trava da conta: se a correção da D22 (sob outra trava) mudou o saldo inicial depois da
+                // leitura acima, nada é gravado (409). Repetir depois de uma queda recalcula zero acima e só fecha.
+                if (!await contasLigadas.TrocarSaldoInicialAsync(grupo.Id, grupo.SaldoInicialCentavos, checked(grupo.SaldoInicialCentavos + agora), ct))
+                    return (new ResultadoDeLancamento.Recusado(TituloDiferencaMudou, 409), false);
                 break;
             case ResolucaoDoItem.ParearMovimento:
                 var opcaoDoMovimento = movimento!.ValorCentavos < 0 ? ResolucaoDoItem.Aporte : ResolucaoDoItem.Resgate;

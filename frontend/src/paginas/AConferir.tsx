@@ -88,6 +88,8 @@ function ItemDaCaixa({
         pede === "conta" ? escolha : null,
         pede === "categoria" ? escolha : null,
         pede === "movimento" ? escolha : null,
+        // D25: o valor que a tela mostrou; se a diferença mudou, nada é lançado (409).
+        item.tipo === "DIFERENCA_DO_GRUPO" ? item.valorCentavos : null,
       );
       if (opcao === "DEIXAR_PARA_DEPOIS") {
         setAviso(textoDaResolucao(opcao));
@@ -102,6 +104,8 @@ function ItemDaCaixa({
     } catch (falha) {
       setErro(mensagem(falha));
       setTentativa((t) => t + 1);
+      // O item pode ter mudado (valor novo da diferença, resolvido por outra tela): a lista volta a ser a da API.
+      void consultas.invalidateQueries({ queryKey: ["a-conferir"] });
     } finally {
       setOcupado(false);
     }
